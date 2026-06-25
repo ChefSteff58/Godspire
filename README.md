@@ -47,7 +47,22 @@ npm run test     # run unit tests (incl. the architecture guard)
 npm run lint     # oxlint
 ```
 
-## Environment
+## Cloud save (Supabase) — optional, app works without it
 
-Copy `.env.example` to `.env.local` and fill in Supabase values when you reach the
-leaderboard milestone. Not needed before then.
+The game **boots and saves locally with no setup** (guest mode, localStorage). To enable
+cloud save + cross-device accounts + the leaderboard, set up Supabase once:
+
+1. Create a project at [supabase.com](https://supabase.com) → **New project**.
+2. **Authentication → Sign In / Providers**: turn ON **Allow anonymous sign-ins**.
+3. **Authentication → Settings**: turn ON **Allow manual linking** (needed for guest → account).
+4. (Optional) Enable the **Google** provider, and under **URL Configuration → Redirect URLs**
+   add `http://localhost:5173` and `https://godspire.vercel.app`.
+5. **SQL Editor → New query**: paste and run [`supabase/schema.sql`](supabase/schema.sql).
+6. **Project Settings → API**: copy the **Project URL** and **anon/public** key (never the service key).
+7. Put them in `.env.local` (copy from `.env.example`) and in Vercel → Settings →
+   Environment Variables, then **redeploy**.
+
+```
+VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-public-key
+```
