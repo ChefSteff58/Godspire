@@ -16,7 +16,7 @@ export interface Enemy {
 let nextId = 1
 
 export function createEnemy(kind: EnemyKind = 'shade'): Enemy {
-  return { id: `e${nextId++}`, kind, pathT: 0, speed: 60, hp: 5, maxHp: 5 }
+  return { id: `e${nextId++}`, kind, pathT: 0, speed: 60, hp: 10, maxHp: 10 }
 }
 
 /**
@@ -30,4 +30,10 @@ export function advanceEnemy(enemy: Enemy, dtSeconds: number, pathLength: number
     return true
   }
   return false
+}
+
+/** Apply damage. Mutates hp. Returns true if the enemy died (hp ≤ 0). */
+export function damageEnemy(enemy: Enemy, amount: number): boolean {
+  enemy.hp -= amount
+  return enemy.hp <= 0
 }

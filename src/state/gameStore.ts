@@ -1,45 +1,36 @@
 import { create } from 'zustand'
-import type { GameCommand } from '../core/types'
+import type { GodKind } from '../core/data/towers'
 
 /**
- * The Zustand store is the BRIDGE between Phaser (the simulation) and React (the UI).
- *  - Phaser -> React : the engine writes mirrored values (e.g. `elapsed`) for the HUD to read.
- *  - React -> Phaser : the UI enqueues commands; the GameScene drains them each frame.
- *
- * Phaser reads/writes via `useGameStore.getState()`; React subscribes via the hook.
- * For Milestone 0 this holds only a demo heartbeat + a pulse command to prove both
- * directions work end-to-end.
+ * UI-facing game state mirrored from the Phaser sim + player intents back into it.
+ * (Gold/lives arrive in M3; this stays the bridge for HUD ↔ battlefield.)
  */
 interface GameStore {
-  /** Seconds the seal has held — mirrored from Phaser's update loop. */
+  /** Seconds the seal has held — mirrored from the scene loop. */
   elapsed: number
-  /** How many "pulse" commands Phaser has handled — mirrored back after handling. */
-  pulses: number
-  /** Queue of player intents waiting to be applied on a clean frame boundary. */
-  pendingCommands: GameCommand[]
+  /** Enemies slain — mirrored from the scene. */
+  kills: number
+  /** The god the player is currently placing (null = not placing). React→Phaser intent. */
+  placingGod: GodKind | null
+  /** Targeting-debug overlay toggle. */
+  showDebug: boolean
 
-  // Phaser -> React (engine writes)
   setElapsed: (seconds: number) => void
-  registerPulse: () => void
-  drainCommands: () => GameCommand[]
-
-  // React -> Phaser (UI enqueues)
-  requestPulse: () => void
+  addKill: () => void
+  beginPlacing: (god: GodKind) => void
+  cancelPlacing: () => void
+  toggleDebug: () => void
 }
 
-export const useGameStore = create<GameStore>((set, get) => ({
+export const useGameStore = create<GameStore>((set) => ({
   elapsed: 0,
-  pulses: 0,
-  pendingCommands: [],
+  kills: 0,
+  placingGod: null,
+  showDebug: false,
 
   setElapsed: (seconds) => set({ elapsed: seconds }),
-  registerPulse: () => set({ pulses: get().pulses + 1 }),
-  drainCommands: () => {
-    const cmds = get().pendingCommands
-    if (cmds.length > 0) set({ pendingCommands: [] })
-    return cmds
-  },
-
-  requestPulse: () =>
-    set({ pendingCommands: [...get().pendingCommands, { type: 'pulse' }] }),
+  addKill: () => set((s) => ({ kills: s.kills + 1 })),
+  beginPlacing: (god) => set({ placingGod: god }),
+  cancelPlacing: () => set({ placingGod: null }),
+  toggleDebug: () => set((s) => ({ showDebug: !s.showDebug })),
 }))
