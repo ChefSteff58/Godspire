@@ -1,9 +1,8 @@
 import Phaser from 'phaser'
 import { GameScene } from './scenes/GameScene'
+import { GAME_WIDTH, GAME_HEIGHT } from './dimensions'
 
-/** Logical resolution the game is designed against; Scale.FIT letterboxes to fit. */
-export const GAME_WIDTH = 960
-export const GAME_HEIGHT = 540
+export { GAME_WIDTH, GAME_HEIGHT } from './dimensions'
 
 export function createConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {

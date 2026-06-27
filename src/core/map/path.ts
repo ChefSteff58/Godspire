@@ -5,14 +5,21 @@ import type { Vec2 } from '../types'
  * Underworld (bottom) up the winding road to the Gates of Olympus (top). Authored as
  * DATA (not baked into art) so movement is testable and the map is swappable later.
  */
+// "Tartarus Switchback" — a flat top-down single path: enters off the bottom-left (Tartarus
+// rift), exits off the top-right (Olympus gate). 5 meaningful bends incl. a hairpin and a
+// double-back across the top; each bend curls TOWARD open ground so the high-coverage build
+// pockets sit on the concave inside of turns (researched — beats a naive zig-zag).
 export const OLYMPUS_PATH: readonly Vec2[] = [
-  { x: 480, y: 528 }, // Tartarus mouth (bottom)
-  { x: 180, y: 450 },
-  { x: 760, y: 372 },
-  { x: 220, y: 286 },
-  { x: 740, y: 208 },
-  { x: 430, y: 120 },
-  { x: 490, y: 18 }, // Gates of Olympus (top)
+  { x: -20, y: 470 }, // enters off the bottom-left edge
+  { x: 230, y: 470 },
+  { x: 230, y: 250 },
+  { x: 470, y: 250 },
+  { x: 470, y: 410 }, // hairpin down…
+  { x: 700, y: 410 },
+  { x: 700, y: 150 }, // …back up and double across the top
+  { x: 430, y: 150 },
+  { x: 430, y: 60 },
+  { x: 980, y: 60 }, // exits off the top-right edge
 ]
 
 function dist(a: Vec2, b: Vec2): number {
