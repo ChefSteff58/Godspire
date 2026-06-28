@@ -1,0 +1,120 @@
+import { describe, it, expect } from 'vitest'
+import {
+  createLedger,
+  canAfford,
+  spend,
+  earn,
+  waveIncome,
+  WAVE_INCOME_FLAT_BASE,
+  WAVE_INCOME_PER_WAVE,
+} from '../src/core/economy/ledger'
+import { enemyHp, enemyCount, enemySpeed, waveSpec } from '../src/core/systems/waveManager'
+import { foldRunModifiers, BOON_POOL, type Boon } from '../src/core/run/boons'
+import { generateDraft, scheduleNextDraft } from '../src/core/run/draft'
+import { BASE_MODIFIERS } from '../src/core/progress/rules'
+import type { Modifiers } from '../src/core/progress/types'
+
+describe('ledger', () => {
+  it('spends only what it can afford', () => {
+    const l = createLedger(250)
+    expect(canAfford(l, 200)).toBe(true)
+    expect(spend(l, 200)).toBe(true)
+    expect(l.gold).toBe(50)
+    expect(spend(l, 200)).toBe(false) // too poor, unchanged
+    expect(l.gold).toBe(50)
+  })
+
+  it('earns non-negative gold and floors the start', () => {
+    const l = createLedger(10.9)
+    expect(l.gold).toBe(10)
+    earn(l, 40)
+    expect(l.gold).toBe(50)
+    earn(l, -5) // ignored
+    expect(l.gold).toBe(50)
+  })
+
+  it('waveIncome is flat-only in M3 (interest disabled)', () => {
+    expect(waveIncome(1)).toBe(WAVE_INCOME_FLAT_BASE + WAVE_INCOME_PER_WAVE)
+    expect(waveIncome(10)).toBe(WAVE_INCOME_FLAT_BASE + WAVE_INCOME_PER_WAVE * 10)
+    // banked gold must NOT change the payout while interest is off
+    expect(waveIncome(10, 99999)).toBe(waveIncome(10, 0))
+  })
+})
+
+describe('wave scaling', () => {
+  it('HP compounds and is strictly increasing', () => {
+    expect(enemyHp(1)).toBe(10)
+    for (let n = 2; n <= 60; n++) expect(enemyHp(n)).toBeGreaterThanOrEqual(enemyHp(n - 1))
+    expect(enemyHp(11)).toBeGreaterThan(enemyHp(1) * 2) // ~×3.1 by wave 11
+  })
+
+  it('count grows linearly and slowly', () => {
+    expect(enemyCount(1)).toBe(8)
+    for (let n = 2; n <= 60; n++) expect(enemyCount(n)).toBeGreaterThanOrEqual(enemyCount(n - 1))
+    expect(enemyCount(40)).toBeLessThan(30) // never an instant lag-bomb
+  })
+
+  it('speed rises but is hard-capped at 2× base', () => {
+    expect(enemySpeed(1)).toBeGreaterThan(0)
+    for (let n = 1; n <= 300; n++) expect(enemySpeed(n)).toBeLessThanOrEqual(120)
+    expect(enemySpeed(300)).toBe(120)
+  })
+
+  it('waveSpec is Shade-only with a flat bounty', () => {
+    const s = waveSpec(7)
+    expect(s.kind).toBe('shade')
+    expect(s.bounty).toBe(4)
+    expect(s.leakWeight).toBe(1)
+    expect(s.count).toBe(enemyCount(7))
+    expect(s.hp).toBe(enemyHp(7))
+  })
+})
+
+describe('foldRunModifiers', () => {
+  const meta: Modifiers = { ...BASE_MODIFIERS, towerDamageMul: 1.2 }
+
+  it('seeds from the meta tree and stacks persistent boons', () => {
+    const dmg = BOON_POOL.find((b) => b.id === 'wrath')! // towerDamageMul 1.15
+    const zeus = BOON_POOL.find((b) => b.id === 'zeus-fury')! // godDamageMul zeus 1.3
+    const tribute = BOON_POOL.find((b) => b.id === 'tribute')! // goldPerKillAdd 2
+    const rm = foldRunModifiers(meta, [dmg, zeus, tribute])
+    expect(rm.towerDamageMul).toBeCloseTo(1.2 * 1.15)
+    expect(rm.godDamageMul.zeus).toBeCloseTo(1.3)
+    expect(rm.godDamageMul.apollo).toBe(1)
+    expect(rm.goldPerKillBonus).toBe(2)
+  })
+
+  it('does NOT mutate the persisted meta modifiers', () => {
+    const before = { ...meta }
+    foldRunModifiers(meta, BOON_POOL.slice())
+    expect(meta).toEqual(before)
+  })
+
+  it('immediate-grant boons are ignored by the fold (applied by the controller instead)', () => {
+    const midas = BOON_POOL.find((b) => b.id === 'midas')! as Boon // goldGrant
+    const rm = foldRunModifiers(BASE_MODIFIERS, [midas])
+    expect(rm.towerDamageMul).toBe(1)
+    expect(rm.goldPerKillBonus).toBe(0)
+  })
+})
+
+describe('draft', () => {
+  // deterministic RNG cycling through a fixed sequence
+  const seq = (values: number[]) => {
+    let i = 0
+    return () => values[i++ % values.length]
+  }
+
+  it('offers exactly 3 DISTINCT boons, none before wave 1', () => {
+    const opts = generateDraft(5, seq([0.1, 0.4, 0.7, 0.2, 0.9]))
+    expect(opts).toHaveLength(3)
+    expect(opts.every((o) => o.type === 'boon')).toBe(true)
+    const ids = opts.map((o) => (o.type === 'boon' ? o.boon.id : ''))
+    expect(new Set(ids).size).toBe(3)
+  })
+
+  it('schedules the next draft 3–5 waves out', () => {
+    expect(scheduleNextDraft(10, () => 0)).toBe(13)
+    expect(scheduleNextDraft(10, () => 0.99)).toBe(15)
+  })
+})

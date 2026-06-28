@@ -5,6 +5,8 @@ import { GOD_ORDER, TOWER_STATS } from '../../core/data/towers'
 export function RightRail() {
   const placingGod = useGameStore((s) => s.placingGod)
   const beginPlacing = useGameStore((s) => s.beginPlacing)
+  const cancelPlacing = useGameStore((s) => s.cancelPlacing)
+  const gold = useGameStore((s) => s.gold)
 
   return (
     <aside className="flex w-44 shrink-0 flex-col gap-2 overflow-y-auto border-l border-white/10 bg-slate-900/90 p-2">
@@ -12,18 +14,27 @@ export function RightRail() {
       {GOD_ORDER.map((god) => {
         const stats = TOWER_STATS[god]
         const active = placingGod === god
+        const affordable = gold >= stats.cost
         return (
           <button
             key={god}
-            onClick={() => beginPlacing(god)}
+            onClick={() => (active ? cancelPlacing() : beginPlacing(god))}
+            disabled={!affordable && !active}
             title={stats.blurb}
             className={`flex items-center gap-2 rounded-lg p-2 text-left transition ${
-              active ? 'bg-amber-400 text-slate-900' : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+              active
+                ? 'bg-amber-400 text-slate-900'
+                : affordable
+                  ? 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                  : 'cursor-not-allowed bg-slate-800/40 text-slate-500'
             }`}
           >
             <span className="text-2xl leading-none">{stats.icon}</span>
             <span className="flex min-w-0 flex-col">
-              <span className="text-sm font-bold">{stats.name}</span>
+              <span className="flex items-center gap-1 text-sm font-bold">
+                {stats.name}
+                <span className={active ? 'text-slate-800' : 'text-amber-300'}>🪙{stats.cost}</span>
+              </span>
               <span className="truncate text-xs opacity-70">{stats.blurb}</span>
             </span>
           </button>

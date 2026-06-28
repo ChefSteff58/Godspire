@@ -7,6 +7,7 @@ export interface TowerStats {
   name: string
   blurb: string
   icon: string
+  cost: number // gold to place one
   range: number // px in the 960×540 logical space
   damage: number
   fireRate: number // shots per second
@@ -23,6 +24,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     name: 'Zeus',
     blurb: 'Chain bolt to the lead foe.',
     icon: '⚡',
+    cost: 200,
     range: 135,
     damage: 5,
     fireRate: 1.5,
@@ -35,6 +37,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     name: 'Apollo',
     blurb: 'Piercing sun-arrow, long range.',
     icon: '🏹',
+    cost: 250,
     range: 210,
     damage: 8,
     fireRate: 0.9,

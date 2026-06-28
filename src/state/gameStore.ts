@@ -1,38 +1,123 @@
 import { create } from 'zustand'
 import type { GodKind } from '../core/data/towers'
+import type { RunPhase } from '../core/run/types'
+import type { DraftOption } from '../core/run/draft'
+import type { RunSnapshot } from '../game/run/RunController'
+
+/** Shown on the run-over screen. Computed once when the run ends. */
+export interface RunSummary {
+  wave: number
+  favor: number
+  bestWave: number
+}
+
+/** React→Phaser intents. Enqueued by the UI, drained by GameScene each frame (even while paused). */
+export type RunIntent =
+  | { type: 'startWave' }
+  | { type: 'pickDraft'; index: number }
+  | { type: 'playAgain' }
+  | { type: 'cheatGold' }
+  | { type: 'cheatInvincible' }
 
 /**
- * UI-facing game state mirrored from the Phaser sim + player intents back into it.
- * (Gold/lives arrive in M3; this stays the bridge for HUD ↔ battlefield.)
+ * UI-facing game state: values mirrored FROM the Phaser sim (read-only for React) + player intents
+ * pushed back INTO it. The RunController owns the authoritative numbers; these are a per-frame copy.
  */
 interface GameStore {
+  // M2.5 bridge
   elapsed: number
   kills: number
-  /** The god the player is currently placing (null = not placing). React→Phaser intent. */
   placingGod: GodKind | null
   showDebug: boolean
-  /** 0 = paused, 1/2/3 = sim speed multiplier (applied to dt in GameScene). */
+  /** 0 = paused, 1/3 = sim speed multiplier (applied to dt in GameScene). */
   timeScale: number
 
+  // M3 run mirrors (written only by mirrorRun)
+  gold: number
+  lives: number
+  wave: number
+  phase: RunPhase
+  draftOptions: DraftOption[] | null
+  invincible: boolean
+  canStartWave: boolean
+  runSummary: RunSummary | null
+  /** The speed to restore after a draft pause — stashed so 3× FF survives the modal. */
+  preDraftScale: number
+
+  // intent queue
+  intents: RunIntent[]
+
   setElapsed: (seconds: number) => void
-  addKill: () => void
   beginPlacing: (god: GodKind) => void
   cancelPlacing: () => void
   toggleDebug: () => void
   setSpeed: (timeScale: number) => void
+
+  mirrorRun: (s: RunSnapshot) => void
+  setRunSummary: (s: RunSummary | null) => void
+  setPreDraftScale: (scale: number) => void
+  resetRun: () => void
+  drainIntents: () => RunIntent[]
+
+  // UI-facing intent helpers
+  requestStartWave: () => void
+  pickDraft: (index: number) => void
+  playAgain: () => void
+  cheatGold: () => void
+  cheatInvincible: () => void
 }
 
-export const useGameStore = create<GameStore>((set) => ({
-  elapsed: 0,
+const FRESH_RUN = {
+  gold: 0,
+  lives: 0,
+  wave: 0,
   kills: 0,
+  phase: 'building' as RunPhase,
+  draftOptions: null,
+  invincible: false,
+  canStartWave: true,
+  runSummary: null,
+  preDraftScale: 1,
+}
+
+export const useGameStore = create<GameStore>((set, get) => ({
+  elapsed: 0,
   placingGod: null,
   showDebug: false,
   timeScale: 1,
+  intents: [],
+  ...FRESH_RUN,
 
   setElapsed: (seconds) => set({ elapsed: seconds }),
-  addKill: () => set((s) => ({ kills: s.kills + 1 })),
   beginPlacing: (god) => set({ placingGod: god }),
   cancelPlacing: () => set({ placingGod: null }),
   toggleDebug: () => set((s) => ({ showDebug: !s.showDebug })),
   setSpeed: (timeScale) => set({ timeScale }),
+
+  // one batched write per frame — never tear gold/lives across separate setters
+  mirrorRun: (s) =>
+    set({
+      gold: s.gold,
+      lives: s.lives,
+      wave: s.wave,
+      kills: s.kills,
+      phase: s.phase,
+      draftOptions: s.draftOptions,
+      invincible: s.invincible,
+      canStartWave: s.canStartWave,
+    }),
+  setRunSummary: (runSummary) => set({ runSummary }),
+  setPreDraftScale: (preDraftScale) => set({ preDraftScale }),
+  resetRun: () => set({ ...FRESH_RUN, elapsed: 0, placingGod: null, intents: [] }),
+  drainIntents: () => {
+    const q = get().intents
+    if (q.length) set({ intents: [] })
+    return q
+  },
+
+  requestStartWave: () => set((s) => ({ intents: [...s.intents, { type: 'startWave' }] })),
+  pickDraft: (index) => set((s) => ({ intents: [...s.intents, { type: 'pickDraft', index }] })),
+  playAgain: () => set((s) => ({ intents: [...s.intents, { type: 'playAgain' }] })),
+  cheatGold: () => set((s) => ({ intents: [...s.intents, { type: 'cheatGold' }] })),
+  cheatInvincible: () => set((s) => ({ intents: [...s.intents, { type: 'cheatInvincible' }] })),
 }))

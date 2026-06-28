@@ -11,6 +11,10 @@ export interface Enemy {
   speed: number
   hp: number
   maxHp: number
+  /** Gold awarded on death. */
+  bounty: number
+  /** Lives Olympus loses if this enemy leaks. */
+  leakWeight: number
 }
 
 /** Each enemy kind's identity color + base radius (placeholder art). */
@@ -20,7 +24,8 @@ export const ENEMY_BASE_RADIUS = 10
 let nextId = 1
 
 export function createEnemy(kind: EnemyKind = 'shade'): Enemy {
-  return { id: `e${nextId++}`, kind, pathT: 0, speed: 60, hp: 10, maxHp: 10 }
+  // Base stats; the wave manager mutates hp/speed/bounty per wave (we never re-signature this fn).
+  return { id: `e${nextId++}`, kind, pathT: 0, speed: 60, hp: 10, maxHp: 10, bounty: 4, leakWeight: 1 }
 }
 
 /**

@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { useGameStore } from '../../state/gameStore'
+import { useSessionStore } from '../../state/sessionStore'
 import { PathSystem, OLYMPUS_PATH } from '../../core/map/path'
 import { OBSTACLES } from '../../core/map/obstacles'
 import { canPlace } from '../../core/map/placement'
@@ -22,11 +23,13 @@ import {
 } from '../../core/entities/projectile'
 import { selectTarget } from '../../core/systems/targeting'
 import { TOWER_STATS, type GodKind } from '../../core/data/towers'
+import { favorFromRun } from '../../core/progress/rules'
+import type { SpawnDesc } from '../../core/run/types'
 import type { Vec2 } from '../../core/types'
+import { RunController } from '../run/RunController'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
 const MAX_DELTA_MS = 50
-const SPAWN_INTERVAL_MS = 2200
 const BOUNDS = { w: GAME_WIDTH, h: GAME_HEIGHT }
 
 /**
@@ -45,9 +48,11 @@ export class GameScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Graphics
   private ghost!: Phaser.GameObjects.Graphics
   private pointer: Vec2 = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 }
-  private spawnAccumMs = 0
   private elapsedAccumMs = 0
   private elapsedSec = 0
+  private run = new RunController()
+  private runEnded = false
+  private draftWasOpen = false
 
   constructor() {
     super('Game')
@@ -68,10 +73,17 @@ export class GameScene extends Phaser.Scene {
     this.towerSprites.clear()
     this.projectiles = []
     this.projSprites.clear()
-    this.spawnAccumMs = 0
     this.elapsedAccumMs = 0
     this.elapsedSec = 0
+
+    // Start a fresh run: the skill-tree meta (gold/lives/towerDmg) feeds run-start here.
+    this.run = new RunController()
+    this.run.start(useSessionStore.getState().getModifiers())
+    this.runEnded = false
+    this.draftWasOpen = false
     useGameStore.getState().setElapsed(0)
+    useGameStore.getState().setRunSummary(null)
+    useGameStore.getState().mirrorRun(this.run.snapshot())
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.worldX, y: p.worldY }
@@ -217,10 +229,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Intents + run-over + draft-pause run EVERY frame, even while paused (dt may be 0).
+    this.applyIntents()
+    if (this.run.phase === 'over' && !this.runEnded) this.endRun()
+    this.syncDraftPause()
+
     const scale = useGameStore.getState().timeScale
     const dt = Math.min(delta, MAX_DELTA_MS) * scale
 
-    if (dt > 0) {
+    if (dt > 0 && this.run.phase !== 'over') {
       const dtSec = dt / 1000
 
       this.elapsedAccumMs += dt
@@ -230,45 +247,107 @@ export class GameScene extends Phaser.Scene {
         useGameStore.getState().setElapsed(this.elapsedSec)
       }
 
-      this.spawnAccumMs += dt
-      if (this.spawnAccumMs >= SPAWN_INTERVAL_MS) {
-        this.spawnAccumMs -= SPAWN_INTERVAL_MS
-        this.spawnEnemy()
-      }
+      // spawn this wave's enemies on the run's schedule
+      for (const desc of this.run.tick(dtSec)) this.spawnEnemy(desc)
 
-      // advance enemies; sync sprites; remove on leak
+      // advance enemies; sync sprites; leak → lose lives + juice
       for (let i = this.enemies.length - 1; i >= 0; i--) {
         const enemy = this.enemies[i]
         const leaked = advanceEnemy(enemy, dtSec, this.path.length)
         if (leaked) {
-          this.removeEnemy(enemy)
+          this.onEnemyLeak(enemy)
           continue
         }
         const pos = this.path.getPointAt(enemy.pathT)
         this.enemySprites.get(enemy.id)?.setPosition(pos.x, pos.y)
       }
 
-      // towers acquire + fire
+      // towers acquire + fire (damage/fire-rate read LIVE from run modifiers, never baked)
       for (const tower of this.towers) {
         tower.cooldown -= dtSec
         if (tower.cooldown > 0) continue
         const target = selectTarget(tower, this.enemies, this.enemyPos, tower.targeting)
         if (!target) continue
-        tower.cooldown = 1 / tower.fireRate
+        tower.cooldown = 1 / this.run.effectiveFireRate(tower.god, tower.fireRate)
+        const dmg = this.run.effectiveDamage(tower.god, tower.damage)
         const stats = TOWER_STATS[tower.god]
-        if (stats.attack === 'hitscan') this.fireHitscan(tower, target)
-        else this.fireProjectile(tower, target)
+        if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
+        else this.fireProjectile(tower, target, dmg)
       }
 
       this.updateProjectiles(dtSec)
+
+      // clear-gate: a wave ends only when fully emitted AND no enemy remains alive
+      this.run.settle(this.enemies.length)
     }
 
+    useGameStore.getState().mirrorRun(this.run.snapshot())
     this.renderOverlay()
     this.renderGhost()
   }
 
-  private spawnEnemy(): void {
-    const enemy = createEnemy('shade')
+  /** Drain React→Phaser intents and forward them to the authoritative run. */
+  private applyIntents(): void {
+    for (const it of useGameStore.getState().drainIntents()) {
+      if (it.type === 'startWave') this.run.requestStartWave()
+      else if (it.type === 'pickDraft') this.run.pickDraft(it.index)
+      else if (it.type === 'cheatGold') this.run.cheatGold()
+      else if (it.type === 'cheatInvincible') this.run.toggleInvincible()
+      else if (it.type === 'playAgain') {
+        // ORDER MATTERS: clear store mirrors → reset speed → restart, or the overlay sticks.
+        useGameStore.getState().resetRun()
+        useGameStore.getState().setSpeed(1)
+        this.scene.restart()
+        return
+      }
+    }
+  }
+
+  /** Pause the sim for the Fate Draft, stashing the player's prior speed (so 3× FF survives). */
+  private syncDraftPause(): void {
+    const store = useGameStore.getState()
+    const open = this.run.draft !== null
+    if (open && !this.draftWasOpen) {
+      this.draftWasOpen = true
+      store.setPreDraftScale(store.timeScale === 0 ? 1 : store.timeScale)
+      store.setSpeed(0)
+    } else if (!open && this.draftWasOpen) {
+      this.draftWasOpen = false
+      store.setSpeed(store.preDraftScale || 1)
+    }
+  }
+
+  /** End the run: bank Favor (fire-and-forget — never await, or the lose screen hangs). */
+  private endRun(): void {
+    this.runEnded = true
+    const session = useSessionStore.getState()
+    const result = { waveReached: this.run.wave, victory: false, kills: this.run.kills }
+    const bestWave = Math.max(session.progress.stats.bestWave, this.run.wave)
+    void session.applyRun(result)
+    useGameStore.getState().setRunSummary({ wave: this.run.wave, favor: favorFromRun(result), bestWave })
+  }
+
+  private onEnemyLeak(enemy: Enemy): void {
+    const lost = this.run.onLeak(enemy.leakWeight)
+    this.removeEnemy(enemy)
+    if (lost) this.flashLeak()
+  }
+
+  /** Red pulse at the Olympus gate — the game's only negative feedback, so it's mandatory. */
+  private flashLeak(): void {
+    const end = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
+    const flash = this.add.circle(end.x, end.y, 26, 0xff2d3a, 0.6).setDepth(9)
+    this.tweens.add({ targets: flash, scale: 2.2, alpha: 0, duration: 320, onComplete: () => flash.destroy() })
+    this.cameras.main.shake(120, 0.004)
+  }
+
+  private spawnEnemy(desc: SpawnDesc): void {
+    const enemy = createEnemy(desc.kind)
+    enemy.hp = desc.hp
+    enemy.maxHp = desc.hp
+    enemy.speed = desc.speed
+    enemy.bounty = desc.bounty
+    enemy.leakWeight = desc.leakWeight
     this.enemies.push(enemy)
     const pos = this.path.getPointAt(0)
     const sprite = this.add
@@ -286,19 +365,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── firing ──
-  private fireHitscan(tower: Tower, target: Enemy): void {
+  private fireHitscan(tower: Tower, target: Enemy, damage: number): void {
     this.drawLightning(tower.pos, this.path.getPointAt(target.pathT))
-    this.hitEnemy(target, tower.damage)
+    this.hitEnemy(target, damage)
   }
 
-  private fireProjectile(tower: Tower, target: Enemy): void {
+  private fireProjectile(tower: Tower, target: Enemy, damage: number): void {
     const stats = TOWER_STATS[tower.god]
     const tp = this.path.getPointAt(target.pathT)
     const proj = createProjectile(
       tower.pos,
       { x: tp.x - tower.pos.x, y: tp.y - tower.pos.y },
       stats.projectileSpeed ?? 500,
-      tower.damage,
+      damage,
       stats.pierce ?? 0,
     )
     this.projectiles.push(proj)
@@ -364,7 +443,7 @@ export class GameScene extends Phaser.Scene {
     const poof = this.add.circle(at.x, at.y, 12, color, 0.7).setDepth(7)
     this.tweens.add({ targets: poof, scale: 2.4, alpha: 0, duration: 200, onComplete: () => poof.destroy() })
     this.removeEnemy(enemy)
-    useGameStore.getState().addKill()
+    this.run.onKill(enemy.bounty)
   }
 
   /** A cheap particle burst — small circles that fly outward and fade. */
@@ -444,7 +523,9 @@ export class GameScene extends Phaser.Scene {
     const placingGod = useGameStore.getState().placingGod
     if (!placingGod) return
     const stats = TOWER_STATS[placingGod]
-    const ok = canPlace(this.pointer, stats.footprint, { towers: this.towerFootprints() }).ok
+    const ok =
+      canPlace(this.pointer, stats.footprint, { towers: this.towerFootprints() }).ok &&
+      this.run.canAfford(stats.cost)
     const tint = ok ? 0x6be36b : 0xff5566
     g.fillStyle(tint, 0.45)
     g.fillCircle(this.pointer.x, this.pointer.y, stats.footprint)
@@ -459,6 +540,7 @@ export class GameScene extends Phaser.Scene {
     const pos = { x: p.worldX, y: p.worldY }
     const stats = TOWER_STATS[placingGod]
     if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints() }).ok) return
+    if (!this.run.purchase(stats.cost)) return // too poor — keep placing so they can try elsewhere
     this.placeTower(placingGod, pos)
     store.cancelPlacing()
   }

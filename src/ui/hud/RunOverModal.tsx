@@ -1,0 +1,41 @@
+import { useGameStore } from '../../state/gameStore'
+
+/** Shown when Olympus falls. Banks Favor by highest wave; one tap to start a fresh run. */
+export function RunOverModal() {
+  const phase = useGameStore((s) => s.phase)
+  const summary = useGameStore((s) => s.runSummary)
+  const playAgain = useGameStore((s) => s.playAgain)
+  if (phase !== 'over' || !summary) return null
+
+  const newBest = summary.wave >= summary.bestWave && summary.wave > 0
+
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-6 bg-slate-950/85 backdrop-blur-sm">
+      <div className="text-center">
+        <h2 className="font-serif text-3xl font-bold text-rose-400">Olympus has fallen</h2>
+        <p className="text-sm text-slate-400">The monsters have stormed the gates… this time.</p>
+      </div>
+      <div className="flex gap-8 font-mono text-center">
+        <Stat label="Wave reached" value={`${summary.wave}`} highlight={newBest} />
+        <Stat label="Favor earned" value={`+${summary.favor}`} />
+        <Stat label="Best wave" value={`${summary.bestWave}`} />
+      </div>
+      {newBest && <p className="text-sm font-bold text-amber-300">🏆 New best wave!</p>}
+      <button
+        onClick={playAgain}
+        className="rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
+      >
+        ⚔️ Play again
+      </button>
+    </div>
+  )
+}
+
+function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="flex flex-col">
+      <span className={`text-3xl font-bold ${highlight ? 'text-amber-300' : 'text-slate-100'}`}>{value}</span>
+      <span className="text-xs uppercase tracking-wide text-slate-500">{label}</span>
+    </div>
+  )
+}
