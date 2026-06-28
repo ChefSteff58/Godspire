@@ -37,6 +37,8 @@ interface GameStore {
   // M3 run mirrors (written only by mirrorRun)
   gold: number
   lives: number
+  maxLives: number
+  shieldCharges: number
   wave: number
   phase: RunPhase
   draftOptions: DraftOption[] | null
@@ -73,6 +75,8 @@ interface GameStore {
 const FRESH_RUN = {
   gold: 0,
   lives: 0,
+  maxLives: 0,
+  shieldCharges: 0,
   wave: 0,
   kills: 0,
   phase: 'building' as RunPhase,
@@ -104,6 +108,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       gold: s.gold,
       lives: s.lives,
+      maxLives: s.maxLives,
+      shieldCharges: s.shieldCharges,
       wave: s.wave,
       kills: s.kills,
       phase: s.phase,

@@ -2,11 +2,12 @@
 
 import type { GodKind } from '../data/towers'
 import type { Boon } from './boons'
-import { BOON_POOL } from './boons'
+import { BOON_POOL, RARITY_WEIGHT } from './boons'
 
 /**
- * A draft card. M3 only ever emits `boon` (both gods start unlocked). The `god` arm is defined so
- * M5 can flip on the god-slot roll without reshaping the type or the draft UI.
+ * A draft card. M3 only ever emits `boon` (both gods start unlocked, and the tower-access decision
+ * is TRADITIONAL — gods are gated by the skill tree, never per-run drafted). The `god` arm is kept
+ * defined-but-UNUSED so the type/UI never need reshaping; do NOT flip it on.
  */
 export type DraftOption =
   | { type: 'boon'; boon: Boon }
@@ -14,17 +15,22 @@ export type DraftOption =
 
 type Rng = () => number
 
-/** Build a 3-card draft. Boons-only in M3; 3 DISTINCT picks from the pool. Pure given `rng`. */
+/** Build a 3-card draft: 3 DISTINCT boons, sampled WEIGHTED by rarity (rarer = scarcer). Pure. */
 export function generateDraft(_wave: number, rng: Rng = Math.random): DraftOption[] {
   const pool = BOON_POOL.slice()
-  // Fisher–Yates shuffle, then take 3.
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1))
-    const tmp = pool[i]
-    pool[i] = pool[j]
-    pool[j] = tmp
+  const picks: Boon[] = []
+  for (let n = 0; n < 3 && pool.length > 0; n++) {
+    const total = pool.reduce((s, b) => s + RARITY_WEIGHT[b.rarity], 0)
+    let r = rng() * total
+    let idx = 0
+    for (let i = 0; i < pool.length; i++) {
+      r -= RARITY_WEIGHT[pool[i].rarity]
+      if (r <= 0) { idx = i; break }
+    }
+    picks.push(pool[idx])
+    pool.splice(idx, 1) // distinct: don't draw the same card twice
   }
-  return pool.slice(0, 3).map((boon) => ({ type: 'boon', boon }))
+  return picks.map((boon) => ({ type: 'boon', boon }))
 }
 
 /** The wave at which the NEXT draft fires — every 3–5 waves (jittered). Never before wave 1. */

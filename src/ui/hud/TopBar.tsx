@@ -6,6 +6,7 @@ import { SpeedControls } from './SpeedControls'
 export function TopBar() {
   const gold = useGameStore((s) => s.gold)
   const lives = useGameStore((s) => s.lives)
+  const shieldCharges = useGameStore((s) => s.shieldCharges)
   const wave = useGameStore((s) => s.wave)
   const kills = useGameStore((s) => s.kills)
   const showDebug = useGameStore((s) => s.showDebug)
@@ -36,6 +37,11 @@ export function TopBar() {
         >
           ❤️ {lives}
         </span>
+        {shieldCharges > 0 && (
+          <span className="rounded bg-black/40 px-3 py-1 text-sky-300" title="Gate shield — absorbs leaks">
+            🛡️ {shieldCharges}
+          </span>
+        )}
         <span className="rounded bg-black/40 px-3 py-1 text-slate-300">🌊 Wave {wave}</span>
         <span className="rounded bg-black/40 px-3 py-1 text-slate-400">💀 {kills}</span>
       </div>

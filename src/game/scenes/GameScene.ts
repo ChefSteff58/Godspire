@@ -309,7 +309,7 @@ export class GameScene extends Phaser.Scene {
   /** Pause the sim for the Fate Draft, stashing the player's prior speed (so 3× FF survives). */
   private syncDraftPause(): void {
     const store = useGameStore.getState()
-    const open = this.run.draft !== null
+    const open = !!this.run.draft
     if (open && !this.draftWasOpen) {
       this.draftWasOpen = true
       store.setPreDraftScale(store.timeScale === 0 ? 1 : store.timeScale)

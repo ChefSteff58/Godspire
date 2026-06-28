@@ -9,13 +9,15 @@ import type { Modifiers } from '../../core/progress/types'
 import type { GodKind } from '../../core/data/towers'
 import { createLedger, spend, canAfford, earn, waveIncome, type Ledger } from '../../core/economy/ledger'
 import { waveSpec, type WaveSpec } from '../../core/systems/waveManager'
-import { foldRunModifiers, type Boon } from '../../core/run/boons'
+import { foldRunModifiers, type BoonEffect } from '../../core/run/boons'
 import { generateDraft, scheduleNextDraft, type DraftOption } from '../../core/run/draft'
 import type { RunPhase, RunModifiers, SpawnDesc } from '../../core/run/types'
 
 export interface RunSnapshot {
   gold: number
   lives: number
+  maxLives: number
+  shieldCharges: number
   wave: number
   kills: number
   phase: RunPhase
@@ -33,6 +35,7 @@ const BUILD_GRACE_MS = 1500
 export class RunController {
   private ledger: Ledger = createLedger(0)
   lives = 0
+  maxLives = 0
   wave = 0
   kills = 0
   phase: RunPhase = 'building'
@@ -40,10 +43,12 @@ export class RunController {
   /** When true, the next wave begins automatically after a short build grace. */
   autoStart = false
   private buildGraceMs = BUILD_GRACE_MS
+  private shieldCharges = 0
+  private secondWindArmed = false
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1 }
   private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1 } }
-  private activeBoons: Boon[] = []
+  private persistentEffects: BoonEffect[] = []
 
   draft: DraftOption[] | null = null
   private nextDraftWave = 3
@@ -64,13 +69,16 @@ export class RunController {
     this.meta = meta
     this.ledger = createLedger(meta.startingGold)
     this.lives = meta.startingLives
+    this.maxLives = meta.startingLives
+    this.shieldCharges = 0
+    this.secondWindArmed = false
     this.wave = 0
     this.kills = 0
     this.phase = 'building'
     this.invincible = false
     this.buildGraceMs = BUILD_GRACE_MS
-    this.activeBoons = []
-    this.modifiers = foldRunModifiers(meta, this.activeBoons)
+    this.persistentEffects = []
+    this.modifiers = foldRunModifiers(meta, this.persistentEffects)
     this.draft = null
     this.nextDraftWave = scheduleNextDraft(0, this.rng) // first draft 3–5 waves in, never before wave 1
     this.spec = null
@@ -90,7 +98,7 @@ export class RunController {
     const opt = this.draft[index]
     this.draft = null
     if (!opt || opt.type !== 'boon') return // M3 never emits 'god'; ignore defensively
-    this.applyBoon(opt.boon)
+    this.applyEffect(opt.boon.effect)
   }
 
   cheatGold(): void {
@@ -140,11 +148,23 @@ export class RunController {
     this.kills++
   }
 
-  /** A leak: lose lives (unless invincible) and maybe end the run. Returns true if a life was lost. */
+  /**
+   * A leak: a gate shield absorbs it if any charge remains; otherwise lose lives, with Second Wind
+   * catching the first lethal blow. Returns true if the player felt it (life lost / saved) — for juice.
+   */
   onLeak(weight: number): boolean {
     if (this.phase === 'over' || this.invincible) return false
+    if (this.shieldCharges > 0) {
+      this.shieldCharges -= 1 // shield eats the leak, no life lost
+      return false
+    }
     this.lives -= weight
     if (this.lives <= 0) {
+      if (this.secondWindArmed) {
+        this.secondWindArmed = false
+        this.lives = 25 // Nike refuses to let you lose — once
+        return true
+      }
       this.lives = 0
       this.phase = 'over'
     }
@@ -183,6 +203,8 @@ export class RunController {
     return {
       gold: this.ledger.gold,
       lives: this.lives,
+      maxLives: this.maxLives,
+      shieldCharges: this.shieldCharges,
       wave: this.wave,
       kills: this.kills,
       phase: this.phase,
@@ -202,13 +224,47 @@ export class RunController {
     this.phase = 'spawning'
   }
 
-  private applyBoon(boon: Boon): void {
-    const e = boon.effect
-    if (e.kind === 'goldGrant') earn(this.ledger, e.value)
-    else if (e.kind === 'livesGrant') this.lives += e.value
-    else {
-      this.activeBoons.push(boon)
-      this.modifiers = foldRunModifiers(this.meta, this.activeBoons) // re-fold live
+  /**
+   * Apply one boon effect. Immediate kinds resolve now; persistent kinds join the fold (re-folded
+   * live so they reach already-placed towers); composite/coinflip recurse so the fold only ever
+   * sees flat leaf effects.
+   */
+  private applyEffect(e: BoonEffect): void {
+    switch (e.kind) {
+      case 'goldGrant':
+        earn(this.ledger, e.value)
+        break
+      case 'livesGrant':
+        this.addLives(e.value)
+        break
+      case 'maxLivesAdd':
+        this.maxLives += e.value
+        this.addLives(e.value)
+        break
+      case 'gateShield':
+        this.shieldCharges += e.value
+        break
+      case 'secondWind':
+        this.secondWindArmed = true
+        break
+      case 'composite':
+        for (const sub of e.effects) this.applyEffect(sub)
+        break
+      case 'coinflipFold':
+        this.applyEffect(this.rng() < 0.5 ? e.win : e.lose)
+        break
+      default: // persistent: goldPerKillAdd | towerDamageMul | godDamageMul | fireRateMul
+        this.persistentEffects.push(e)
+        this.modifiers = foldRunModifiers(this.meta, this.persistentEffects)
+    }
+  }
+
+  /** Heal (clamped to maxLives); a negative grant can drive the run to defeat. */
+  private addLives(v: number): void {
+    this.lives = Math.min(this.lives + v, this.maxLives)
+    if (this.lives <= 0) {
+      this.lives = 0
+      this.phase = 'over'
     }
   }
 }

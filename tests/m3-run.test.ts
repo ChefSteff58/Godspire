@@ -9,7 +9,7 @@ import {
   WAVE_INCOME_PER_WAVE,
 } from '../src/core/economy/ledger'
 import { enemyHp, enemyCount, enemySpeed, waveSpec } from '../src/core/systems/waveManager'
-import { foldRunModifiers, BOON_POOL, type Boon } from '../src/core/run/boons'
+import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP } from '../src/core/run/boons'
 import { generateDraft, scheduleNextDraft } from '../src/core/run/draft'
 import { BASE_MODIFIERS } from '../src/core/progress/rules'
 import type { Modifiers } from '../src/core/progress/types'
@@ -72,12 +72,14 @@ describe('wave scaling', () => {
 
 describe('foldRunModifiers', () => {
   const meta: Modifiers = { ...BASE_MODIFIERS, towerDamageMul: 1.2 }
+  const fx = (id: string) => BOON_POOL.find((b) => b.id === id)!.effect
 
-  it('seeds from the meta tree and stacks persistent boons', () => {
-    const dmg = BOON_POOL.find((b) => b.id === 'wrath')! // towerDamageMul 1.15
-    const zeus = BOON_POOL.find((b) => b.id === 'zeus-fury')! // godDamageMul zeus 1.3
-    const tribute = BOON_POOL.find((b) => b.id === 'tribute')! // goldPerKillAdd 2
-    const rm = foldRunModifiers(meta, [dmg, zeus, tribute])
+  it('seeds from the meta tree and stacks persistent leaf effects', () => {
+    const rm = foldRunModifiers(meta, [
+      fx('off-divine-wrath'), // towerDamageMul 1.15
+      fx('core-zeus-king-of-storms'), // godDamageMul zeus 1.3
+      fx('eco-tithe-of-the-fallen'), // goldPerKillAdd 2
+    ])
     expect(rm.towerDamageMul).toBeCloseTo(1.2 * 1.15)
     expect(rm.godDamageMul.zeus).toBeCloseTo(1.3)
     expect(rm.godDamageMul.apollo).toBe(1)
@@ -86,15 +88,14 @@ describe('foldRunModifiers', () => {
 
   it('does NOT mutate the persisted meta modifiers', () => {
     const before = { ...meta }
-    foldRunModifiers(meta, BOON_POOL.slice())
+    foldRunModifiers(meta, [fx('off-divine-wrath'), fx('eco-tithe-of-the-fallen')])
     expect(meta).toEqual(before)
   })
 
-  it('immediate-grant boons are ignored by the fold (applied by the controller instead)', () => {
-    const midas = BOON_POOL.find((b) => b.id === 'midas')! as Boon // goldGrant
-    const rm = foldRunModifiers(BASE_MODIFIERS, [midas])
-    expect(rm.towerDamageMul).toBe(1)
-    expect(rm.goldPerKillBonus).toBe(0)
+  it('soft-caps multiplicative fire-rate so an endless run cannot break', () => {
+    const haste = fx('util-festival-of-dionysus') // fireRateMul 1.35
+    const rm = foldRunModifiers(BASE_MODIFIERS, Array(20).fill(haste))
+    expect(rm.fireRateMul).toBe(FIRE_RATE_CAP)
   })
 })
 
