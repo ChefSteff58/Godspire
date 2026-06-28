@@ -43,7 +43,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     color: 0xffcf6b,
     attack: 'projectile',
     pierce: 2,
-    projectileSpeed: 520,
+    projectileSpeed: 1400,
   },
 }
 

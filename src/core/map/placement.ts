@@ -3,8 +3,8 @@ import { OLYMPUS_PATH } from './path'
 import type { Obstacle } from './obstacles'
 import { OBSTACLES } from './obstacles'
 
-export const PATH_HALF_WIDTH = 28 // half the walkable road width
-export const PLACEMENT_BUFFER = 4
+export const PATH_HALF_WIDTH = 20 // tight to the walkable road so towers can hug the track
+export const PLACEMENT_BUFFER = 2
 
 export type PlaceReason = 'oob' | 'on-path' | 'obstacle' | 'too-close'
 export type PlaceResult = { ok: true } | { ok: false; reason: PlaceReason }

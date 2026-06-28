@@ -32,10 +32,10 @@ describe('placement / dead zones', () => {
   })
 
   it('blocks building inside the path corridor buffer', () => {
-    // just inside the corridor: dist 50 < 28 + 20 + 4 = 52
-    const r = canPlace({ x: 100, y: 150 }, 20, { path: PATH, bounds: BOUNDS, obstacles: [] })
+    // just inside the corridor: dist 35 < 20 + 20 + 2 = 42
+    const r = canPlace({ x: 100, y: 135 }, 20, { path: PATH, bounds: BOUNDS, obstacles: [] })
     expect(r).toEqual({ ok: false, reason: 'on-path' })
-    expect(PATH_HALF_WIDTH).toBe(28)
+    expect(PATH_HALF_WIDTH).toBe(20)
   })
 
   it('blocks overlapping an obstacle (and lets water gods onto water)', () => {

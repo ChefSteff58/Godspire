@@ -113,9 +113,9 @@ export class GameScene extends Phaser.Scene {
 
   private drawPath(): void {
     const g = this.add.graphics().setDepth(1)
-    g.lineStyle(56, 0x0d0b12, 1) // dead-zone buffer band
+    g.lineStyle(46, 0x0d0b12, 1) // dead-zone buffer band (tight to the road)
     this.strokePolyline(g)
-    g.lineStyle(44, 0x2a2533, 1) // walkable road
+    g.lineStyle(40, 0x2a2533, 1) // walkable road
     this.strokePolyline(g)
   }
 

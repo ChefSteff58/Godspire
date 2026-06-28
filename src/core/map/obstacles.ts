@@ -17,8 +17,8 @@ export interface Obstacle {
 export const OBSTACLES: readonly Obstacle[] = [
   // Ruined columns — deny the inside corner of the lower-left opener pocket.
   { id: 'columns', label: 'Ruined Columns', shape: { kind: 'circle', x: 150, y: 360, r: 24 }, color: 0x7a7d88 },
-  // Boulder — sits in the lower-mid field, forcing tower spacing.
-  { id: 'boulder', label: 'Boulder', shape: { kind: 'circle', x: 560, y: 490, r: 26 }, color: 0x4a4a52 },
+  // Boulder — contests the premium central pocket alongside the Styx, forcing tower spacing.
+  { id: 'boulder', label: 'Boulder', shape: { kind: 'circle', x: 480, y: 300, r: 26 }, color: 0x4a4a52 },
   // Pool of Styx — contests the central crossroads pocket (water hook for Poseidon later).
   { id: 'styx', label: 'Pool of Styx', shape: { kind: 'circle', x: 590, y: 320, r: 30 }, color: 0x2f6f8c, terrain: 'water' },
   // Olive grove — breaks up the open top-left field.

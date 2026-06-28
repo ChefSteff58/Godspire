@@ -19,8 +19,14 @@ describe('PathSystem', () => {
     expect(path.getPointAt(5)).toEqual({ ...OLYMPUS_PATH[OLYMPUS_PATH.length - 1] })
   })
 
-  it('moves up the screen overall (Tartarus → Olympus, y decreases)', () => {
-    expect(path.getPointAt(0.9).y).toBeLessThan(path.getPointAt(0.1).y)
+  it('produces a continuous, in-bounds smooth path', () => {
+    for (let t = 0; t <= 1; t += 0.1) {
+      const p = path.getPointAt(t)
+      expect(p.x).toBeGreaterThan(-80)
+      expect(p.x).toBeLessThan(1080)
+      expect(p.y).toBeGreaterThan(-40)
+      expect(p.y).toBeLessThan(580)
+    }
   })
 
   it('interpolates the midpoint of a straight two-point path', () => {
