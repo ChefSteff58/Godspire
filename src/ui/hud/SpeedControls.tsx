@@ -1,9 +1,11 @@
 import { useGameStore } from '../../state/gameStore'
 
-/** Pause + a single 1×/3× fast-forward toggle (3× = BTD6 baseline). */
+/** Pause · 1×/3× fast-forward · AUTO (auto-start each wave). */
 export function SpeedControls() {
   const timeScale = useGameStore((s) => s.timeScale)
   const setSpeed = useGameStore((s) => s.setSpeed)
+  const autoStart = useGameStore((s) => s.autoStart)
+  const toggleAutoStart = useGameStore((s) => s.toggleAutoStart)
   const paused = timeScale === 0
   const fast = timeScale === 3
 
@@ -26,6 +28,15 @@ export function SpeedControls() {
         }`}
       >
         ⏩
+      </button>
+      <button
+        onClick={toggleAutoStart}
+        title="Auto-start each wave"
+        className={`px-2.5 py-1 text-xs font-bold transition ${
+          autoStart ? 'bg-amber-400 text-slate-900' : 'bg-black/40 text-slate-300 hover:bg-black/60'
+        }`}
+      >
+        AUTO
       </button>
     </div>
   )

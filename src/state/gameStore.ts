@@ -31,6 +31,8 @@ interface GameStore {
   showDebug: boolean
   /** 0 = paused, 1/3 = sim speed multiplier (applied to dt in GameScene). */
   timeScale: number
+  /** Player preference: auto-start each wave after a short grace (survives Play Again). */
+  autoStart: boolean
 
   // M3 run mirrors (written only by mirrorRun)
   gold: number
@@ -52,6 +54,7 @@ interface GameStore {
   cancelPlacing: () => void
   toggleDebug: () => void
   setSpeed: (timeScale: number) => void
+  toggleAutoStart: () => void
 
   mirrorRun: (s: RunSnapshot) => void
   setRunSummary: (s: RunSummary | null) => void
@@ -85,6 +88,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   placingGod: null,
   showDebug: false,
   timeScale: 1,
+  autoStart: false,
   intents: [],
   ...FRESH_RUN,
 
@@ -93,6 +97,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   cancelPlacing: () => set({ placingGod: null }),
   toggleDebug: () => set((s) => ({ showDebug: !s.showDebug })),
   setSpeed: (timeScale) => set({ timeScale }),
+  toggleAutoStart: () => set((s) => ({ autoStart: !s.autoStart })),
 
   // one batched write per frame — never tear gold/lives across separate setters
   mirrorRun: (s) =>

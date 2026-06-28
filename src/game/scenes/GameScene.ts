@@ -88,7 +88,9 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.worldX, y: p.worldY }
     })
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p))
+    // Drag-and-drop placement: the rail begins a drag (sets placingGod); releasing the pointer
+    // over the canvas DROPS the god here. (Releasing off-canvas cancels — handled in GameCanvas.)
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.onDrop(p))
     this.input.keyboard?.on('keydown-ESC', () => useGameStore.getState().cancelPlacing())
 
     if (import.meta.env.DEV) {
@@ -231,6 +233,7 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     // Intents + run-over + draft-pause run EVERY frame, even while paused (dt may be 0).
     this.applyIntents()
+    this.run.autoStart = useGameStore.getState().autoStart // read-through preference
     if (this.run.phase === 'over' && !this.runEnded) this.endRun()
     this.syncDraftPause()
 
@@ -533,14 +536,21 @@ export class GameScene extends Phaser.Scene {
     g.strokeCircle(this.pointer.x, this.pointer.y, stats.range)
   }
 
-  private onPointerDown(p: Phaser.Input.Pointer): void {
+  /** Drop the dragged god at the release point if it's a valid, affordable spot. */
+  private onDrop(p: Phaser.Input.Pointer): void {
     const store = useGameStore.getState()
     const placingGod = store.placingGod
     if (!placingGod) return
     const pos = { x: p.worldX, y: p.worldY }
     const stats = TOWER_STATS[placingGod]
-    if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints() }).ok) return
-    if (!this.run.purchase(stats.cost)) return // too poor — keep placing so they can try elsewhere
+    if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints() }).ok) {
+      store.cancelPlacing() // dropped on an invalid spot — cancel the drag
+      return
+    }
+    if (!this.run.purchase(stats.cost)) {
+      store.cancelPlacing() // can't afford — cancel
+      return
+    }
     this.placeTower(placingGod, pos)
     store.cancelPlacing()
   }

@@ -27,6 +27,9 @@ export interface RunSnapshot {
 
 type Rng = () => number
 
+/** Grace before an auto-started wave begins (counted on the scaled clock, never wall-clock). */
+const BUILD_GRACE_MS = 1500
+
 export class RunController {
   private ledger: Ledger = createLedger(0)
   lives = 0
@@ -34,6 +37,9 @@ export class RunController {
   kills = 0
   phase: RunPhase = 'building'
   invincible = false
+  /** When true, the next wave begins automatically after a short build grace. */
+  autoStart = false
+  private buildGraceMs = BUILD_GRACE_MS
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1 }
   private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1 } }
@@ -62,6 +68,7 @@ export class RunController {
     this.kills = 0
     this.phase = 'building'
     this.invincible = false
+    this.buildGraceMs = BUILD_GRACE_MS
     this.activeBoons = []
     this.modifiers = foldRunModifiers(meta, this.activeBoons)
     this.draft = null
@@ -109,6 +116,12 @@ export class RunController {
 
   /** Advance spawning by `dtSec`. Returns the enemies to spawn THIS frame (possibly several at FF). */
   tick(dtSec: number): SpawnDesc[] {
+    // Auto-start: after a wave clears, begin the next one once a short grace elapses. Counted on
+    // the SCALED clock (this is fed scaled dt), so it respects pause/FF and never fires mid-draft.
+    if (this.autoStart && this.phase === 'building' && !this.draft) {
+      this.buildGraceMs -= dtSec * 1000
+      if (this.buildGraceMs <= 0) this.beginWave(this.wave + 1)
+    }
     if (this.phase !== 'spawning' || !this.spec) return []
     const out: SpawnDesc[] = []
     this.spawnTimerMs += dtSec * 1000
@@ -148,6 +161,7 @@ export class RunController {
     if (this.phase !== 'clearing' || liveEnemyCount > 0) return
     earn(this.ledger, waveIncome(this.wave, this.ledger.gold))
     this.phase = 'building'
+    this.buildGraceMs = BUILD_GRACE_MS // restart the auto-start grace for the next wave
     this.spec = null
     if (this.wave >= this.nextDraftWave) {
       this.draft = generateDraft(this.wave, this.rng)
