@@ -7,10 +7,3 @@ export interface Vec2 {
   x: number
   y: number
 }
-
-/**
- * Commands flow React -> Phaser through a queue in the store, drained once per
- * frame inside the GameScene. This keeps a single clock (Phaser's) authoritative.
- * For Milestone 0 there is exactly one command; it will grow (PLACE_TOWER, etc.).
- */
-export type GameCommand = { type: 'pulse' }

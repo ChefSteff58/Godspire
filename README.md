@@ -1,9 +1,12 @@
 # Godspire ⚡🏛️
 
-A witty-heroic **Greek-mythology tower defense** for the browser. Command the gods to
-defend Mount Olympus against the monsters storming up from Tartarus.
+A witty-heroic **Greek-mythology roguelike tower defense** for the browser. Command the
+gods to defend Mount Olympus against the monsters storming up from Tartarus — across
+escalating runs, drafting gods and boons from the Fates.
 
-> Status: **Milestone 0** — project scaffold + a blank Phaser canvas wired to React.
+> Status: **Milestone 2.5 done** — the core loop (place gods → auto-target → fire → kill),
+> a flat BTD6-style map with dead zones + obstacles, guest cloud save + a meta-progression
+> skill tree, and a Zeus + Apollo roster. Next up: the roguelike run loop (M3).
 
 ## Tech stack
 
