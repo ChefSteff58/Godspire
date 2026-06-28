@@ -55,6 +55,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.drawBackground()
+    this.drawTerrain()
     this.drawPath()
     this.drawObstacles()
     this.drawMarkers()
@@ -126,17 +127,55 @@ export class GameScene extends Phaser.Scene {
     g.strokePath()
   }
 
+  private drawTerrain(): void {
+    const g = this.add.graphics().setDepth(0.5)
+    // subtle buildable "plots" so the field reads as a map, not a flat void (placeholder; art in M8)
+    const zones: [number, number, number, number, number][] = [
+      [40, 150, 330, 210, 0x1b2018],
+      [400, 95, 380, 150, 0x191c22],
+      [360, 340, 430, 175, 0x1d1a16],
+    ]
+    for (const [x, y, w, h, c] of zones) {
+      g.fillStyle(c, 0.6)
+      g.fillRoundedRect(x, y, w, h, 24)
+    }
+  }
+
   private drawObstacles(): void {
     const g = this.add.graphics().setDepth(2)
     for (const o of OBSTACLES) {
-      g.fillStyle(o.color, o.terrain === 'water' ? 0.7 : 0.92)
-      g.lineStyle(2, 0x000000, 0.3)
-      if (o.shape.kind === 'circle') {
-        g.fillCircle(o.shape.x, o.shape.y, o.shape.r)
-        g.strokeCircle(o.shape.x, o.shape.y, o.shape.r)
+      const s = o.shape
+      if (o.id === 'styx' && s.kind === 'circle') {
+        g.fillStyle(0x123847, 0.95)
+        g.fillCircle(s.x, s.y, s.r)
+        g.fillStyle(0x2f6f8c, 0.95)
+        g.fillCircle(s.x, s.y, s.r - 6)
+        g.fillStyle(0x5aa6c2, 0.5)
+        g.fillCircle(s.x - 7, s.y - 7, s.r * 0.42)
+      } else if (o.id === 'columns' && s.kind === 'circle') {
+        for (const [dx, dy] of [[-12, -4], [5, -13], [13, 7], [-5, 11]]) {
+          g.fillStyle(0x5f6470, 1)
+          g.fillCircle(s.x + dx, s.y + dy + 3, 8)
+          g.fillStyle(0x9aa0ac, 1)
+          g.fillCircle(s.x + dx, s.y + dy, 8)
+        }
+      } else if (o.id === 'olive' && s.kind === 'rect') {
+        for (let i = 0; i < 6; i++) {
+          const cx = s.x + 14 + (i % 3) * ((s.w - 28) / 2)
+          const cy = s.y + 13 + Math.floor(i / 3) * (s.h - 26)
+          g.fillStyle(0x2f4a1f, 1)
+          g.fillCircle(cx, cy + 2, 11)
+          g.fillStyle(0x4e7a32, 1)
+          g.fillCircle(cx - 2, cy - 2, 9)
+        }
+      } else if (s.kind === 'circle') {
+        g.fillStyle(0x42424a, 1)
+        g.fillCircle(s.x, s.y, s.r)
+        g.fillStyle(0x63636d, 0.85)
+        g.fillCircle(s.x - 6, s.y - 7, s.r * 0.5)
       } else {
-        g.fillRoundedRect(o.shape.x, o.shape.y, o.shape.w, o.shape.h, 6)
-        g.strokeRoundedRect(o.shape.x, o.shape.y, o.shape.w, o.shape.h, 6)
+        g.fillStyle(o.color, 0.9)
+        g.fillRoundedRect(s.x, s.y, s.w, s.h, 6)
       }
     }
   }
