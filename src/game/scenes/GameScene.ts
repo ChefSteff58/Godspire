@@ -39,6 +39,7 @@ import {
 import { favorFromRun } from '../../core/progress/rules'
 import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
+import { hasSprite } from '../assets/manifest'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
 const MAX_DELTA_MS = 50
@@ -60,13 +61,15 @@ export class GameScene extends Phaser.Scene {
   private enemies: Enemy[] = []
   // Wave spawns waiting for a free body slot (keeps the wave intact when we hit the concurrency cap).
   private pendingSpawns: SpawnDesc[] = []
-  private readonly enemySprites = new Map<string, Phaser.GameObjects.Arc>()
+  // Arc = placeholder disc; Image = dropped-in sprite. Both support setPosition/scale tweens/destroy;
+  // the damage-state code branches on which one is live (see hitEnemy).
+  private readonly enemySprites = new Map<string, Phaser.GameObjects.Arc | Phaser.GameObjects.Image>()
   private towers: Tower[] = []
   private readonly towerSprites = new Map<string, Phaser.GameObjects.Container>()
   // Mobile gods (Hermes) get a static "home base" badge at their orbit center — the click target.
   private readonly homeBaseGfx = new Map<string, Phaser.GameObjects.Container>()
   private projectiles: Projectile[] = []
-  private readonly projSprites = new Map<string, Phaser.GameObjects.Rectangle>()
+  private readonly projSprites = new Map<string, Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image>()
   // Hephaestus spike traps, one per owner tower (keyed by tower id).
   private readonly spikes = new Map<string, Spike>()
   private readonly spikeGfx = new Map<string, Phaser.GameObjects.Graphics>()
@@ -484,15 +487,21 @@ export class GameScene extends Phaser.Scene {
     if (enemy.kind === 'boss') this.telegraphBoss(enemy)
     const pos = this.path.getPointAt(enemy.pathT)
     const isBoss = enemy.kind === 'boss'
-    const sprite = this.add
-      .circle(pos.x, pos.y, enemyRadius(enemy), enemyColor(enemy), 1)
-      .setStrokeStyle(isBoss ? 4 : enemy.flying ? 3 : 2, enemyStroke(enemy))
-      .setDepth(isBoss ? 6 : enemy.flying ? 5 : 4) // bosses ride above everything
+    const depth = isBoss ? 6 : enemy.flying ? 5 : 4 // bosses ride above everything
+    const texKey = isBoss && enemy.bossId ? enemy.bossId : enemy.kind
+    const sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Image = hasSprite(texKey)
+      ? this.addSpriteScaled(texKey, pos.x, pos.y, enemyRadius(enemy) * 2).setDepth(depth)
+      : this.add
+          .circle(pos.x, pos.y, enemyRadius(enemy), enemyColor(enemy), 1)
+          .setStrokeStyle(isBoss ? 4 : enemy.flying ? 3 : 2, enemyStroke(enemy))
+          .setDepth(depth)
     if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
-    // juice: pop into existence (squash-stretch) instead of blinking in
-    sprite.setScale(0.4)
-    this.tweens.add({ targets: sprite, scale: 1, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
+    // juice: pop into existence (squash-stretch) instead of blinking in — relative to the baseline scale
+    // so a scaled sprite keeps its intended size (a placeholder disc's baseline is 1).
+    const base = (sprite.getData('baseScale') as number) ?? 1
+    sprite.setScale(base * 0.4)
+    this.tweens.add({ targets: sprite, scale: base, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
   }
 
   /** One-time hint the first time a Harpy appears — the only enemy with a hard counter requirement. */
@@ -714,10 +723,12 @@ export class GameScene extends Phaser.Scene {
       stats.canHitAir ?? false,
     )
     this.projectiles.push(proj)
-    const sprite = this.add
-      .rectangle(proj.pos.x, proj.pos.y, 16, 4, stats.color, 1)
-      .setRotation(Math.atan2(proj.vy, proj.vx))
-      .setDepth(7)
+    const angle = Math.atan2(proj.vy, proj.vx)
+    const projKey = `proj_${tower.god}`
+    const sprite: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image = hasSprite(projKey)
+      ? this.addSpriteScaled(projKey, proj.pos.x, proj.pos.y, 16).setRotation(angle).setDepth(7)
+      : this.add.rectangle(proj.pos.x, proj.pos.y, 16, 4, stats.color, 1).setRotation(angle).setDepth(7)
+    sprite.setData('trailColor', stats.color) // the fading trail reads this (an Image has no fillColor)
     this.projSprites.set(proj.id, sprite)
   }
 
@@ -729,7 +740,8 @@ export class GameScene extends Phaser.Scene {
       ps?.setPosition(p.pos.x, p.pos.y)
       // juice: a short fading trail so fast shots read as motion (in the projectile's color)
       if (ps && Math.random() < 0.55) {
-        const t = this.add.circle(p.pos.x, p.pos.y, 3, ps.fillColor, 0.5).setDepth(6)
+        const trailColor = (ps.getData('trailColor') as number) ?? 0xffffff
+        const t = this.add.circle(p.pos.x, p.pos.y, 3, trailColor, 0.5).setDepth(6)
         this.tweens.add({ targets: t, alpha: 0, scale: 0.2, duration: 170, onComplete: () => t.destroy() })
       }
       // collide with enemies — iterate BACKWARD over the live array (no per-frame slice alloc): a hit
@@ -771,12 +783,22 @@ export class GameScene extends Phaser.Scene {
     const sprite = this.enemySprites.get(enemy.id)
     if (sprite) {
       const frac = enemy.hp / enemy.maxHp
-      sprite.setRadius(damagedRadius(enemyRadius(enemy), frac))
-      sprite.setFillStyle(0xffffff) // brief flash
-      this.time.delayedCall(70, () => {
-        if (sprite.active) sprite.setFillStyle(damagedColor(enemyColor(enemy), frac))
-      })
-      this.tweens.add({ targets: sprite, scale: 1.15, duration: 55, yoyo: true })
+      if (sprite instanceof Phaser.GameObjects.Arc) {
+        // placeholder disc: convey HP via radius shrink + heat-ramp fill, with a brief white flash
+        sprite.setRadius(damagedRadius(enemyRadius(enemy), frac))
+        sprite.setFillStyle(0xffffff)
+        this.time.delayedCall(70, () => {
+          if (sprite.active) sprite.setFillStyle(damagedColor(enemyColor(enemy), frac))
+        })
+      } else {
+        // real sprite: a brief white hit-flash (HP reads from the ring; recoloring art would muddy it)
+        sprite.setTintFill(0xffffff)
+        this.time.delayedCall(70, () => {
+          if (sprite.active) sprite.clearTint()
+        })
+      }
+      // size-relative punch so a scaled sprite isn't resized to texture-native (a disc's scale is 1)
+      this.tweens.add({ targets: sprite, scaleX: '*=1.15', scaleY: '*=1.15', duration: 55, yoyo: true })
     }
     this.burst(pos.x, pos.y, 4, 0xffffff, 14, 2, 150)
   }
@@ -1105,9 +1127,23 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The standard god badge — a colored disc with the god's initial. */
+  /**
+   * An Image scaled so its longest side ≈ `size` px (aspect preserved), with its baseline scale stashed
+   * in data so juice tweens can animate relative to it. The bridge from a dropped-in PNG to the scene.
+   */
+  private addSpriteScaled(key: string, x: number, y: number, size: number): Phaser.GameObjects.Image {
+    const img = this.add.image(x, y, key)
+    const s = size / Math.max(img.width, img.height)
+    return img.setScale(s).setData('baseScale', s)
+  }
+
+  /** The standard god badge — a dropped-in sprite if present, else a colored disc with the god's initial. */
   private makeBadge(god: GodKind, radius = 16): Phaser.GameObjects.Container {
     const stats = TOWER_STATS[god]
+    if (hasSprite(god)) {
+      // dropped-in art: a scaled sprite in place of the disc+initial (same Container so callers are unchanged)
+      return this.add.container(0, 0, [this.addSpriteScaled(god, 0, 0, radius * 2)])
+    }
     const circle = this.add.circle(0, 0, radius, stats.color, 1).setStrokeStyle(2, 0xffffff)
     const label = this.add
       .text(0, 0, stats.name[0], {

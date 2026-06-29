@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { PreloadScene } from './scenes/PreloadScene'
 import { GameScene } from './scenes/GameScene'
 import { GAME_WIDTH, GAME_HEIGHT } from './dimensions'
 
@@ -15,7 +16,8 @@ export function createConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig 
       width: GAME_WIDTH,
       height: GAME_HEIGHT,
     },
-    // Boot/Preload scenes arrive in Milestone 1 once we load real assets.
-    scene: [GameScene],
+    // Preload discovers + loads any dropped-in art, then starts GameScene (which falls back to
+    // placeholder shapes for any key whose PNG isn't present yet).
+    scene: [PreloadScene, GameScene],
   }
 }

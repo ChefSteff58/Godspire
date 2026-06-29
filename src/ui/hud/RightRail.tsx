@@ -1,5 +1,6 @@
 import { useGameStore } from '../../state/gameStore'
 import { GOD_ORDER, TOWER_STATS } from '../../core/data/towers'
+import { hasSprite, spriteUrl } from '../../game/assets/manifest'
 
 /** The tower shop, as a reserved right-side column. Click a god to enter placement mode. */
 export function RightRail() {
@@ -30,7 +31,11 @@ export function RightRail() {
                   : 'cursor-not-allowed bg-slate-800/40 text-slate-500'
             }`}
           >
-            <span className="text-2xl leading-none">{stats.icon}</span>
+            {hasSprite(god) ? (
+              <img src={spriteUrl(god)} alt={stats.name} className="h-7 w-7 shrink-0 object-contain" />
+            ) : (
+              <span className="text-2xl leading-none">{stats.icon}</span>
+            )}
             <span className="flex min-w-0 flex-col">
               <span className="flex items-center gap-1 text-sm font-bold">
                 {stats.name}
