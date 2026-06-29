@@ -4,7 +4,7 @@ A witty-heroic **Greek-mythology roguelike tower defense** for the browser. Comm
 gods to defend Mount Olympus against the monsters storming up from Tartarus — across
 escalating runs, drafting gods and boons from the Fates.
 
-> Status: **Milestones 3–6 done** — a full, playable roguelike with bosses. The run loop (costed
+> Status: **Milestones 3–6.5 done** — a full, playable roguelike with bosses + a meta-progression tree. The run loop (costed
 > placement, gold economy, ~100 lives, endless clear-gated waves, the Fate Draft of ~20 boons,
 > Play-Again banking Favor); the **7-enemy roster** (swarm/baseline/flying/armor/splits/fast/stealth,
 > each with one crisp counter); the **8-god roster** with 2×3 upgrade paths each — Zeus, Apollo,
@@ -12,9 +12,11 @@ escalating runs, drafting gods and boons from the Fates.
 > knockback), Aphrodite (slow field), Athena (buff aura + detection); a **Type-Carried Hybrid**
 > difficulty curve (composition drifts toward stronger types, gentle HP, every-10th elite surge); and
 > **3 cycling bosses** every 20 waves — Nemean Lion (damage cap), Minotaur (charge + CC-resist),
-> Cyclops (bursts into adds), each scaling per recurrence — plus a rich **end-of-run stats screen**.
-> Click-to-place + sell + auto-start + target priority. 128 unit tests. Next up: the Pantheon
-> skill-tree UI (M6.5) and the Supabase leaderboard (M7).
+> Cyclops (bursts into adds), each scaling per recurrence — plus a rich **end-of-run stats screen**;
+> and the **Pantheon skill tree** — spend banked Favor between runs on a tiered War/Harvest/Wisdom
+> tree (~18 nodes, prereq chains) that permanently buffs future runs.
+> Click-to-place + sell + auto-start + target priority. 138 unit tests. Next up: the Supabase
+> leaderboard (M7), then art/sound/juice (M8).
 
 ## Tech stack
 

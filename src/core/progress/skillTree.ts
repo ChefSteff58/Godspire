@@ -4,6 +4,12 @@ import type { SkillNode } from './types'
  * The Pantheon Tree (M6.5) — 3 branches × 6 nodes, tiered with prerequisite chains. Favor → account
  * level → Knowledge Points; spend points here between runs for permanent run-start buffs.
  * Keeps the 3 original M0.5 node ids (war_dmg_1 / harvest_gold_1 / wisdom_life_1) as the tier-1 roots.
+ *
+ * PACING (verified against the Favor curve — favorFromRun = 10·wave + 1·kill + 50·boss, and the
+ * mild-quadratic level curve in rules.ts): a first run earns ~1-2 points (buy a node immediately);
+ * ~5 runs → a tier-1 sweep; a capstone path (≈10 pts) → ~8-12 runs; the full 40-pt tree is a
+ * long-term goal (~50+ runs). Early gratification is fast, completion is a marathon — by design.
+ * Costs are a tuned first pass; final feel-tuning awaits real playtests.
  */
 export const PANTHEON_NODES: readonly SkillNode[] = [
   // ── War (offense) ──
