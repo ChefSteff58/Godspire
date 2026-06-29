@@ -3,7 +3,7 @@
 // hydra (SPLITS → pierce/AoE). Gorgon-kin (stealth) / Satyr (fast) / Cyclops (tanky) are deferred
 // until their counter-gods (detection / slow) exist.
 
-export type EnemyKind = 'shade' | 'skeleton' | 'harpy' | 'talos' | 'hydra'
+export type EnemyKind = 'shade' | 'skeleton' | 'harpy' | 'talos' | 'hydra' | 'satyr'
 
 export interface Enemy {
   id: string
@@ -24,6 +24,10 @@ export interface Enemy {
   armor: number
   /** How many times this lineage has already split (Hydra). */
   splitDepth: number
+  /** Speed multiplier from a slow effect (1 = normal; Aphrodite drops it). */
+  slowMul: number
+  /** Milliseconds left on the current slow (it lifts to 1 when this hits 0). */
+  slowTimerMs: number
 }
 
 /** What to spawn. The scene creates the Enemy (traits derived from kind) + overrides these. */
@@ -45,6 +49,7 @@ export const ENEMY_BASE_COLOR: Record<EnemyKind, number> = {
   harpy: 0x5fd0e0,
   talos: 0x8a8f9c,
   hydra: 0x7ac74f,
+  satyr: 0xc9e265,
 }
 
 /** Per-kind base radius (px) — the glance cue + the collision/HP-ring size. */
@@ -54,6 +59,7 @@ export const ENEMY_RADIUS: Record<EnemyKind, number> = {
   harpy: 9,
   talos: 15,
   hydra: 12,
+  satyr: 8,
 }
 
 /** Per-kind sprite stroke (a metallic ring reads as armor, a bright ring as airborne). */
@@ -63,6 +69,7 @@ export const ENEMY_STROKE: Record<EnemyKind, number> = {
   harpy: 0xffffff,
   talos: 0x3a3d44,
   hydra: 0x3f7a2a,
+  satyr: 0x8fae3a,
 }
 
 /** Intrinsic traits per kind (the wave manager scales hp/speed/bounty; these stay fixed). */
@@ -72,6 +79,7 @@ const ENEMY_TRAITS: Record<EnemyKind, { flying: boolean; armor: number }> = {
   harpy: { flying: true, armor: 0 },
   talos: { flying: false, armor: 6 },
   hydra: { flying: false, armor: 0 },
+  satyr: { flying: false, armor: 0 },
 }
 
 let nextId = 1
@@ -91,20 +99,32 @@ export function createEnemy(kind: EnemyKind = 'shade'): Enemy {
     flying: t.flying,
     armor: t.armor,
     splitDepth: 0,
+    slowMul: 1,
+    slowTimerMs: 0,
   }
 }
 
 /**
- * Advance an enemy along the path by `dtSeconds`. Mutates `pathT`.
+ * Advance an enemy along the path by `dtSeconds` (scaled by any active slow). Mutates `pathT`.
  * Returns true if it reached the end (leaked into Olympus) this step.
  */
 export function advanceEnemy(enemy: Enemy, dtSeconds: number, pathLength: number): boolean {
-  enemy.pathT += (enemy.speed * dtSeconds) / pathLength
+  if (enemy.slowTimerMs > 0) {
+    enemy.slowTimerMs -= dtSeconds * 1000
+    if (enemy.slowTimerMs <= 0) enemy.slowMul = 1 // slow lifts
+  }
+  enemy.pathT += (enemy.speed * enemy.slowMul * dtSeconds) / pathLength
   if (enemy.pathT >= 1) {
     enemy.pathT = 1
     return true
   }
   return false
+}
+
+/** Apply a slow (the strongest active one wins) and refresh its duration. */
+export function applySlow(enemy: Enemy, mul: number, durationMs: number): void {
+  enemy.slowMul = Math.min(enemy.slowMul, mul)
+  enemy.slowTimerMs = Math.max(enemy.slowTimerMs, durationMs)
 }
 
 /**

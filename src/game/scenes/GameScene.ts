@@ -9,6 +9,7 @@ import {
   advanceEnemy,
   damageEnemy,
   onDeath,
+  applySlow,
   ENEMY_BASE_COLOR,
   ENEMY_RADIUS,
   ENEMY_STROKE,
@@ -278,6 +279,9 @@ export class GameScene extends Phaser.Scene {
       // spawn this wave's enemies on the run's schedule
       for (const desc of this.run.tick(dtSec)) this.spawnEnemy(desc)
 
+      // Aphrodite chills foes in her field BEFORE they move this frame
+      this.updateSlowAuras()
+
       // advance enemies; sync sprites; leak → lose lives + juice
       for (let i = this.enemies.length - 1; i >= 0; i--) {
         const enemy = this.enemies[i]
@@ -443,6 +447,22 @@ export class GameScene extends Phaser.Scene {
       tower.pos.x = tower.center.x + Math.cos(tower.orbitPhase) * m.orbitRadius
       tower.pos.y = tower.center.y + Math.sin(tower.orbitPhase) * m.orbitRadius
       this.towerSprites.get(tower.id)?.setPosition(tower.pos.x, tower.pos.y)
+    }
+  }
+
+  /** Aphrodite: slow every enemy currently inside a slow-aura tower's range. */
+  private updateSlowAuras(): void {
+    for (const tower of this.towers) {
+      const aura = TOWER_STATS[tower.god].slowAura
+      if (!aura) continue
+      const eff = towerEffectiveStats(tower)
+      const r2 = eff.range * eff.range
+      for (const e of this.enemies) {
+        const ep = this.path.getPointAt(e.pathT)
+        if ((tower.pos.x - ep.x) ** 2 + (tower.pos.y - ep.y) ** 2 <= r2) {
+          applySlow(e, eff.slowMul, aura.refreshMs)
+        }
+      }
     }
   }
 
@@ -683,6 +703,13 @@ export class GameScene extends Phaser.Scene {
       const selected = tower.id === this.selectedTowerId
       const eff = towerEffectiveStats(tower)
       const range = eff.range
+      // Aphrodite's chilling field is always visible (it's her whole identity)
+      if (TOWER_STATS[tower.god].slowAura) {
+        g.fillStyle(0x6fd0e8, 0.07)
+        g.fillCircle(tower.pos.x, tower.pos.y, range)
+        g.lineStyle(1, 0x6fd0e8, 0.3)
+        g.strokeCircle(tower.pos.x, tower.pos.y, range)
+      }
       if (selected || showDebug) {
         g.lineStyle(1.5, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
         g.strokeCircle(tower.pos.x, tower.pos.y, range)

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { selectTarget } from '../src/core/systems/targeting'
-import { createEnemy, damageEnemy, onDeath, SPLIT_DEPTH_CAP, type Enemy } from '../src/core/entities/enemy'
+import { createEnemy, damageEnemy, onDeath, applySlow, advanceEnemy, SPLIT_DEPTH_CAP, type Enemy } from '../src/core/entities/enemy'
 import { enemyCounts, waveSpec } from '../src/core/systems/waveManager'
 import { TOWER_STATS } from '../src/core/data/towers'
 
@@ -105,6 +105,27 @@ describe('createEnemy traits', () => {
     expect(createEnemy('talos').armor).toBe(6)
     expect(createEnemy('shade').flying).toBe(false)
     expect(createEnemy('shade').armor).toBe(0)
+    expect(createEnemy('satyr').flying).toBe(false) // fast, not flying
+  })
+})
+
+describe('slow status (Aphrodite)', () => {
+  it('slows movement, then lifts after its duration', () => {
+    const e = createEnemy('skeleton')
+    e.speed = 100
+    applySlow(e, 0.5, 500)
+    expect(e.slowMul).toBe(0.5)
+    advanceEnemy(e, 0.1, 1000) // 100 × 0.5 × 0.1 / 1000 = 0.005 (half of unslowed 0.01)
+    expect(e.pathT).toBeCloseTo(0.005)
+    for (let i = 0; i < 6; i++) advanceEnemy(e, 0.1, 1000) // past the 500ms duration
+    expect(e.slowMul).toBe(1)
+  })
+
+  it('keeps the strongest active slow', () => {
+    const e = createEnemy('skeleton')
+    applySlow(e, 0.6, 500)
+    applySlow(e, 0.3, 500)
+    expect(e.slowMul).toBe(0.3)
   })
 })
 
@@ -120,6 +141,7 @@ describe('wave composition', () => {
     expect(enemyCounts(6).harpy).toBeGreaterThanOrEqual(1) // Harpy debut
     expect(enemyCounts(9).talos).toBeGreaterThanOrEqual(1) // Talos debut
     expect(enemyCounts(12).hydra).toBeGreaterThanOrEqual(1) // Hydra debut
+    expect(enemyCounts(15).satyr).toBeGreaterThanOrEqual(1) // Satyr debut
   })
 
   it('shares partition the count budget exactly (no extra bodies)', () => {

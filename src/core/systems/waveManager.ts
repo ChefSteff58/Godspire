@@ -64,16 +64,17 @@ export function spawnIntervalMs(n: number): number {
 // ── the roster composition (M4) ──
 // Per-kind: when it debuts, its hp/speed multipliers on the wave curve, and flat bounty/leakWeight.
 // (flying/armor are intrinsic to the kind — set in createEnemy, not here.)
-const ORDER: readonly EnemyKind[] = ['shade', 'skeleton', 'harpy', 'talos', 'hydra']
+const ORDER: readonly EnemyKind[] = ['shade', 'skeleton', 'harpy', 'talos', 'hydra', 'satyr']
 const KIND: Record<EnemyKind, { intro: number; hpMul: number; speedMul: number; bounty: number; leakWeight: number }> = {
   shade: { intro: 1, hpMul: 0.6, speedMul: 1.0, bounty: 3, leakWeight: 1 },
   skeleton: { intro: 3, hpMul: 1.0, speedMul: 1.0, bounty: 5, leakWeight: 1 },
   harpy: { intro: 6, hpMul: 0.8, speedMul: 1.15, bounty: 7, leakWeight: 1 },
   talos: { intro: 9, hpMul: 1.5, speedMul: 0.75, bounty: 12, leakWeight: 2 },
   hydra: { intro: 12, hpMul: 1.4, speedMul: 0.9, bounty: 9, leakWeight: 1 },
+  satyr: { intro: 15, hpMul: 0.7, speedMul: 1.6, bounty: 6, leakWeight: 1 }, // FAST → demands a slow
 }
 // Blend weights once multiple kinds are unlocked; talos/hydra are capped so they stay a minority.
-const WEIGHT: Record<EnemyKind, number> = { shade: 5, skeleton: 4, harpy: 3, talos: 1.5, hydra: 1.5 }
+const WEIGHT: Record<EnemyKind, number> = { shade: 5, skeleton: 4, harpy: 3, talos: 1.5, hydra: 1.5, satyr: 2.5 }
 
 /**
  * How many of each kind spawn at wave `n`. Shares PARTITION the existing enemyCount(n) budget
@@ -83,7 +84,7 @@ const WEIGHT: Record<EnemyKind, number> = { shade: 5, skeleton: 4, harpy: 3, tal
 export function enemyCounts(n: number): Record<EnemyKind, number> {
   const wave = Math.max(1, Math.floor(n))
   const total = enemyCount(wave)
-  const counts: Record<EnemyKind, number> = { shade: 0, skeleton: 0, harpy: 0, talos: 0, hydra: 0 }
+  const counts: Record<EnemyKind, number> = { shade: 0, skeleton: 0, harpy: 0, talos: 0, hydra: 0, satyr: 0 }
   const unlocked = ORDER.filter((k) => wave >= KIND[k].intro)
 
   const debut = unlocked.find((k) => k !== 'shade' && KIND[k].intro === wave)

@@ -1,8 +1,8 @@
 import type { TargetingMode } from '../systems/targeting'
 
 // The god roster grows across M5. Built so far: Zeus, Apollo, Demeter, Hermes (mobile anti-air),
-// Hephaestus (deployable spike factory), Poseidon (water-gated AoE + knockback).
-export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon'
+// Hephaestus (deployable spike factory), Poseidon (AoE + knockback), Aphrodite (slow aura).
+export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon' | 'aphrodite'
 
 export interface TowerStats {
   name: string
@@ -28,6 +28,8 @@ export interface TowerStats {
   splash?: { radius: number; knockback: number }
   /** Must be placed on water terrain (the Styx pool) — Poseidon. */
   requiresWater?: boolean
+  /** Slow-aura gods (Aphrodite): every enemy in range is slowed (no shooting). */
+  slowAura?: { mul: number; refreshMs: number }
 }
 
 export const TOWER_STATS: Record<GodKind, TowerStats> = {
@@ -121,9 +123,24 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     splash: { radius: 55, knockback: 0.03 },
     requiresWater: true,
   },
+  aphrodite: {
+    name: 'Aphrodite',
+    blurb: 'Foes fall in love and slow to a crawl — a chilling field. No damage.',
+    icon: '💘',
+    cost: 220,
+    range: 150,
+    damage: 0, // pure control — slows, doesn't shoot
+    fireRate: 1, // unused
+    footprint: 18,
+    defaultTargeting: 'first',
+    color: 0xff6fae,
+    attack: 'hitscan',
+    canHitAir: false,
+    slowAura: { mul: 0.55, refreshMs: 600 },
+  },
 }
 
-export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes', 'hephaestus', 'poseidon']
+export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes', 'hephaestus', 'poseidon', 'aphrodite']
 
 /** Fraction of a tower's cost refunded when sold (BTD6-style). */
 export const SELL_REFUND_RATE = 0.7

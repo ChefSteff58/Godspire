@@ -31,6 +31,8 @@ export interface UpgradeEffect {
   /** Poseidon: blast radius / knockback multipliers. */
   splashRadiusMul?: number
   knockbackMul?: number
+  /** Aphrodite: multiply the slow mul (<1 deepens the slow; floored so foes never fully stop). */
+  slowMulMul?: number
 }
 
 export interface UpgradeTier {
@@ -172,6 +174,26 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       ],
     },
   },
+  aphrodite: {
+    A: {
+      name: 'Glue & Charm',
+      blurb: 'A wider, stickier field — slows more of the lane at once.',
+      tiers: [
+        { name: 'Sticky Heart', cost: 140, desc: '+20% range, deeper slow', effect: { rangeMul: 1.2, slowMulMul: 0.85 } },
+        { name: 'Sweet Nothings', cost: 260, desc: '+20% range, deeper slow', effect: { rangeMul: 1.2, slowMulMul: 0.8 } },
+        { name: 'Irresistible', cost: 600, desc: '+25% range, deeper slow', effect: { rangeMul: 1.25, slowMulMul: 0.8 } },
+      ],
+    },
+    B: {
+      name: 'Winter Aphrodite',
+      blurb: 'Cold-hearted — a near-freeze that pins foes in place.',
+      tiers: [
+        { name: 'First Frost', cost: 160, desc: 'much deeper slow', effect: { slowMulMul: 0.7 } },
+        { name: 'Hard Freeze', cost: 320, desc: 'much deeper slow, +10% range', effect: { slowMulMul: 0.6, rangeMul: 1.1 } },
+        { name: 'Eternal Winter', cost: 700, desc: 'near-total freeze, +15% range', effect: { slowMulMul: 0.5, rangeMul: 1.15 } },
+      ],
+    },
+  },
 }
 
 export interface FoldedUpgrades {
@@ -186,11 +208,12 @@ export interface FoldedUpgrades {
   maxChargesAdd: number
   splashRadiusMul: number
   knockbackMul: number
+  slowMulMul: number
 }
 
 /** Accumulate every purchased tier's effects (paths multiply for muls, add for adds). Pure. */
 export function foldUpgrades(god: GodKind, pathATier: number, pathBTier: number): FoldedUpgrades {
-  const f: FoldedUpgrades = { damageMul: 1, fireRateMul: 1, rangeMul: 1, pierceAdd: 0, projectileSpeedMul: 1, incomePerWaveAdd: 0, incomeWaveScaleAdd: 0, grantsAir: false, maxChargesAdd: 0, splashRadiusMul: 1, knockbackMul: 1 }
+  const f: FoldedUpgrades = { damageMul: 1, fireRateMul: 1, rangeMul: 1, pierceAdd: 0, projectileSpeedMul: 1, incomePerWaveAdd: 0, incomeWaveScaleAdd: 0, grantsAir: false, maxChargesAdd: 0, splashRadiusMul: 1, knockbackMul: 1, slowMulMul: 1 }
   const applyPath = (path: UpgradePathKey, tier: number) => {
     const p = UPGRADES[god]?.[path]
     if (!p) return
@@ -207,6 +230,7 @@ export function foldUpgrades(god: GodKind, pathATier: number, pathBTier: number)
       f.maxChargesAdd += e.maxChargesAdd ?? 0
       f.splashRadiusMul *= e.splashRadiusMul ?? 1
       f.knockbackMul *= e.knockbackMul ?? 1
+      f.slowMulMul *= e.slowMulMul ?? 1
     }
   }
   applyPath('A', pathATier)
@@ -227,6 +251,8 @@ export interface EffectiveStats {
   /** Poseidon: AoE blast radius + per-hit knockback (base × upgrades). */
   splashRadius: number
   knockback: number
+  /** Aphrodite: slow speed-multiplier applied to foes in range (floored so they never fully stop). */
+  slowMul: number
 }
 
 /** A tower's combat stats after its upgrades (base × folded multipliers). Pure. */
@@ -243,6 +269,7 @@ export function towerEffectiveStats(tower: Tower): EffectiveStats {
     maxCharges: (base.deployable?.maxCharges ?? 0) + f.maxChargesAdd,
     splashRadius: (base.splash?.radius ?? 0) * f.splashRadiusMul,
     knockback: (base.splash?.knockback ?? 0) * f.knockbackMul,
+    slowMul: Math.max(0.15, (base.slowAura?.mul ?? 1) * f.slowMulMul), // floor: foes always creep
   }
 }
 

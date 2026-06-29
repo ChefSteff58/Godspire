@@ -9,7 +9,7 @@ import {
 import { createTower, type Tower } from '../src/core/entities/tower'
 import { TOWER_STATS } from '../src/core/data/towers'
 
-const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon', a = 0, b = 0): Tower => {
+const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon' | 'aphrodite', a = 0, b = 0): Tower => {
   const t = createTower(god, { x: 0, y: 0 })
   t.pathA = a
   t.pathB = b
@@ -119,6 +119,15 @@ describe('Poseidon AoE', () => {
 
   it('non-AoE gods report 0 splash', () => {
     expect(towerEffectiveStats(tower('zeus')).splashRadius).toBe(0)
+  })
+})
+
+describe('Aphrodite slow aura', () => {
+  it('deepens down the Winter path, floored so foes never fully stop', () => {
+    expect(TOWER_STATS.aphrodite.slowAura?.mul).toBe(0.55)
+    expect(towerEffectiveStats(tower('aphrodite')).slowMul).toBeCloseTo(0.55)
+    expect(towerEffectiveStats(tower('aphrodite', 0, 1)).slowMul).toBeCloseTo(0.55 * 0.7) // First Frost
+    expect(towerEffectiveStats(tower('aphrodite', 0, 3)).slowMul).toBeGreaterThanOrEqual(0.15) // floored
   })
 })
 
