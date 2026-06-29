@@ -207,8 +207,23 @@ export function damageEnemy(enemy: Enemy, amount: number): boolean {
 /** How many times a Hydra lineage may split (1 root → 2 → 4, then stop = 7 bodies total). */
 export const SPLIT_DEPTH_CAP = 2
 
-/** What an enemy leaves behind when it dies. Hydra → 2 smaller children at the death point. Pure. */
+/** What an enemy leaves behind when it dies. Hydra → 2 children; Cyclops → a burst of adds. Pure. */
 export function onDeath(enemy: Enemy): SpawnDesc[] {
+  // Cyclops: shatter into a handful of wave-appropriate adds at the death point (reuses this same
+  // SpawnDesc pipeline as Hydra — killEnemy spawns them BEFORE settle, so the clear-gate holds).
+  if (enemy.kind === 'boss' && enemy.bossId) {
+    const adds = bossById(enemy.bossId).mechanic.onDeathAdds
+    if (!adds) return []
+    const addHp = Math.max(1, Math.round(enemy.maxHp * 0.04))
+    return Array.from({ length: adds }, (): SpawnDesc => ({
+      kind: 'skeleton',
+      hp: addHp,
+      speed: 70,
+      bounty: 4,
+      leakWeight: 2,
+      spawnAtT: enemy.pathT,
+    }))
+  }
   if (enemy.kind !== 'hydra' || enemy.splitDepth >= SPLIT_DEPTH_CAP) return []
   const childHp = Math.max(1, Math.round(enemy.maxHp * 0.45))
   const child = (): SpawnDesc => ({

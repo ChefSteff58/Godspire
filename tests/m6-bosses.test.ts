@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { waveSpec } from '../src/core/systems/waveManager'
 import { bossForWave, bossOccurrence, bossScaledStats, BOSS_ROSTER, bossById } from '../src/core/data/bosses'
-import { createEnemy, damageEnemy, applySlow, advanceEnemy } from '../src/core/entities/enemy'
+import { createEnemy, damageEnemy, applySlow, advanceEnemy, onDeath } from '../src/core/entities/enemy'
 
 describe('boss cadence (every 20 waves, cycling)', () => {
   it('no boss except on a multiple of 20', () => {
@@ -134,6 +134,35 @@ describe('Minotaur charge (in advanceEnemy)', () => {
     e.speed = 60
     advanceEnemy(e, 0.1, 1e9)
     expect(e.speed).toBe(60)
+  })
+})
+
+describe('Cyclops on-death adds (in onDeath)', () => {
+  it('a slain Cyclops bursts into adds at its death point', () => {
+    const e = createEnemy('boss')
+    e.bossId = 'cyclops'
+    e.maxHp = 3000
+    e.pathT = 0.6
+    const adds = onDeath(e)
+    expect(adds).toHaveLength(4) // BOSS_ROSTER cyclops.mechanic.onDeathAdds
+    expect(adds.every((a) => a.kind === 'skeleton')).toBe(true)
+    expect(adds.every((a) => a.spawnAtT === 0.6)).toBe(true) // born where the brute fell
+    expect(adds[0].hp).toBeGreaterThan(0)
+    expect(adds[0].hp).toBeLessThan(e.maxHp) // adds are chaff, not a second boss
+  })
+
+  it('non-add bosses (Nemean / Minotaur) leave nothing behind', () => {
+    const nem = createEnemy('boss'); nem.bossId = 'nemean'
+    const min = createEnemy('boss'); min.bossId = 'minotaur'
+    expect(onDeath(nem)).toEqual([])
+    expect(onDeath(min)).toEqual([])
+  })
+
+  it('Hydra split is unchanged (regression)', () => {
+    const h = createEnemy('hydra')
+    h.maxHp = 100
+    expect(onDeath(h)).toHaveLength(2)
+    expect(onDeath(createEnemy('shade'))).toEqual([])
   })
 })
 
