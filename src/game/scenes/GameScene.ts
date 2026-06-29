@@ -282,6 +282,9 @@ export class GameScene extends Phaser.Scene {
         this.enemySprites.get(enemy.id)?.setPosition(pos.x, pos.y)
       }
 
+      // mobile gods (Hermes) orbit their placed center — move them before they acquire/fire
+      this.updateMobileTowers(dtSec)
+
       // towers acquire + fire (effective stats from UPGRADES × run modifiers, read at fire-time)
       for (const tower of this.towers) {
         const eff = towerEffectiveStats(tower)
@@ -289,7 +292,7 @@ export class GameScene extends Phaser.Scene {
         tower.cooldown -= dtSec
         if (tower.cooldown > 0) continue
         const target = selectTarget(
-          { pos: tower.pos, range: eff.range, canHitAir: TOWER_STATS[tower.god].canHitAir },
+          { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir },
           this.enemies,
           this.enemyPos,
           tower.targeting,
@@ -414,9 +417,23 @@ export class GameScene extends Phaser.Scene {
     if (idx >= 0) this.enemies.splice(idx, 1)
   }
 
+  /** Mobile gods (Hermes) orbit their placed center; recompute pos + move the sprite each frame. */
+  private updateMobileTowers(dtSec: number): void {
+    for (const tower of this.towers) {
+      const m = TOWER_STATS[tower.god].mobile
+      if (!m) continue
+      tower.orbitPhase += m.angularSpeed * dtSec
+      tower.pos.x = tower.center.x + Math.cos(tower.orbitPhase) * m.orbitRadius
+      tower.pos.y = tower.center.y + Math.sin(tower.orbitPhase) * m.orbitRadius
+      this.towerSprites.get(tower.id)?.setPosition(tower.pos.x, tower.pos.y)
+    }
+  }
+
   // ── firing ──
   private fireHitscan(tower: Tower, target: Enemy, damage: number): void {
-    this.drawLightning(tower.pos, this.path.getPointAt(target.pathT))
+    const to = this.path.getPointAt(target.pathT)
+    if (tower.god === 'hermes') this.drawDart(tower.pos, to)
+    else this.drawLightning(tower.pos, to)
     this.hitEnemy(target, damage)
   }
 
@@ -537,6 +554,17 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: g, alpha: 0, duration: 150, onComplete: () => g.destroy() })
   }
 
+  /** Hermes' quick dart — a thin straight tracer, distinct from Zeus's jagged bolt. */
+  private drawDart(from: Vec2, to: Vec2): void {
+    const g = this.add.graphics().setDepth(8)
+    g.lineStyle(2, 0xe8e0ff, 0.95)
+    g.beginPath()
+    g.moveTo(from.x, from.y)
+    g.lineTo(to.x, to.y)
+    g.strokePath()
+    this.tweens.add({ targets: g, alpha: 0, duration: 90, onComplete: () => g.destroy() })
+  }
+
   // ── overlay: range rings, debug target lines, HP rings ──
   private renderOverlay(): void {
     const showDebug = useGameStore.getState().showDebug
@@ -546,14 +574,21 @@ export class GameScene extends Phaser.Scene {
     for (const tower of this.towers) {
       // Range ring shows ONLY for the selected tower (or every tower in debug) — not always-on.
       const selected = tower.id === this.selectedTowerId
-      const range = towerEffectiveStats(tower).range
+      const eff = towerEffectiveStats(tower)
+      const range = eff.range
       if (selected || showDebug) {
         g.lineStyle(1.5, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
         g.strokeCircle(tower.pos.x, tower.pos.y, range)
+        // mobile gods: also trace the orbit path so its sweep is legible
+        const m = TOWER_STATS[tower.god].mobile
+        if (m) {
+          g.lineStyle(1, 0xc7b3ff, 0.45)
+          g.strokeCircle(tower.center.x, tower.center.y, m.orbitRadius)
+        }
       }
       if (showDebug) {
         const target = selectTarget(
-          { pos: tower.pos, range, canHitAir: TOWER_STATS[tower.god].canHitAir },
+          { pos: tower.pos, range, canHitAir: eff.canHitAir },
           this.enemies,
           this.enemyPos,
           tower.targeting,
@@ -617,8 +652,11 @@ export class GameScene extends Phaser.Scene {
   private selectTowerAt(pos: Vec2): void {
     let hit: Tower | null = null
     for (const t of this.towers) {
-      const r = TOWER_STATS[t.god].footprint + 4
-      if ((t.pos.x - pos.x) ** 2 + (t.pos.y - pos.y) ** 2 <= r * r) {
+      const stats = TOWER_STATS[t.god]
+      // a mobile god is hard to click while moving — select by its (fixed) orbit AREA instead
+      const c = stats.mobile ? t.center : t.pos
+      const r = (stats.mobile ? stats.mobile.orbitRadius : 0) + stats.footprint + 4
+      if ((c.x - pos.x) ** 2 + (c.y - pos.y) ** 2 <= r * r) {
         hit = t
         break
       }

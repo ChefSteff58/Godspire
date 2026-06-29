@@ -1,8 +1,8 @@
 import type { TargetingMode } from '../systems/targeting'
 
 // The god roster grows across M5. Built so far: Zeus (hitscan), Apollo (piercing projectile),
-// Demeter (money farm — deals no damage; pays gold each wave).
-export type GodKind = 'zeus' | 'apollo' | 'demeter'
+// Demeter (money farm — deals no damage; pays gold each wave), Hermes (mobile anti-air).
+export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes'
 
 export interface TowerStats {
   name: string
@@ -18,8 +18,10 @@ export interface TowerStats {
   attack: 'hitscan' | 'projectile'
   pierce?: number // projectile only: extra enemies passed through
   projectileSpeed?: number // projectile only: px/sec
-  /** Can target FLYING enemies (Harpies). Only Apollo, for now — the lone anti-air. */
+  /** Can target FLYING enemies (Harpies). Base anti-air; upgrades can also grant it. */
   canHitAir?: boolean
+  /** Mobile gods (Hermes) orbit their placed point; pos updates each frame. */
+  mobile?: { orbitRadius: number; angularSpeed: number }
 }
 
 export const TOWER_STATS: Record<GodKind, TowerStats> = {
@@ -67,9 +69,24 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     attack: 'hitscan',
     canHitAir: false, // a farm; never fires anyway
   },
+  hermes: {
+    name: 'Hermes',
+    blurb: 'Winged scout — orbits and strikes foes from the air.',
+    icon: '🪽',
+    cost: 275,
+    range: 120,
+    damage: 3,
+    fireRate: 3, // fast, low-damage darts
+    footprint: 16,
+    defaultTargeting: 'first',
+    color: 0xc7b3ff,
+    attack: 'hitscan',
+    canHitAir: true, // the dedicated anti-air specialist
+    mobile: { orbitRadius: 50, angularSpeed: 1.6 }, // ~4s loop around the placed point
+  },
 }
 
-export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter']
+export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes']
 
 /** Fraction of a tower's cost refunded when sold (BTD6-style). */
 export const SELL_REFUND_RATE = 0.7

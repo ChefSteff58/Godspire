@@ -7,8 +7,9 @@ import {
   canUpgradePath,
 } from '../src/core/data/upgrades'
 import { createTower, type Tower } from '../src/core/entities/tower'
+import { TOWER_STATS } from '../src/core/data/towers'
 
-const tower = (god: 'zeus' | 'apollo' | 'demeter', a = 0, b = 0): Tower => {
+const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes', a = 0, b = 0): Tower => {
   const t = createTower(god, { x: 0, y: 0 })
   t.pathA = a
   t.pathB = b
@@ -64,6 +65,30 @@ describe('cross-path rule (one main, one secondary capped at tier 1)', () => {
   it('nextTier returns null once a path is maxed', () => {
     expect(nextTier('zeus', 'A', 3)).toBeNull()
     expect(nextTier('zeus', 'A', 0)?.name).toBe('Forked Spark')
+  })
+})
+
+describe('anti-air (canHitAir)', () => {
+  it('Hermes is anti-air at base; Apollo too; Zeus/Demeter are not', () => {
+    expect(towerEffectiveStats(tower('hermes')).canHitAir).toBe(true)
+    expect(towerEffectiveStats(tower('apollo')).canHitAir).toBe(true)
+    expect(towerEffectiveStats(tower('zeus')).canHitAir).toBe(false)
+    expect(towerEffectiveStats(tower('demeter')).canHitAir).toBe(false)
+  })
+
+  it('the Zeus Stormcaller "Storm Caller" tier GRANTS anti-air', () => {
+    expect(foldUpgrades('zeus', 1, 0).grantsAir).toBe(false) // only Forked Spark bought
+    expect(foldUpgrades('zeus', 2, 0).grantsAir).toBe(true) // through Storm Caller
+    expect(towerEffectiveStats(tower('zeus', 2, 0)).canHitAir).toBe(true)
+    // the OTHER path (Tyrant) never grants air
+    expect(towerEffectiveStats(tower('zeus', 0, 3)).canHitAir).toBe(false)
+  })
+
+  it('Hermes orbits a fixed center (mobile config present)', () => {
+    expect(TOWER_STATS.hermes.mobile?.orbitRadius).toBeGreaterThan(0)
+    const h = createTower('hermes', { x: 100, y: 200 })
+    expect(h.center).toEqual({ x: 100, y: 200 })
+    expect(h.orbitPhase).toBe(0)
   })
 })
 

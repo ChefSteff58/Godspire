@@ -24,6 +24,8 @@ export interface UpgradeEffect {
   incomePerWaveAdd?: number
   /** Demeter: gold-per-wave that scales with the wave number (× wave). */
   incomeWaveScaleAdd?: number
+  /** Grants anti-air (the Zeus Stormcaller tier — "the storm reaches the sky"). */
+  grantsAir?: boolean
 }
 
 export interface UpgradeTier {
@@ -51,7 +53,7 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       blurb: 'Rapid, wide bolts — the storm-mage line (builds toward chain lightning).',
       tiers: [
         { name: 'Forked Spark', cost: 130, desc: '+40% fire rate, +10% range', effect: { fireRateMul: 1.4, rangeMul: 1.1 } },
-        { name: 'Storm Caller', cost: 240, desc: '+30% fire rate, +20% damage', effect: { fireRateMul: 1.3, damageMul: 1.2, rangeMul: 1.1 } },
+        { name: 'Storm Caller', cost: 240, desc: '+30% fire rate, +20% damage · strikes flying foes', effect: { fireRateMul: 1.3, damageMul: 1.2, rangeMul: 1.1, grantsAir: true } },
         { name: 'Wrath of the Sky', cost: 650, desc: '+40% fire rate, +40% damage, +20% range', effect: { fireRateMul: 1.4, damageMul: 1.4, rangeMul: 1.2 } },
       ],
     },
@@ -105,6 +107,26 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       ],
     },
   },
+  hermes: {
+    A: {
+      name: 'Strafing Ace',
+      blurb: 'A wide, hard-hitting warplane — covers the map with heavy strafing runs.',
+      tiers: [
+        { name: 'War Plane', cost: 150, desc: '+25% range, +30% damage', effect: { rangeMul: 1.25, damageMul: 1.3 } },
+        { name: 'Dive Bomber', cost: 300, desc: '+20% range, +50% damage', effect: { rangeMul: 1.2, damageMul: 1.5 } },
+        { name: 'Sky Sovereign', cost: 720, desc: '+25% range, +60% damage', effect: { rangeMul: 1.25, damageMul: 1.6 } },
+      ],
+    },
+    B: {
+      name: "Hermes' Escort",
+      blurb: 'A rapid hovering gunship — a wall of darts over one chokepoint.',
+      tiers: [
+        { name: 'Twin Guns', cost: 160, desc: '+35% fire rate', effect: { fireRateMul: 1.35 } },
+        { name: 'Gunship', cost: 320, desc: '+35% fire rate, +20% damage', effect: { fireRateMul: 1.35, damageMul: 1.2 } },
+        { name: 'Storm of Arrows', cost: 700, desc: '+45% fire rate, +30% damage', effect: { fireRateMul: 1.45, damageMul: 1.3 } },
+      ],
+    },
+  },
 }
 
 export interface FoldedUpgrades {
@@ -115,11 +137,12 @@ export interface FoldedUpgrades {
   projectileSpeedMul: number
   incomePerWaveAdd: number
   incomeWaveScaleAdd: number
+  grantsAir: boolean
 }
 
 /** Accumulate every purchased tier's effects (paths multiply for muls, add for adds). Pure. */
 export function foldUpgrades(god: GodKind, pathATier: number, pathBTier: number): FoldedUpgrades {
-  const f: FoldedUpgrades = { damageMul: 1, fireRateMul: 1, rangeMul: 1, pierceAdd: 0, projectileSpeedMul: 1, incomePerWaveAdd: 0, incomeWaveScaleAdd: 0 }
+  const f: FoldedUpgrades = { damageMul: 1, fireRateMul: 1, rangeMul: 1, pierceAdd: 0, projectileSpeedMul: 1, incomePerWaveAdd: 0, incomeWaveScaleAdd: 0, grantsAir: false }
   const applyPath = (path: UpgradePathKey, tier: number) => {
     const p = UPGRADES[god]?.[path]
     if (!p) return
@@ -132,6 +155,7 @@ export function foldUpgrades(god: GodKind, pathATier: number, pathBTier: number)
       f.projectileSpeedMul *= e.projectileSpeedMul ?? 1
       f.incomePerWaveAdd += e.incomePerWaveAdd ?? 0
       f.incomeWaveScaleAdd += e.incomeWaveScaleAdd ?? 0
+      f.grantsAir = f.grantsAir || (e.grantsAir ?? false)
     }
   }
   applyPath('A', pathATier)
@@ -145,6 +169,8 @@ export interface EffectiveStats {
   range: number
   pierce: number
   projectileSpeed: number
+  /** Can this tower (base + upgrades) strike flying enemies? */
+  canHitAir: boolean
 }
 
 /** A tower's combat stats after its upgrades (base × folded multipliers). Pure. */
@@ -157,6 +183,7 @@ export function towerEffectiveStats(tower: Tower): EffectiveStats {
     range: base.range * f.rangeMul,
     pierce: (base.pierce ?? 0) + f.pierceAdd,
     projectileSpeed: (base.projectileSpeed ?? 500) * f.projectileSpeedMul,
+    canHitAir: (base.canHitAir ?? false) || f.grantsAir,
   }
 }
 
