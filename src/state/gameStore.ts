@@ -11,11 +11,23 @@ export interface RunSummary {
   bestWave: number
 }
 
-/** The placed tower the player has selected (clicked). Drives the range ring + sell panel. */
+/** One upgrade path's state for the selected tower's panel. */
+export interface SelectedTowerPath {
+  name: string
+  tier: number // 0–3 bought
+  nextName: string | null // next purchasable tier name (null = maxed)
+  nextCost: number | null
+  nextDesc: string | null
+  locked: boolean // blocked by the cross-path rule
+}
+
+/** The placed tower the player has selected (clicked). Drives the range ring + upgrade/sell panel. */
 export interface SelectedTower {
   id: string
   god: GodKind
   sellValue: number
+  pathA: SelectedTowerPath
+  pathB: SelectedTowerPath
 }
 
 /** React→Phaser intents. Enqueued by the UI, drained by GameScene each frame (even while paused). */
@@ -24,6 +36,7 @@ export type RunIntent =
   | { type: 'pickDraft'; index: number }
   | { type: 'playAgain' }
   | { type: 'sellTower' }
+  | { type: 'upgradeTower'; path: 'A' | 'B' }
   | { type: 'cheatGold' }
   | { type: 'cheatInvincible' }
 
@@ -80,6 +93,7 @@ interface GameStore {
   pickDraft: (index: number) => void
   playAgain: () => void
   sellTower: () => void
+  upgradeTower: (path: 'A' | 'B') => void
   cheatGold: () => void
   cheatInvincible: () => void
 }
@@ -144,6 +158,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   pickDraft: (index) => set((s) => ({ intents: [...s.intents, { type: 'pickDraft', index }] })),
   playAgain: () => set((s) => ({ intents: [...s.intents, { type: 'playAgain' }] })),
   sellTower: () => set((s) => ({ intents: [...s.intents, { type: 'sellTower' }] })),
+  upgradeTower: (path) => set((s) => ({ intents: [...s.intents, { type: 'upgradeTower', path }] })),
   cheatGold: () => set((s) => ({ intents: [...s.intents, { type: 'cheatGold' }] })),
   cheatInvincible: () => set((s) => ({ intents: [...s.intents, { type: 'cheatInvincible' }] })),
 }))

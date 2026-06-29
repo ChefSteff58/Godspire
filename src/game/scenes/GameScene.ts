@@ -23,6 +23,13 @@ import {
 } from '../../core/entities/projectile'
 import { selectTarget } from '../../core/systems/targeting'
 import { TOWER_STATS, sellValue, type GodKind } from '../../core/data/towers'
+import {
+  UPGRADES,
+  towerEffectiveStats,
+  demeterIncome,
+  nextTier,
+  canUpgradePath,
+} from '../../core/data/upgrades'
 import { favorFromRun } from '../../core/progress/rules'
 import type { SpawnDesc } from '../../core/run/types'
 import type { Vec2 } from '../../core/types'
@@ -271,23 +278,26 @@ export class GameScene extends Phaser.Scene {
         this.enemySprites.get(enemy.id)?.setPosition(pos.x, pos.y)
       }
 
-      // towers acquire + fire (damage/fire-rate read LIVE from run modifiers, never baked)
+      // towers acquire + fire (effective stats from UPGRADES × run modifiers, read at fire-time)
       for (const tower of this.towers) {
+        const eff = towerEffectiveStats(tower)
+        if (eff.fireRate <= 0 || eff.damage <= 0) continue // farms (Demeter) don't fire
         tower.cooldown -= dtSec
         if (tower.cooldown > 0) continue
-        const target = selectTarget(tower, this.enemies, this.enemyPos, tower.targeting)
+        const target = selectTarget({ pos: tower.pos, range: eff.range }, this.enemies, this.enemyPos, tower.targeting)
         if (!target) continue
-        tower.cooldown = 1 / this.run.effectiveFireRate(tower.god, tower.fireRate)
-        const dmg = this.run.effectiveDamage(tower.god, tower.damage)
+        tower.cooldown = 1 / this.run.effectiveFireRate(tower.god, eff.fireRate)
+        const dmg = this.run.effectiveDamage(tower.god, eff.damage)
         const stats = TOWER_STATS[tower.god]
         if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
-        else this.fireProjectile(tower, target, dmg)
+        else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
       }
 
       this.updateProjectiles(dtSec)
 
-      // clear-gate: a wave ends only when fully emitted AND no enemy remains alive
-      this.run.settle(this.enemies.length)
+      // clear-gate: a wave ends only when fully emitted AND no enemy remains alive.
+      // When it clears, Demeter farms pay out their harvest.
+      if (this.run.settle(this.enemies.length)) this.payDemeterIncome()
     }
 
     useGameStore.getState().mirrorRun(this.run.snapshot())
@@ -301,6 +311,7 @@ export class GameScene extends Phaser.Scene {
       if (it.type === 'startWave') this.run.requestStartWave()
       else if (it.type === 'pickDraft') this.run.pickDraft(it.index)
       else if (it.type === 'sellTower') this.sellSelectedTower()
+      else if (it.type === 'upgradeTower') this.upgradeSelectedTower(it.path)
       else if (it.type === 'cheatGold') this.run.cheatGold()
       else if (it.type === 'cheatInvincible') this.run.toggleInvincible()
       else if (it.type === 'playAgain') {
@@ -380,15 +391,15 @@ export class GameScene extends Phaser.Scene {
     this.hitEnemy(target, damage)
   }
 
-  private fireProjectile(tower: Tower, target: Enemy, damage: number): void {
+  private fireProjectile(tower: Tower, target: Enemy, damage: number, pierce: number, projectileSpeed: number): void {
     const stats = TOWER_STATS[tower.god]
     const tp = this.path.getPointAt(target.pathT)
     const proj = createProjectile(
       tower.pos,
       { x: tp.x - tower.pos.x, y: tp.y - tower.pos.y },
-      stats.projectileSpeed ?? 500,
+      projectileSpeed,
       damage,
-      stats.pierce ?? 0,
+      pierce,
     )
     this.projectiles.push(proj)
     const sprite = this.add
@@ -501,12 +512,13 @@ export class GameScene extends Phaser.Scene {
     for (const tower of this.towers) {
       // Range ring shows ONLY for the selected tower (or every tower in debug) — not always-on.
       const selected = tower.id === this.selectedTowerId
+      const range = towerEffectiveStats(tower).range
       if (selected || showDebug) {
         g.lineStyle(1.5, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
-        g.strokeCircle(tower.pos.x, tower.pos.y, tower.range)
+        g.strokeCircle(tower.pos.x, tower.pos.y, range)
       }
       if (showDebug) {
-        const target = selectTarget(tower, this.enemies, this.enemyPos, tower.targeting)
+        const target = selectTarget({ pos: tower.pos, range }, this.enemies, this.enemyPos, tower.targeting)
         if (target) {
           const tp = this.path.getPointAt(target.pathT)
           g.lineStyle(1, 0xf5d061, 0.7)
@@ -573,14 +585,50 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.selectedTowerId = hit ? hit.id : null
-    useGameStore
-      .getState()
-      .setSelectedTower(hit ? { id: hit.id, god: hit.god, sellValue: sellValue(hit.god) } : null)
+    this.refreshSelected()
   }
 
   private deselectTower(): void {
     this.selectedTowerId = null
     useGameStore.getState().setSelectedTower(null)
+  }
+
+  /** Push the selected tower's upgrade/sell info to the store (after select / upgrade). */
+  private refreshSelected(): void {
+    const tower = this.selectedTowerId ? this.towers.find((t) => t.id === this.selectedTowerId) : null
+    if (!tower) {
+      useGameStore.getState().setSelectedTower(null)
+      return
+    }
+    const pathInfo = (path: 'A' | 'B') => {
+      const tier = path === 'A' ? tower.pathA : tower.pathB
+      const nt = nextTier(tower.god, path, tier)
+      return {
+        name: UPGRADES[tower.god][path].name,
+        tier,
+        nextName: nt?.name ?? null,
+        nextCost: nt?.cost ?? null,
+        nextDesc: nt?.desc ?? null,
+        locked: nt !== null && !canUpgradePath(tower, path),
+      }
+    }
+    useGameStore.getState().setSelectedTower({
+      id: tower.id,
+      god: tower.god,
+      sellValue: sellValue(tower.god),
+      pathA: pathInfo('A'),
+      pathB: pathInfo('B'),
+    })
+  }
+
+  private upgradeSelectedTower(path: 'A' | 'B'): void {
+    const tower = this.selectedTowerId ? this.towers.find((t) => t.id === this.selectedTowerId) : null
+    if (!tower || !canUpgradePath(tower, path)) return
+    const nt = nextTier(tower.god, path, path === 'A' ? tower.pathA : tower.pathB)
+    if (!nt || !this.run.purchase(nt.cost)) return
+    if (path === 'A') tower.pathA++
+    else tower.pathB++
+    this.refreshSelected()
   }
 
   /** Sell the selected tower: refund part of its cost and remove it. */
@@ -595,6 +643,21 @@ export class GameScene extends Phaser.Scene {
     this.towerSprites.delete(id)
     this.towers.splice(idx, 1)
     this.deselectTower()
+  }
+
+  /** Demeter farms pay out gold when a wave clears (with a floating gold number). */
+  private payDemeterIncome(): void {
+    for (const t of this.towers) {
+      if (t.god !== 'demeter') continue
+      const income = demeterIncome(t, this.run.wave)
+      if (income <= 0) continue
+      this.run.grantGold(income)
+      const txt = this.add
+        .text(t.pos.x, t.pos.y - 20, `+${income}`, { fontFamily: 'Georgia, serif', fontSize: '15px', color: '#ffe066', fontStyle: 'bold' })
+        .setOrigin(0.5)
+        .setDepth(9)
+      this.tweens.add({ targets: txt, y: t.pos.y - 48, alpha: 0, duration: 1000, onComplete: () => txt.destroy() })
+    }
   }
 
   private placeTower(god: GodKind, pos: Vec2): void {

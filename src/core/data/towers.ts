@@ -1,7 +1,8 @@
 import type { TargetingMode } from '../systems/targeting'
 
-// The god roster grows to 6 in M5. M2.5 ships Zeus (hitscan) + Apollo (piercing projectile).
-export type GodKind = 'zeus' | 'apollo'
+// The god roster grows across M5. Built so far: Zeus (hitscan), Apollo (piercing projectile),
+// Demeter (money farm — deals no damage; pays gold each wave).
+export type GodKind = 'zeus' | 'apollo' | 'demeter'
 
 export interface TowerStats {
   name: string
@@ -48,9 +49,22 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     pierce: 2,
     projectileSpeed: 1400,
   },
+  demeter: {
+    name: 'Demeter',
+    blurb: 'Harvests gold each wave. Deals no damage.',
+    icon: '🌾',
+    cost: 300,
+    range: 90,
+    damage: 0, // a farm, not a fighter — skipped in the fire loop
+    fireRate: 0,
+    footprint: 22,
+    defaultTargeting: 'first',
+    color: 0x6abe53,
+    attack: 'hitscan',
+  },
 }
 
-export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo']
+export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter']
 
 /** Fraction of a tower's cost refunded when sold (BTD6-style). */
 export const SELL_REFUND_RATE = 0.7

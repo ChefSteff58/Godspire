@@ -47,7 +47,8 @@ export class RunController {
   private secondWindArmed = false
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1 }
-  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1 } }
+  // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
+  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1 } }
   private persistentEffects: BoonEffect[] = []
 
   draft: DraftOption[] | null = null
@@ -182,8 +183,8 @@ export class RunController {
    * enemy array BEFORE this is called each frame, or `liveEnemyCount === 0` could false-trigger
    * between a parent's death and its children's spawn.
    */
-  settle(liveEnemyCount: number): void {
-    if (this.phase !== 'clearing' || liveEnemyCount > 0) return
+  settle(liveEnemyCount: number): boolean {
+    if (this.phase !== 'clearing' || liveEnemyCount > 0) return false
     earn(this.ledger, waveIncome(this.wave, this.ledger.gold))
     this.phase = 'building'
     this.buildGraceMs = BUILD_GRACE_MS // restart the auto-start grace for the next wave
@@ -192,6 +193,7 @@ export class RunController {
       this.draft = generateDraft(this.wave, this.rng)
       this.nextDraftWave = scheduleNextDraft(this.wave, this.rng)
     }
+    return true // a wave just cleared this frame (the scene pays Demeter income)
   }
 
   // ── fire-time stat reads (NEVER baked at placement, so re-folds reach existing towers) ──

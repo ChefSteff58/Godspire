@@ -7,11 +7,14 @@ export interface Tower {
   id: string
   god: GodKind
   pos: Vec2
-  range: number
+  range: number // BASE stat (effective stats come from towerEffectiveStats once upgraded)
   damage: number
   fireRate: number // shots per second
   cooldown: number // seconds until the next shot (counts down to 0)
   targeting: TargetingMode
+  /** Tiers bought on each upgrade path (0–3). */
+  pathA: number
+  pathB: number
 }
 
 let nextId = 1
@@ -27,5 +30,7 @@ export function createTower(god: GodKind, pos: Vec2): Tower {
     fireRate: s.fireRate,
     cooldown: 0,
     targeting: s.defaultTargeting,
+    pathA: 0,
+    pathB: 0,
   }
 }
