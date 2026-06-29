@@ -6,6 +6,8 @@ export type TargetingMode = 'first' | 'last' | 'closest' | 'strongest'
 interface Targeter {
   pos: Vec2
   range: number
+  /** If `false`, the tower cannot acquire FLYING enemies. Undefined = can hit anything. */
+  canHitAir?: boolean
 }
 
 function dist2(a: Vec2, b: Vec2): number {
@@ -32,6 +34,8 @@ export function selectTarget(
   let best: Enemy | null = null
   let bestKey = 0
   for (const e of enemies) {
+    // ground-only towers can't acquire fliers (=== false so an unspecified caller can hit anything)
+    if (e.flying && tower.canHitAir === false) continue
     const d2 = dist2(tower.pos, posOf(e))
     if (d2 > r2) continue
     const key =

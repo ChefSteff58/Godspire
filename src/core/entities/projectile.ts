@@ -13,6 +13,8 @@ export interface Projectile {
   hitIds: string[]
   /** Seconds of life left before it expires. */
   life: number
+  /** Whether this projectile may strike FLYING enemies (set from the firing tower). */
+  canHitAir: boolean
 }
 
 let nextId = 1
@@ -24,6 +26,7 @@ export function createProjectile(
   speed: number,
   damage: number,
   pierce: number,
+  canHitAir = false,
 ): Projectile {
   const len = Math.hypot(dir.x, dir.y) || 1
   return {
@@ -35,6 +38,7 @@ export function createProjectile(
     pierceLeft: pierce,
     hitIds: [],
     life: 2,
+    canHitAir,
   }
 }
 

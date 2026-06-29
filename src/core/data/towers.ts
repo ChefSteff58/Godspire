@@ -18,6 +18,8 @@ export interface TowerStats {
   attack: 'hitscan' | 'projectile'
   pierce?: number // projectile only: extra enemies passed through
   projectileSpeed?: number // projectile only: px/sec
+  /** Can target FLYING enemies (Harpies). Only Apollo, for now — the lone anti-air. */
+  canHitAir?: boolean
 }
 
 export const TOWER_STATS: Record<GodKind, TowerStats> = {
@@ -33,6 +35,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     defaultTargeting: 'first',
     color: 0xf5d061,
     attack: 'hitscan',
+    canHitAir: false, // ground-only — whiffs Harpies (the anti-air lesson)
   },
   apollo: {
     name: 'Apollo',
@@ -48,6 +51,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     attack: 'projectile',
     pierce: 2,
     projectileSpeed: 1400,
+    canHitAir: true, // the lone anti-air — his arrows strike flying foes
   },
   demeter: {
     name: 'Demeter',
@@ -61,6 +65,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     defaultTargeting: 'first',
     color: 0x6abe53,
     attack: 'hitscan',
+    canHitAir: false, // a farm; never fires anyway
   },
 }
 

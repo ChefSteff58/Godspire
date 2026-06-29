@@ -8,11 +8,14 @@ import {
   createEnemy,
   advanceEnemy,
   damageEnemy,
+  onDeath,
   ENEMY_BASE_COLOR,
-  ENEMY_BASE_RADIUS,
+  ENEMY_RADIUS,
+  ENEMY_STROKE,
   damagedColor,
   damagedRadius,
   type Enemy,
+  type SpawnDesc,
 } from '../../core/entities/enemy'
 import { createTower, type Tower } from '../../core/entities/tower'
 import {
@@ -31,7 +34,6 @@ import {
   canUpgradePath,
 } from '../../core/data/upgrades'
 import { favorFromRun } from '../../core/progress/rules'
-import type { SpawnDesc } from '../../core/run/types'
 import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
@@ -61,6 +63,7 @@ export class GameScene extends Phaser.Scene {
   private runEnded = false
   private draftWasOpen = false
   private selectedTowerId: string | null = null
+  private harpyTold = false
 
   constructor() {
     super('Game')
@@ -90,6 +93,7 @@ export class GameScene extends Phaser.Scene {
     this.runEnded = false
     this.draftWasOpen = false
     this.selectedTowerId = null
+    this.harpyTold = false
     useGameStore.getState().setElapsed(0)
     useGameStore.getState().setRunSummary(null)
     useGameStore.getState().setSelectedTower(null)
@@ -284,7 +288,12 @@ export class GameScene extends Phaser.Scene {
         if (eff.fireRate <= 0 || eff.damage <= 0) continue // farms (Demeter) don't fire
         tower.cooldown -= dtSec
         if (tower.cooldown > 0) continue
-        const target = selectTarget({ pos: tower.pos, range: eff.range }, this.enemies, this.enemyPos, tower.targeting)
+        const target = selectTarget(
+          { pos: tower.pos, range: eff.range, canHitAir: TOWER_STATS[tower.god].canHitAir },
+          this.enemies,
+          this.enemyPos,
+          tower.targeting,
+        )
         if (!target) continue
         tower.cooldown = 1 / this.run.effectiveFireRate(tower.god, eff.fireRate)
         const dmg = this.run.effectiveDamage(tower.god, eff.damage)
@@ -369,13 +378,33 @@ export class GameScene extends Phaser.Scene {
     enemy.speed = desc.speed
     enemy.bounty = desc.bounty
     enemy.leakWeight = desc.leakWeight
+    if (desc.splitDepth !== undefined) enemy.splitDepth = desc.splitDepth
+    if (desc.spawnAtT !== undefined) enemy.pathT = desc.spawnAtT // split children appear mid-path
     this.enemies.push(enemy)
-    const pos = this.path.getPointAt(0)
+    if (enemy.kind === 'harpy') this.telegraphHarpy()
+    const pos = this.path.getPointAt(enemy.pathT)
     const sprite = this.add
-      .circle(pos.x, pos.y, ENEMY_BASE_RADIUS, ENEMY_BASE_COLOR[enemy.kind], 1)
-      .setStrokeStyle(2, 0xc9a8ee)
-      .setDepth(4)
+      .circle(pos.x, pos.y, ENEMY_RADIUS[enemy.kind], ENEMY_BASE_COLOR[enemy.kind], 1)
+      .setStrokeStyle(enemy.flying ? 3 : 2, ENEMY_STROKE[enemy.kind])
+      .setDepth(enemy.flying ? 5 : 4) // fliers ride above ground foes (the airborne read)
     this.enemySprites.set(enemy.id, sprite)
+  }
+
+  /** One-time hint the first time a Harpy appears — the only enemy with a hard counter requirement. */
+  private telegraphHarpy(): void {
+    if (this.harpyTold) return
+    this.harpyTold = true
+    const t = this.add
+      .text(GAME_WIDTH / 2, 72, "Harpies fly — only Apollo's arrows reach them!", {
+        fontFamily: 'Georgia, serif',
+        fontSize: '15px',
+        color: '#bfe3ff',
+        backgroundColor: '#000000aa',
+        padding: { x: 10, y: 5 },
+      })
+      .setOrigin(0.5)
+      .setDepth(20)
+    this.tweens.add({ targets: t, alpha: 0, delay: 3500, duration: 800, onComplete: () => t.destroy() })
   }
 
   private removeEnemy(enemy: Enemy): void {
@@ -400,6 +429,7 @@ export class GameScene extends Phaser.Scene {
       projectileSpeed,
       damage,
       pierce,
+      stats.canHitAir ?? false,
     )
     this.projectiles.push(proj)
     const sprite = this.add
@@ -418,8 +448,9 @@ export class GameScene extends Phaser.Scene {
       for (const e of this.enemies.slice()) {
         if (p.pierceLeft < 0) break
         if (p.hitIds.includes(e.id)) continue
+        if (e.flying && !p.canHitAir) continue // ground-only arrows pass under fliers
         const ep = this.path.getPointAt(e.pathT)
-        const hitR = damagedRadius(ENEMY_BASE_RADIUS, e.hp / e.maxHp) + 5
+        const hitR = damagedRadius(ENEMY_RADIUS[e.kind], e.hp / e.maxHp) + 5
         if ((p.pos.x - ep.x) ** 2 + (p.pos.y - ep.y) ** 2 <= hitR * hitR) {
           p.hitIds.push(e.id)
           p.pierceLeft -= 1
@@ -448,7 +479,7 @@ export class GameScene extends Phaser.Scene {
     const sprite = this.enemySprites.get(enemy.id)
     if (sprite) {
       const frac = enemy.hp / enemy.maxHp
-      sprite.setRadius(damagedRadius(ENEMY_BASE_RADIUS, frac))
+      sprite.setRadius(damagedRadius(ENEMY_RADIUS[enemy.kind], frac))
       sprite.setFillStyle(0xffffff) // brief flash
       this.time.delayedCall(70, () => {
         if (sprite.active) sprite.setFillStyle(damagedColor(ENEMY_BASE_COLOR[enemy.kind], frac))
@@ -459,6 +490,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private killEnemy(enemy: Enemy, at: Vec2): void {
+    // Hydra split: children MUST enter this.enemies (via spawnEnemy) BEFORE settle() reads .length
+    // this frame, or the clear-gate false-triggers between the parent's death and the kids' birth.
+    for (const child of onDeath(enemy)) this.spawnEnemy(child)
     const color = ENEMY_BASE_COLOR[enemy.kind]
     this.burst(at.x, at.y, 14, color, 28, 3, 240)
     const poof = this.add.circle(at.x, at.y, 12, color, 0.7).setDepth(7)
@@ -518,7 +552,12 @@ export class GameScene extends Phaser.Scene {
         g.strokeCircle(tower.pos.x, tower.pos.y, range)
       }
       if (showDebug) {
-        const target = selectTarget({ pos: tower.pos, range }, this.enemies, this.enemyPos, tower.targeting)
+        const target = selectTarget(
+          { pos: tower.pos, range, canHitAir: TOWER_STATS[tower.god].canHitAir },
+          this.enemies,
+          this.enemyPos,
+          tower.targeting,
+        )
         if (target) {
           const tp = this.path.getPointAt(target.pathT)
           g.lineStyle(1, 0xf5d061, 0.7)
@@ -532,7 +571,7 @@ export class GameScene extends Phaser.Scene {
       if (e.hp >= e.maxHp) continue
       const p = this.path.getPointAt(e.pathT)
       const frac = Math.max(0, e.hp / e.maxHp)
-      const r = damagedRadius(ENEMY_BASE_RADIUS, frac) + 4
+      const r = damagedRadius(ENEMY_RADIUS[e.kind], frac) + 4
       g.lineStyle(2, 0x000000, 0.4)
       g.strokeCircle(p.x, p.y, r)
       g.lineStyle(2, frac > 0.5 ? 0x6be36b : frac > 0.25 ? 0xe8b04a : 0xd2402f, 0.95)

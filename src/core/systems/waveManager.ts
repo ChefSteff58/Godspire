@@ -16,18 +16,21 @@ const HP_BEND_WAVE = 30
 const SPEED_PER_WAVE = 0.01
 const SPEED_CAP_MUL = 2 // never faster than 2× base
 
-const SHADE_BOUNTY = 4 // flat — HP grows but bounty doesn't, a built-in late-game squeeze
-const SHADE_LEAK_WEIGHT = 1
-
-export interface WaveSpec {
-  wave: number
+/** One contiguous run of a single kind within a wave. */
+export interface SpawnGroup {
   kind: EnemyKind
   count: number
-  intervalMs: number
   hp: number
   speed: number
   bounty: number
   leakWeight: number
+  intervalMs: number
+}
+
+/** A wave = an ordered list of groups, emitted back-to-back. */
+export interface WaveSpec {
+  wave: number
+  groups: SpawnGroup[]
 }
 
 /** Cumulative HP multiplier at wave `n` (1-indexed), with a gentle upward bend past wave 30. */
@@ -58,17 +61,72 @@ export function spawnIntervalMs(n: number): number {
   return Math.max(380, 950 - 12 * (Math.max(1, Math.floor(n)) - 1))
 }
 
-/** The full spawn script for wave `n`. M3 is Shade-only; the roster lands in M4. */
+// ── the roster composition (M4) ──
+// Per-kind: when it debuts, its hp/speed multipliers on the wave curve, and flat bounty/leakWeight.
+// (flying/armor are intrinsic to the kind — set in createEnemy, not here.)
+const ORDER: readonly EnemyKind[] = ['shade', 'skeleton', 'harpy', 'talos', 'hydra']
+const KIND: Record<EnemyKind, { intro: number; hpMul: number; speedMul: number; bounty: number; leakWeight: number }> = {
+  shade: { intro: 1, hpMul: 0.6, speedMul: 1.0, bounty: 3, leakWeight: 1 },
+  skeleton: { intro: 3, hpMul: 1.0, speedMul: 1.0, bounty: 5, leakWeight: 1 },
+  harpy: { intro: 6, hpMul: 0.8, speedMul: 1.15, bounty: 7, leakWeight: 1 },
+  talos: { intro: 9, hpMul: 1.5, speedMul: 0.75, bounty: 12, leakWeight: 2 },
+  hydra: { intro: 12, hpMul: 1.4, speedMul: 0.9, bounty: 9, leakWeight: 1 },
+}
+// Blend weights once multiple kinds are unlocked; talos/hydra are capped so they stay a minority.
+const WEIGHT: Record<EnemyKind, number> = { shade: 5, skeleton: 4, harpy: 3, talos: 1.5, hydra: 1.5 }
+
+/**
+ * How many of each kind spawn at wave `n`. Shares PARTITION the existing enemyCount(n) budget
+ * (they never add bodies — only Hydra's on-death split does). A kind's DEBUT wave is single-kind
+ * (≥1 guaranteed) + Shade cover so exactly one trait is taught at a time. Pure & testable.
+ */
+export function enemyCounts(n: number): Record<EnemyKind, number> {
+  const wave = Math.max(1, Math.floor(n))
+  const total = enemyCount(wave)
+  const counts: Record<EnemyKind, number> = { shade: 0, skeleton: 0, harpy: 0, talos: 0, hydra: 0 }
+  const unlocked = ORDER.filter((k) => wave >= KIND[k].intro)
+
+  const debut = unlocked.find((k) => k !== 'shade' && KIND[k].intro === wave)
+  if (debut) {
+    // teaching wave: mostly the new kind (Hydra capped lower to bound the split fan-out), rest Shade
+    const share = debut === 'hydra' ? 0.4 : 0.7
+    counts[debut] = Math.min(total, Math.max(1, Math.round(total * share)))
+    counts.shade = total - counts[debut]
+    return counts
+  }
+
+  // blended mix: distribute by weight, cap the heavies, dump the rounding remainder into Shade
+  const sumW = unlocked.reduce((s, k) => s + WEIGHT[k], 0)
+  let assigned = 0
+  for (const k of unlocked) {
+    counts[k] = Math.floor((total * WEIGHT[k]) / sumW)
+    assigned += counts[k]
+  }
+  const capTalos = Math.floor(total * 0.25)
+  const capHydra = Math.floor(total * 0.15)
+  if (counts.talos > capTalos) { assigned -= counts.talos - capTalos; counts.talos = capTalos }
+  if (counts.hydra > capHydra) { assigned -= counts.hydra - capHydra; counts.hydra = capHydra }
+  counts.shade += Math.max(0, total - assigned)
+  return counts
+}
+
+function makeGroup(kind: EnemyKind, count: number, n: number): SpawnGroup {
+  const k = KIND[kind]
+  return {
+    kind,
+    count,
+    hp: Math.max(1, Math.round(enemyHp(n) * k.hpMul)),
+    speed: Math.round(enemySpeed(n) * k.speedMul),
+    bounty: k.bounty,
+    leakWeight: k.leakWeight,
+    intervalMs: spawnIntervalMs(n),
+  }
+}
+
+/** The full spawn script for wave `n` — one group per present kind (skipping zero-count kinds). */
 export function waveSpec(n: number): WaveSpec {
   const wave = Math.max(1, Math.floor(n))
-  return {
-    wave,
-    kind: 'shade',
-    count: enemyCount(wave),
-    intervalMs: spawnIntervalMs(wave),
-    hp: enemyHp(wave),
-    speed: enemySpeed(wave),
-    bounty: SHADE_BOUNTY,
-    leakWeight: SHADE_LEAK_WEIGHT,
-  }
+  const counts = enemyCounts(wave)
+  const groups = ORDER.filter((k) => counts[k] > 0).map((k) => makeGroup(k, counts[k], wave))
+  return { wave, groups }
 }

@@ -11,7 +11,8 @@ import { createLedger, spend, canAfford, earn, waveIncome, type Ledger } from '.
 import { waveSpec, type WaveSpec } from '../../core/systems/waveManager'
 import { foldRunModifiers, type BoonEffect } from '../../core/run/boons'
 import { generateDraft, scheduleNextDraft, type DraftOption } from '../../core/run/draft'
-import type { RunPhase, RunModifiers, SpawnDesc } from '../../core/run/types'
+import type { SpawnDesc } from '../../core/entities/enemy'
+import type { RunPhase, RunModifiers } from '../../core/run/types'
 
 export interface RunSnapshot {
   gold: number
@@ -54,9 +55,10 @@ export class RunController {
   draft: DraftOption[] | null = null
   private nextDraftWave = 3
 
-  // active-wave spawn bookkeeping
+  // active-wave spawn bookkeeping — a cursor over the wave's groups
   private spec: WaveSpec | null = null
-  private spawnedCount = 0
+  private groupIdx = 0
+  private spawnedInGroup = 0
   private spawnTimerMs = 0
 
   private readonly rng: Rng
@@ -83,7 +85,8 @@ export class RunController {
     this.draft = null
     this.nextDraftWave = scheduleNextDraft(0, this.rng) // first draft 3–5 waves in, never before wave 1
     this.spec = null
-    this.spawnedCount = 0
+    this.groupIdx = 0
+    this.spawnedInGroup = 0
     this.spawnTimerMs = 0
   }
 
@@ -139,12 +142,25 @@ export class RunController {
     if (this.phase !== 'spawning' || !this.spec) return []
     const out: SpawnDesc[] = []
     this.spawnTimerMs += dtSec * 1000
-    while (this.spawnedCount < this.spec.count && this.spawnTimerMs >= this.spec.intervalMs) {
-      this.spawnTimerMs -= this.spec.intervalMs
-      this.spawnedCount++
-      out.push({ kind: 'shade', hp: this.spec.hp, speed: this.spec.speed, bounty: this.spec.bounty, leakWeight: this.spec.leakWeight })
+    const groups = this.spec.groups
+    // Walk the group cursor: emit from the current group until its count, advance to the next, and
+    // flip to 'clearing' only once the LAST group is fully emitted (the clear-gate depends on this).
+    while (true) {
+      const group = groups[this.groupIdx]
+      if (!group) {
+        this.phase = 'clearing'
+        break
+      }
+      if (this.spawnedInGroup >= group.count) {
+        this.groupIdx++
+        this.spawnedInGroup = 0
+        continue
+      }
+      if (this.spawnTimerMs < group.intervalMs) break // wait for the next spawn tick
+      this.spawnTimerMs -= group.intervalMs
+      this.spawnedInGroup++
+      out.push({ kind: group.kind, hp: group.hp, speed: group.speed, bounty: group.bounty, leakWeight: group.leakWeight, splitDepth: 0 })
     }
-    if (this.spawnedCount >= this.spec.count) this.phase = 'clearing'
     return out
   }
 
@@ -226,8 +242,9 @@ export class RunController {
   private beginWave(n: number): void {
     this.wave = n
     this.spec = waveSpec(n)
-    this.spawnedCount = 0
-    this.spawnTimerMs = this.spec.intervalMs // first enemy spawns on the first tick
+    this.groupIdx = 0
+    this.spawnedInGroup = 0
+    this.spawnTimerMs = this.spec.groups[0]?.intervalMs ?? 0 // first enemy spawns on the first tick
     this.phase = 'spawning'
   }
 

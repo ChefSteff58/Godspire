@@ -60,13 +60,12 @@ describe('wave scaling', () => {
     expect(enemySpeed(300)).toBe(120)
   })
 
-  it('waveSpec is Shade-only with a flat bounty', () => {
+  it('waveSpec returns groups whose total count matches the budget', () => {
     const s = waveSpec(7)
-    expect(s.kind).toBe('shade')
-    expect(s.bounty).toBe(4)
-    expect(s.leakWeight).toBe(1)
-    expect(s.count).toBe(enemyCount(7))
-    expect(s.hp).toBe(enemyHp(7))
+    expect(s.wave).toBe(7)
+    const total = s.groups.reduce((sum, g) => sum + g.count, 0)
+    expect(total).toBe(enemyCount(7))
+    expect(s.groups.every((g) => g.count > 0)).toBe(true)
   })
 })
 

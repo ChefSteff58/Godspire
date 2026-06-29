@@ -19,11 +19,4 @@ export interface RunModifiers {
   godDamageMul: Record<GodKind, number>
 }
 
-/** What one enemy spawn should look like (the scene creates the sprite + mutates the Enemy). */
-export interface SpawnDesc {
-  kind: 'shade'
-  hp: number
-  speed: number
-  bounty: number
-  leakWeight: number
-}
+// SpawnDesc moved to core/entities/enemy.ts (it's enemy-shaped, and onDeath returns it).

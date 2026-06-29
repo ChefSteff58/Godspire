@@ -1,6 +1,9 @@
-// Pure enemy model. M1 has only the "shade" placeholder; the full roster + traits arrive in M4.
+// Pure enemy model + the M4 roster. Five data-driven kinds, each with ONE crisp trait → counter:
+// shade (swarm), skeleton (baseline), harpy (FLYING → Apollo only), talos (ARMOR → big hits),
+// hydra (SPLITS → pierce/AoE). Gorgon-kin (stealth) / Satyr (fast) / Cyclops (tanky) are deferred
+// until their counter-gods (detection / slow) exist.
 
-export type EnemyKind = 'shade'
+export type EnemyKind = 'shade' | 'skeleton' | 'harpy' | 'talos' | 'hydra'
 
 export interface Enemy {
   id: string
@@ -15,17 +18,80 @@ export interface Enemy {
   bounty: number
   /** Lives Olympus loses if this enemy leaks. */
   leakWeight: number
+  /** Airborne — only towers with `canHitAir` can target it. */
+  flying: boolean
+  /** Flat damage reduction per hit (Talos). */
+  armor: number
+  /** How many times this lineage has already split (Hydra). */
+  splitDepth: number
 }
 
-/** Each enemy kind's identity color + base radius (placeholder art). */
-export const ENEMY_BASE_COLOR: Record<EnemyKind, number> = { shade: 0x9d6bd6 }
-export const ENEMY_BASE_RADIUS = 10
+/** What to spawn. The scene creates the Enemy (traits derived from kind) + overrides these. */
+export interface SpawnDesc {
+  kind: EnemyKind
+  hp: number
+  speed: number
+  bounty: number
+  leakWeight: number
+  /** Hydra children carry their lineage depth + birth point (mid-path). */
+  splitDepth?: number
+  spawnAtT?: number
+}
+
+/** Per-kind identity color (the damage-state ramp darkens within a kind, so hue = kind). */
+export const ENEMY_BASE_COLOR: Record<EnemyKind, number> = {
+  shade: 0x9d6bd6,
+  skeleton: 0xe8e4d8,
+  harpy: 0x5fd0e0,
+  talos: 0x8a8f9c,
+  hydra: 0x7ac74f,
+}
+
+/** Per-kind base radius (px) — the glance cue + the collision/HP-ring size. */
+export const ENEMY_RADIUS: Record<EnemyKind, number> = {
+  shade: 7,
+  skeleton: 10,
+  harpy: 9,
+  talos: 15,
+  hydra: 12,
+}
+
+/** Per-kind sprite stroke (a metallic ring reads as armor, a bright ring as airborne). */
+export const ENEMY_STROKE: Record<EnemyKind, number> = {
+  shade: 0xc9a8ee,
+  skeleton: 0xb8b0a0,
+  harpy: 0xffffff,
+  talos: 0x3a3d44,
+  hydra: 0x3f7a2a,
+}
+
+/** Intrinsic traits per kind (the wave manager scales hp/speed/bounty; these stay fixed). */
+const ENEMY_TRAITS: Record<EnemyKind, { flying: boolean; armor: number }> = {
+  shade: { flying: false, armor: 0 },
+  skeleton: { flying: false, armor: 0 },
+  harpy: { flying: true, armor: 0 },
+  talos: { flying: false, armor: 6 },
+  hydra: { flying: false, armor: 0 },
+}
 
 let nextId = 1
 
 export function createEnemy(kind: EnemyKind = 'shade'): Enemy {
-  // Base stats; the wave manager mutates hp/speed/bounty per wave (we never re-signature this fn).
-  return { id: `e${nextId++}`, kind, pathT: 0, speed: 60, hp: 10, maxHp: 10, bounty: 4, leakWeight: 1 }
+  // Base stats; the wave manager mutates hp/speed/bounty/leakWeight per wave. Traits derive from kind.
+  const t = ENEMY_TRAITS[kind]
+  return {
+    id: `e${nextId++}`,
+    kind,
+    pathT: 0,
+    speed: 60,
+    hp: 10,
+    maxHp: 10,
+    bounty: 4,
+    leakWeight: 1,
+    flying: t.flying,
+    armor: t.armor,
+    splitDepth: 0,
+  }
 }
 
 /**
@@ -41,10 +107,34 @@ export function advanceEnemy(enemy: Enemy, dtSeconds: number, pathLength: number
   return false
 }
 
-/** Apply damage. Mutates hp. Returns true if the enemy died (hp ≤ 0). */
+/**
+ * Apply damage, reduced by flat armor. Mutates hp. Returns true if the enemy died (hp ≤ 0).
+ * The `max(1, …)` floor guarantees armored enemies are never literally unkillable, while big
+ * single hits (Zeus Tyrant) shrug off armor and rapid weak shots crater against it.
+ */
 export function damageEnemy(enemy: Enemy, amount: number): boolean {
-  enemy.hp -= amount
+  const dealt = Math.max(1, amount - enemy.armor)
+  enemy.hp -= dealt
   return enemy.hp <= 0
+}
+
+/** How many times a Hydra lineage may split (1 root → 2 → 4, then stop = 7 bodies total). */
+export const SPLIT_DEPTH_CAP = 2
+
+/** What an enemy leaves behind when it dies. Hydra → 2 smaller children at the death point. Pure. */
+export function onDeath(enemy: Enemy): SpawnDesc[] {
+  if (enemy.kind !== 'hydra' || enemy.splitDepth >= SPLIT_DEPTH_CAP) return []
+  const childHp = Math.max(1, Math.round(enemy.maxHp * 0.45))
+  const child = (): SpawnDesc => ({
+    kind: 'hydra',
+    hp: childHp,
+    speed: enemy.speed * 1.15,
+    bounty: Math.max(1, Math.round(enemy.bounty * 0.4)),
+    leakWeight: enemy.leakWeight,
+    splitDepth: enemy.splitDepth + 1,
+    spawnAtT: enemy.pathT,
+  })
+  return [child(), child()]
 }
 
 // ── damage-state visuals (pure) — the enemy darkens + shrinks as it loses HP,
