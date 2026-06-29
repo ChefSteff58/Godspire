@@ -16,6 +16,10 @@ const HP_BEND_WAVE = 30
 const SPEED_PER_WAVE = 0.01
 const SPEED_CAP_MUL = 2 // never faster than 2× base
 
+// A leak late in a run should HURT — a Talos breaching at wave 30 must cost far more than at wave 9.
+// leakWeight compounds with the wave so late mistakes are punishing (×1.6 per 10 waves).
+const LEAK_RATE = 1.6
+
 /** One contiguous run of a single kind within a wave. */
 export interface SpawnGroup {
   kind: EnemyKind
@@ -59,6 +63,12 @@ export function enemySpeed(n: number): number {
 /** Gap between spawns — tightens with the wave (more pressure), floored so it stays readable. */
 export function spawnIntervalMs(n: number): number {
   return Math.max(380, 950 - 12 * (Math.max(1, Math.floor(n)) - 1))
+}
+
+/** Lives a leaking enemy costs, scaled up the run so late breaches sting (compounds ×1.6/10 waves). */
+export function leakWeightAt(base: number, n: number): number {
+  const w = Math.max(1, Math.floor(n))
+  return Math.max(base, Math.round(base * LEAK_RATE ** ((w - 1) / 10)))
 }
 
 // ── the roster composition (M4) ──
@@ -120,7 +130,7 @@ function makeGroup(kind: EnemyKind, count: number, n: number): SpawnGroup {
     hp: Math.max(1, Math.round(enemyHp(n) * k.hpMul)),
     speed: Math.round(enemySpeed(n) * k.speedMul),
     bounty: k.bounty,
-    leakWeight: k.leakWeight,
+    leakWeight: leakWeightAt(k.leakWeight, n),
     intervalMs: spawnIntervalMs(n),
   }
 }

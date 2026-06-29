@@ -25,7 +25,7 @@ import {
   projectileDone,
   type Projectile,
 } from '../../core/entities/projectile'
-import { selectTarget } from '../../core/systems/targeting'
+import { selectTarget, type TargetingMode } from '../../core/systems/targeting'
 import { TOWER_STATS, sellValue, type GodKind } from '../../core/data/towers'
 import {
   UPGRADES,
@@ -57,6 +57,8 @@ export class GameScene extends Phaser.Scene {
   private readonly enemySprites = new Map<string, Phaser.GameObjects.Arc>()
   private towers: Tower[] = []
   private readonly towerSprites = new Map<string, Phaser.GameObjects.Container>()
+  // Mobile gods (Hermes) get a static "home base" badge at their orbit center — the click target.
+  private readonly homeBaseGfx = new Map<string, Phaser.GameObjects.Container>()
   private projectiles: Projectile[] = []
   private readonly projSprites = new Map<string, Phaser.GameObjects.Rectangle>()
   // Hephaestus spike traps, one per owner tower (keyed by tower id).
@@ -90,6 +92,7 @@ export class GameScene extends Phaser.Scene {
     this.enemySprites.clear()
     this.towers = []
     this.towerSprites.clear()
+    this.homeBaseGfx.clear()
     this.projectiles = []
     this.projSprites.clear()
     this.spikes.clear()
@@ -138,7 +141,12 @@ export class GameScene extends Phaser.Scene {
 
   private enemyPos = (e: Enemy): Vec2 => this.path.getPointAt(e.pathT)
   private towerFootprints() {
-    return this.towers.map((t) => ({ pos: t.pos, footprint: TOWER_STATS[t.god].footprint }))
+    // A mobile god's dead zone is its FIXED home base, not its orbiting position — so other towers
+    // can be built freely under its sweep (only the small base footprint is blocked).
+    return this.towers.map((t) => ({
+      pos: TOWER_STATS[t.god].mobile ? t.center : t.pos,
+      footprint: TOWER_STATS[t.god].footprint,
+    }))
   }
 
   // ── static map (flat, top-down) ──
@@ -348,6 +356,7 @@ export class GameScene extends Phaser.Scene {
       else if (it.type === 'pickDraft') this.run.pickDraft(it.index)
       else if (it.type === 'sellTower') this.sellSelectedTower()
       else if (it.type === 'upgradeTower') this.upgradeSelectedTower(it.path)
+      else if (it.type === 'setTargeting') this.setSelectedTargeting(it.mode)
       else if (it.type === 'cheatGold') this.run.cheatGold()
       else if (it.type === 'cheatInvincible') this.run.toggleInvincible()
       else if (it.type === 'playAgain') {
@@ -471,18 +480,21 @@ export class GameScene extends Phaser.Scene {
     return { damageMul, fireRateMul, detect }
   }
 
-  /** Aphrodite: slow every enemy currently inside a slow-aura tower's range. */
+  /** Aphrodite: charm only the LEAD foes in range, up to her cap — she can't hold the whole lane. */
   private updateSlowAuras(): void {
     for (const tower of this.towers) {
       const aura = TOWER_STATS[tower.god].slowAura
       if (!aura) continue
       const eff = towerEffectiveStats(tower)
       const r2 = eff.range * eff.range
-      for (const e of this.enemies) {
+      const inRange = this.enemies.filter((e) => {
         const ep = this.path.getPointAt(e.pathT)
-        if ((tower.pos.x - ep.x) ** 2 + (tower.pos.y - ep.y) ** 2 <= r2) {
-          applySlow(e, eff.slowMul, aura.refreshMs)
-        }
+        return (tower.pos.x - ep.x) ** 2 + (tower.pos.y - ep.y) ** 2 <= r2
+      })
+      // prioritize the foes furthest along (most urgent), then apply the slow to the first N
+      inRange.sort((a, b) => b.pathT - a.pathT)
+      for (let i = 0; i < inRange.length && i < eff.slowTargets; i++) {
+        applySlow(inRange[i], eff.slowMul, aura.refreshMs)
       }
     }
   }
@@ -830,9 +842,9 @@ export class GameScene extends Phaser.Scene {
     let hit: Tower | null = null
     for (const t of this.towers) {
       const stats = TOWER_STATS[t.god]
-      // a mobile god is hard to click while moving — select by its (fixed) orbit AREA instead
+      // a mobile god is hard to click while moving — select via its fixed HOME BASE at the center
       const c = stats.mobile ? t.center : t.pos
-      const r = (stats.mobile ? stats.mobile.orbitRadius : 0) + stats.footprint + 4
+      const r = stats.footprint + 6
       if ((c.x - pos.x) ** 2 + (c.y - pos.y) ** 2 <= r * r) {
         hit = t
         break
@@ -866,10 +878,14 @@ export class GameScene extends Phaser.Scene {
         locked: nt !== null && !canUpgradePath(tower, path),
       }
     }
+    const stats = TOWER_STATS[tower.god]
     useGameStore.getState().setSelectedTower({
       id: tower.id,
       god: tower.god,
       sellValue: sellValue(tower.god),
+      targeting: tower.targeting,
+      // only gods that actually acquire a target expose a priority (not farms / auras / spike forges)
+      targets: stats.damage > 0 && !stats.deployable,
       pathA: pathInfo('A'),
       pathB: pathInfo('B'),
     })
@@ -885,6 +901,14 @@ export class GameScene extends Phaser.Scene {
     this.refreshSelected()
   }
 
+  /** Set the selected tower's target priority (First / Last / Closest / Strongest). */
+  private setSelectedTargeting(mode: TargetingMode): void {
+    const tower = this.selectedTowerId ? this.towers.find((t) => t.id === this.selectedTowerId) : null
+    if (!tower) return
+    tower.targeting = mode
+    this.refreshSelected()
+  }
+
   /** Sell the selected tower: refund part of its cost and remove it. */
   private sellSelectedTower(): void {
     const id = this.selectedTowerId
@@ -895,6 +919,8 @@ export class GameScene extends Phaser.Scene {
     this.run.grantGold(sellValue(t.god))
     this.towerSprites.get(id)?.destroy()
     this.towerSprites.delete(id)
+    this.homeBaseGfx.get(id)?.destroy() // remove a mobile god's home base with it
+    this.homeBaseGfx.delete(id)
     this.spikes.delete(id) // remove a Hephaestus trap with its forge
     this.spikeGfx.get(id)?.destroy()
     this.spikeGfx.delete(id)
@@ -917,20 +943,37 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private placeTower(god: GodKind, pos: Vec2): void {
-    const tower = createTower(god, pos)
-    this.towers.push(tower)
+  /** The standard god badge — a colored disc with the god's initial. */
+  private makeBadge(god: GodKind, radius = 16): Phaser.GameObjects.Container {
     const stats = TOWER_STATS[god]
-    const circle = this.add.circle(0, 0, 16, stats.color, 1).setStrokeStyle(2, 0xffffff)
+    const circle = this.add.circle(0, 0, radius, stats.color, 1).setStrokeStyle(2, 0xffffff)
     const label = this.add
       .text(0, 0, stats.name[0], {
         fontFamily: 'Georgia, serif',
-        fontSize: '18px',
+        fontSize: `${Math.round(radius * 1.1)}px`,
         fontStyle: 'bold',
         color: '#1a1407',
       })
       .setOrigin(0.5)
-    const container = this.add.container(pos.x, pos.y, [circle, label]).setDepth(6)
+    return this.add.container(0, 0, [circle, label])
+  }
+
+  private placeTower(god: GodKind, pos: Vec2): void {
+    const tower = createTower(god, pos)
+    this.towers.push(tower)
+    const stats = TOWER_STATS[god]
+    if (stats.mobile) {
+      // Mobile god: a fixed HOME BASE badge at the center (identity + click target), and a small
+      // marker that actually orbits/strikes. Clicking the base manages a god that won't sit still.
+      const base = this.makeBadge(god).setPosition(tower.center.x, tower.center.y).setDepth(5)
+      this.homeBaseGfx.set(tower.id, base)
+      const flier = this.add
+        .container(pos.x, pos.y, [this.add.circle(0, 0, 7, stats.color, 1).setStrokeStyle(2, 0xffffff)])
+        .setDepth(6)
+      this.towerSprites.set(tower.id, flier)
+      return
+    }
+    const container = this.makeBadge(god).setPosition(pos.x, pos.y).setDepth(6)
     this.towerSprites.set(tower.id, container)
   }
 }

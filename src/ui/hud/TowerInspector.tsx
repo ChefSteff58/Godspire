@@ -1,12 +1,21 @@
 import { useGameStore, type SelectedTowerPath } from '../../state/gameStore'
 import { TOWER_STATS } from '../../core/data/towers'
+import type { TargetingMode } from '../../core/systems/targeting'
 
-/** Appears when a placed tower is selected: its two upgrade paths + a Sell button. */
+const TARGET_MODES: { mode: TargetingMode; label: string; title: string }[] = [
+  { mode: 'first', label: 'First', title: 'Target the foe furthest along the path (closest to Olympus)' },
+  { mode: 'last', label: 'Last', title: 'Target the foe least far along (newest into the field)' },
+  { mode: 'closest', label: 'Close', title: 'Target the foe nearest this god' },
+  { mode: 'strongest', label: 'Strong', title: 'Target the foe with the most health' },
+]
+
+/** Appears when a placed tower is selected: target priority, its two upgrade paths + a Sell button. */
 export function TowerInspector() {
   const sel = useGameStore((s) => s.selectedTower)
   const gold = useGameStore((s) => s.gold)
   const upgradeTower = useGameStore((s) => s.upgradeTower)
   const sellTower = useGameStore((s) => s.sellTower)
+  const setTargeting = useGameStore((s) => s.setTargeting)
   if (!sel) return null
   const stats = TOWER_STATS[sel.god]
 
@@ -23,6 +32,23 @@ export function TowerInspector() {
           Sell 🪙{sel.sellValue}
         </button>
       </div>
+      {sel.targets && (
+        <div className="flex items-center gap-1">
+          <span className="mr-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Target</span>
+          {TARGET_MODES.map(({ mode, label, title }) => (
+            <button
+              key={mode}
+              title={title}
+              onClick={() => setTargeting(mode)}
+              className={`flex-1 rounded px-1.5 py-1 text-[11px] font-bold transition ${
+                sel.targeting === mode ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <PathRow info={sel.pathA} gold={gold} onUpgrade={() => upgradeTower('A')} />
       <PathRow info={sel.pathB} gold={gold} onUpgrade={() => upgradeTower('B')} />
     </div>

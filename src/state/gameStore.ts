@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { GodKind } from '../core/data/towers'
+import type { TargetingMode } from '../core/systems/targeting'
 import type { RunPhase } from '../core/run/types'
 import type { DraftOption } from '../core/run/draft'
 import type { RunSnapshot } from '../game/run/RunController'
@@ -26,6 +27,10 @@ export interface SelectedTower {
   id: string
   god: GodKind
   sellValue: number
+  /** Current target-priority (only meaningful for gods that actually acquire a target). */
+  targeting: TargetingMode
+  /** Whether this god picks a target at all (false for farms / auras / spike forges). */
+  targets: boolean
   pathA: SelectedTowerPath
   pathB: SelectedTowerPath
 }
@@ -37,6 +42,7 @@ export type RunIntent =
   | { type: 'playAgain' }
   | { type: 'sellTower' }
   | { type: 'upgradeTower'; path: 'A' | 'B' }
+  | { type: 'setTargeting'; mode: TargetingMode }
   | { type: 'cheatGold' }
   | { type: 'cheatInvincible' }
 
@@ -94,6 +100,7 @@ interface GameStore {
   playAgain: () => void
   sellTower: () => void
   upgradeTower: (path: 'A' | 'B') => void
+  setTargeting: (mode: TargetingMode) => void
   cheatGold: () => void
   cheatInvincible: () => void
 }
@@ -119,7 +126,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   placingGod: null,
   showDebug: false,
   timeScale: 1,
-  autoStart: false,
+  autoStart: true, // rounds auto-chain (BTD6 auto-play); the first wave still waits for a manual start
   intents: [],
   ...FRESH_RUN,
 
@@ -159,6 +166,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   playAgain: () => set((s) => ({ intents: [...s.intents, { type: 'playAgain' }] })),
   sellTower: () => set((s) => ({ intents: [...s.intents, { type: 'sellTower' }] })),
   upgradeTower: (path) => set((s) => ({ intents: [...s.intents, { type: 'upgradeTower', path }] })),
+  setTargeting: (mode) => set((s) => ({ intents: [...s.intents, { type: 'setTargeting', mode }] })),
   cheatGold: () => set((s) => ({ intents: [...s.intents, { type: 'cheatGold' }] })),
   cheatInvincible: () => set((s) => ({ intents: [...s.intents, { type: 'cheatInvincible' }] })),
 }))

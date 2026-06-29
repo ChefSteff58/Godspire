@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { selectTarget } from '../src/core/systems/targeting'
 import { createEnemy, damageEnemy, onDeath, applySlow, advanceEnemy, SPLIT_DEPTH_CAP, type Enemy } from '../src/core/entities/enemy'
-import { enemyCounts, waveSpec } from '../src/core/systems/waveManager'
+import { enemyCounts, waveSpec, leakWeightAt } from '../src/core/systems/waveManager'
 import { TOWER_STATS } from '../src/core/data/towers'
 
 const posOf = (e: Enemy) => ({ x: e.pathT * 100, y: 0 })
@@ -142,6 +142,21 @@ describe('slow status (Aphrodite)', () => {
     applySlow(e, 0.6, 500)
     applySlow(e, 0.3, 500)
     expect(e.slowMul).toBe(0.3)
+  })
+})
+
+describe('leak weight scaling', () => {
+  it('compounds up the run so late breaches cost far more lives', () => {
+    expect(leakWeightAt(1, 1)).toBe(1) // wave 1: base
+    expect(leakWeightAt(2, 1)).toBe(2) // Talos base at wave 1
+    expect(leakWeightAt(2, 31)).toBeGreaterThan(2 * 3) // ~×4 by wave 31
+    // strictly non-decreasing with the wave
+    let prev = 0
+    for (const w of [1, 5, 10, 20, 30, 40]) {
+      const lw = leakWeightAt(2, w)
+      expect(lw).toBeGreaterThanOrEqual(prev)
+      prev = lw
+    }
   })
 })
 

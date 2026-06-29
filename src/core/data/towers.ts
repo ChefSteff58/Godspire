@@ -28,8 +28,8 @@ export interface TowerStats {
   splash?: { radius: number; knockback: number }
   /** Must be placed on water terrain (the Styx pool) — Poseidon. */
   requiresWater?: boolean
-  /** Slow-aura gods (Aphrodite): every enemy in range is slowed (no shooting). */
-  slowAura?: { mul: number; refreshMs: number }
+  /** Slow-aura gods (Aphrodite): slows up to `maxTargets` foes in range (the lead ones), not all. */
+  slowAura?: { mul: number; refreshMs: number; maxTargets: number }
   /** Support gods (Athena): buff nearby gods' damage/fire-rate + grant stealth detection. */
   auraBuff?: { damageMul: number; fireRateMul: number; detect: boolean }
 }
@@ -127,7 +127,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
   },
   aphrodite: {
     name: 'Aphrodite',
-    blurb: 'Foes fall in love and slow to a crawl — a chilling field. No damage.',
+    blurb: 'Charms the lead foes — they fall in love and crawl. Limited targets. No damage.',
     icon: '💘',
     cost: 220,
     range: 150,
@@ -138,7 +138,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     color: 0xff6fae,
     attack: 'hitscan',
     canHitAir: false,
-    slowAura: { mul: 0.55, refreshMs: 600 },
+    slowAura: { mul: 0.55, refreshMs: 600, maxTargets: 5 }, // charms the lead 5 foes, not the whole lane
   },
   athena: {
     name: 'Athena',

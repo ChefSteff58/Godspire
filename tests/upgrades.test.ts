@@ -124,11 +124,20 @@ describe('Poseidon AoE', () => {
 })
 
 describe('Aphrodite slow aura', () => {
-  it('deepens down the Winter path, floored so foes never fully stop', () => {
+  it('Winter (B) deepens the slow, floored so foes never fully stop', () => {
     expect(TOWER_STATS.aphrodite.slowAura?.mul).toBe(0.55)
     expect(towerEffectiveStats(tower('aphrodite')).slowMul).toBeCloseTo(0.55)
     expect(towerEffectiveStats(tower('aphrodite', 0, 1)).slowMul).toBeCloseTo(0.55 * 0.7) // First Frost
     expect(towerEffectiveStats(tower('aphrodite', 0, 3)).slowMul).toBeGreaterThanOrEqual(0.15) // floored
+  })
+
+  it('charms a capped crowd; Glue & Charm (A) widens the cap, not the depth', () => {
+    expect(TOWER_STATS.aphrodite.slowAura?.maxTargets).toBe(5)
+    expect(towerEffectiveStats(tower('aphrodite')).slowTargets).toBe(5)
+    expect(towerEffectiveStats(tower('aphrodite', 1, 0)).slowTargets).toBe(5 + 2) // Sticky Heart
+    expect(towerEffectiveStats(tower('aphrodite', 2, 0)).slowTargets).toBe(5 + 2 + 3) // + Sweet Nothings
+    // Path A no longer deepens the slow — it stays at base while only the cap grows
+    expect(towerEffectiveStats(tower('aphrodite', 2, 0)).slowMul).toBeCloseTo(0.55)
   })
 })
 
