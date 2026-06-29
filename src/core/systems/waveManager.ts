@@ -9,9 +9,10 @@ import type { EnemyKind } from '../entities/enemy'
 const BASE_HP = 10
 const BASE_SPEED = 60 // px/sec, matches createEnemy's default
 
-const HP_RATE = 1.12 // compounding per wave
-const HP_RATE_LATE = 1.14 // gentle bend upward so inevitability beats tedium
-const HP_BEND_WAVE = 30
+// HP is a GENTLE tail now (was ×1.12 compounding, which made enemy health outrun gold-bought DPS
+// ~36× over 50 waves → "trivial then a wall"). ×1.05/wave only paces intra-kind attrition;
+// difficulty rides on COMPOSITION (stronger TYPES) + count, BTD6-style — not on inflating one body.
+const HP_RATE = 1.05
 
 const SPEED_PER_WAVE = 0.01
 const SPEED_CAP_MUL = 2 // never faster than 2× base
@@ -33,21 +34,24 @@ export interface WaveSpec {
   groups: SpawnGroup[]
 }
 
-/** Cumulative HP multiplier at wave `n` (1-indexed), with a gentle upward bend past wave 30. */
+/** Cumulative HP multiplier at wave `n` (1-indexed) — a gentle ×1.05 tail, no late bend. */
 export function enemyHpMul(n: number): number {
-  const w = Math.max(1, Math.floor(n))
-  if (w <= HP_BEND_WAVE) return HP_RATE ** (w - 1)
-  return HP_RATE ** (HP_BEND_WAVE - 1) * HP_RATE_LATE ** (w - HP_BEND_WAVE)
+  return HP_RATE ** (Math.max(1, Math.floor(n)) - 1)
 }
 
 export function enemyHp(n: number): number {
   return Math.round(BASE_HP * enemyHpMul(n))
 }
 
-/** Linear count growth — keeps the frame budget bounded while HP climbs. (+20% difficulty pass.) */
-const COUNT_DIFFICULTY_MUL = 1.2
+/**
+ * Count grows on a SQRT curve under a HARD ceiling — more bodies early-to-mid (where the user wants
+ * threat to come from "more creatures"), then flattens so the per-frame budget (sprites + targeting
+ * loops + projectile collisions) stays safe. ~8 at w1, ~20 at w30, capped at 45 (~w70+).
+ */
+export const COUNT_CEILING = 45
 export function enemyCount(n: number): number {
-  return Math.round((8 + 0.5 * (Math.max(1, Math.floor(n)) - 1)) * COUNT_DIFFICULTY_MUL)
+  const w = Math.max(1, Math.floor(n))
+  return Math.round(Math.min(8 + 2.2 * Math.sqrt(w - 1), COUNT_CEILING))
 }
 
 /** Speed rises slowly and is hard-capped at 2× base (pins ~wave 100). */
@@ -69,18 +73,41 @@ export function spawnIntervalMs(n: number): number {
 // breaches (a Talos leak hurts far more than a Shade). It does NOT scale with the wave number;
 // late-run lethality comes from tougher COMPOSITION (more of the heavy kinds), not from inflating
 // the same creature's cost. Lives base ~100, so a handful of heavy leaks is a real threat.
+// hpMul is a real LADDER (not noise): a Talos is unambiguously the tankiest body on screen at EVERY
+// wave, a Shade always the flimsiest — so the player reads threat by TYPE, not by a hidden wave number.
 const ORDER: readonly EnemyKind[] = ['shade', 'skeleton', 'harpy', 'talos', 'hydra', 'satyr', 'gorgon']
 const KIND: Record<EnemyKind, { intro: number; hpMul: number; speedMul: number; bounty: number; leakWeight: number }> = {
-  shade: { intro: 1, hpMul: 0.6, speedMul: 1.0, bounty: 3, leakWeight: 1 }, // chaff — let it trickle
+  shade: { intro: 1, hpMul: 0.5, speedMul: 1.0, bounty: 3, leakWeight: 1 }, // chaff — flimsiest, let it trickle
   skeleton: { intro: 3, hpMul: 1.0, speedMul: 1.0, bounty: 5, leakWeight: 2 }, // the 1-RBE yardstick
   satyr: { intro: 15, hpMul: 0.7, speedMul: 1.6, bounty: 6, leakWeight: 3 }, // FAST → leaks easily but fragile
-  harpy: { intro: 6, hpMul: 0.8, speedMul: 1.15, bounty: 7, leakWeight: 5 }, // flying → a structural anti-air gap
-  gorgon: { intro: 18, hpMul: 1.0, speedMul: 1.0, bounty: 8, leakWeight: 7 }, // STEALTH → it was invisible to you
-  hydra: { intro: 12, hpMul: 1.4, speedMul: 0.9, bounty: 9, leakWeight: 4 }, // splits — children inherit halved
-  talos: { intro: 9, hpMul: 1.5, speedMul: 0.75, bounty: 12, leakWeight: 10 }, // armored wall → a leak is a disaster
+  harpy: { intro: 6, hpMul: 1.1, speedMul: 1.15, bounty: 7, leakWeight: 5 }, // flying → a structural anti-air gap
+  gorgon: { intro: 18, hpMul: 1.4, speedMul: 1.0, bounty: 8, leakWeight: 7 }, // STEALTH → it was invisible to you
+  hydra: { intro: 12, hpMul: 1.6, speedMul: 0.9, bounty: 9, leakWeight: 4 }, // splits — children inherit halved
+  talos: { intro: 9, hpMul: 2.6, speedMul: 0.75, bounty: 12, leakWeight: 10 }, // armored wall → tankiest, leak = disaster
 }
-// Blend weights once multiple kinds are unlocked; talos/hydra are capped so they stay a minority.
-const WEIGHT: Record<EnemyKind, number> = { shade: 5, skeleton: 4, harpy: 3, talos: 1.5, hydra: 1.5, satyr: 2.5, gorgon: 2.5 }
+
+// COMPOSITION is the headline difficulty engine: weights DRIFT with the wave so the lane sweeps from a
+// shade-sea (early) to a talos/gorgon/hydra wall (late). Chaff decays, heavies climb. weightAt(kind,wave).
+const WEIGHT_CURVE: Record<EnemyKind, { base: number; slope: number; floor: number }> = {
+  shade: { base: 6.0, slope: -0.13, floor: 0.5 }, // decays hardest
+  skeleton: { base: 5.0, slope: -0.06, floor: 1.0 }, // decays slowly
+  satyr: { base: 1.6, slope: 0.045, floor: 1.6 }, // climbs
+  harpy: { base: 2.0, slope: 0.05, floor: 2.0 }, // climbs
+  hydra: { base: 1.0, slope: 0.05, floor: 1.0 }, // climbs
+  gorgon: { base: 1.4, slope: 0.06, floor: 1.4 }, // climbs
+  talos: { base: 0.9, slope: 0.06, floor: 0.9 }, // climbs hardest
+}
+/** Blend weight for a kind at a given wave — chaff falls off, heavy kinds rise. Pure. */
+export function weightAt(kind: EnemyKind, wave: number): number {
+  const c = WEIGHT_CURVE[kind]
+  return Math.max(c.floor, c.base + c.slope * (Math.max(1, Math.floor(wave)) - 1))
+}
+
+/** Every 10th wave is an "elite legion" — heavies surge (a readable tension peak, BTD6-style). */
+export function isEliteWave(n: number): boolean {
+  const w = Math.max(1, Math.floor(n))
+  return w % 10 === 0
+}
 
 /**
  * How many of each kind spawn at wave `n`. Shares PARTITION the existing enemyCount(n) budget
@@ -102,15 +129,22 @@ export function enemyCounts(n: number): Record<EnemyKind, number> {
     return counts
   }
 
-  // blended mix: distribute by weight, cap the heavies, dump the rounding remainder into Shade
-  const sumW = unlocked.reduce((s, k) => s + WEIGHT[k], 0)
+  // blended mix: distribute by the wave-DRIFTING weight (heavies surge on elite waves), cap the
+  // heavies (caps RISE with the wave so they become a bigger slice late), remainder → Shade.
+  const elite = isEliteWave(wave)
+  const w = (k: EnemyKind): number => {
+    const x = weightAt(k, wave)
+    return elite && (k === 'talos' || k === 'hydra' || k === 'gorgon') ? x * 2.4 : x
+  }
+  const sumW = unlocked.reduce((s, k) => s + w(k), 0)
   let assigned = 0
   for (const k of unlocked) {
-    counts[k] = Math.floor((total * WEIGHT[k]) / sumW)
+    counts[k] = Math.floor((total * w(k)) / sumW)
     assigned += counts[k]
   }
-  const capTalos = Math.floor(total * 0.25)
-  const capHydra = Math.floor(total * 0.15)
+  const eliteMul = elite ? 1.5 : 1
+  const capTalos = Math.floor(total * Math.min(0.45, (0.25 + 0.004 * wave) * eliteMul)) // 0.25→0.40 by ~w40
+  const capHydra = Math.floor(total * Math.min(0.35, (0.15 + 0.004 * wave) * eliteMul)) // 0.15→0.30 by ~w40
   if (counts.talos > capTalos) { assigned -= counts.talos - capTalos; counts.talos = capTalos }
   if (counts.hydra > capHydra) { assigned -= counts.hydra - capHydra; counts.hydra = capHydra }
   counts.shade += Math.max(0, total - assigned)

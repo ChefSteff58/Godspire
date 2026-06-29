@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { selectTarget } from '../src/core/systems/targeting'
 import { createEnemy, damageEnemy, onDeath, applySlow, advanceEnemy, SPLIT_DEPTH_CAP, type Enemy } from '../src/core/entities/enemy'
-import { enemyCounts, waveSpec } from '../src/core/systems/waveManager'
+import { enemyCounts, waveSpec, enemyHpMul, enemyCount, weightAt, isEliteWave, COUNT_CEILING } from '../src/core/systems/waveManager'
 import { TOWER_STATS } from '../src/core/data/towers'
 
 const posOf = (e: Enemy) => ({ x: e.pathT * 100, y: 0 })
@@ -193,10 +193,54 @@ describe('wave composition', () => {
     }
   })
 
-  it('Talos and Hydra stay a capped minority in blended waves', () => {
-    const c = enemyCounts(20) // well past all debuts
+  it('heavies stay capped, but the cap RISES with the wave (no longer a hard 0.25/0.15)', () => {
+    const c = enemyCounts(25) // non-elite, well past all debuts; cap ≈ 0.25+0.004·25 = 0.35
     const total = Object.values(c).reduce((s, n) => s + n, 0)
-    expect(c.talos).toBeLessThanOrEqual(Math.ceil(total * 0.25))
-    expect(c.hydra).toBeLessThanOrEqual(Math.ceil(total * 0.15))
+    expect(c.talos).toBeLessThanOrEqual(Math.ceil(total * 0.37))
+    expect(c.hydra).toBeLessThanOrEqual(Math.ceil(total * 0.37))
+  })
+})
+
+describe('difficulty model — Type-Carried Hybrid', () => {
+  it('HP is a GENTLE tail now (×1.05), not the old runaway ×1.12 compounding', () => {
+    expect(enemyHpMul(1)).toBe(1)
+    expect(enemyHpMul(40)).toBeLessThan(10) // 1.05^39 ≈ 6.7 (was 1.12^39 ≈ 84)
+    expect(enemyHpMul(20)).toBeGreaterThan(enemyHpMul(10)) // still rising
+  })
+
+  it('count grows on a sqrt curve under a hard ceiling', () => {
+    expect(enemyCount(1)).toBe(8)
+    expect(enemyCount(1000)).toBe(COUNT_CEILING) // flattens — frame budget stays bounded
+    let prev = 0
+    for (const w of [1, 5, 10, 20, 30, 50, 100]) {
+      expect(enemyCount(w)).toBeGreaterThanOrEqual(prev) // monotonic
+      expect(enemyCount(w)).toBeLessThanOrEqual(COUNT_CEILING)
+      prev = enemyCount(w)
+    }
+  })
+
+  it('composition DRIFTS: chaff decays, heavies climb', () => {
+    expect(weightAt('shade', 1)).toBeGreaterThan(weightAt('shade', 30)) // chaff falls off
+    expect(weightAt('talos', 30)).toBeGreaterThan(weightAt('talos', 9)) // heavies rise
+    expect(weightAt('gorgon', 40)).toBeGreaterThan(weightAt('gorgon', 18))
+  })
+
+  it('per-kind HP is a ladder — a Talos is the tankiest body at every wave, a Shade the flimsiest', () => {
+    const hpOf = (wave: number, kind: string) => waveSpec(wave).groups.find((g) => g.kind === kind)?.hp
+    const w = 20
+    expect(hpOf(w, 'talos')!).toBeGreaterThan(hpOf(w, 'skeleton')!)
+    expect(hpOf(w, 'skeleton')!).toBeGreaterThan(hpOf(w, 'shade')!)
+    expect(hpOf(w, 'hydra')!).toBeGreaterThan(hpOf(w, 'harpy')!)
+  })
+
+  it('every 10th wave is an elite legion — heavier than its neighbor', () => {
+    expect(isEliteWave(20)).toBe(true)
+    expect(isEliteWave(19)).toBe(false)
+    const heavyShare = (wave: number) => {
+      const c = enemyCounts(wave)
+      const total = Object.values(c).reduce((s, n) => s + n, 0)
+      return (c.talos + c.hydra + c.gorgon) / total
+    }
+    expect(heavyShare(20)).toBeGreaterThan(heavyShare(19)) // the legion spike reads
   })
 })

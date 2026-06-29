@@ -42,6 +42,9 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
 const MAX_DELTA_MS = 50
 const BOUNDS = { w: GAME_WIDTH, h: GAME_HEIGHT }
+// Frame-budget guard: never let more than this many bodies live at once (targeting/collision loops
+// are O(towers × enemies) / O(projectiles × enemies)). Over-budget wave spawns DEFER, they don't drop.
+const MAX_CONCURRENT_BODIES = 60
 
 /** A Hephaestus spike trap on the path — pops each ground enemy once, consuming a charge. */
 type Spike = { pos: Vec2; charges: number; damage: number; hitRadius: number; hitIds: string[] }
@@ -54,6 +57,8 @@ type Spike = { pos: Vec2; charges: number; damage: number; hitRadius: number; hi
 export class GameScene extends Phaser.Scene {
   private readonly path = new PathSystem(OLYMPUS_PATH)
   private enemies: Enemy[] = []
+  // Wave spawns waiting for a free body slot (keeps the wave intact when we hit the concurrency cap).
+  private pendingSpawns: SpawnDesc[] = []
   private readonly enemySprites = new Map<string, Phaser.GameObjects.Arc>()
   private towers: Tower[] = []
   private readonly towerSprites = new Map<string, Phaser.GameObjects.Container>()
@@ -91,6 +96,7 @@ export class GameScene extends Phaser.Scene {
     this.ghost = this.add.graphics().setDepth(10)
 
     this.enemies = []
+    this.pendingSpawns = []
     this.enemySprites.clear()
     this.towers = []
     this.towerSprites.clear()
@@ -288,8 +294,12 @@ export class GameScene extends Phaser.Scene {
         useGameStore.getState().setElapsed(this.elapsedSec)
       }
 
-      // spawn this wave's enemies on the run's schedule
-      for (const desc of this.run.tick(dtSec)) this.spawnEnemy(desc)
+      // spawn this wave's enemies on the run's schedule — but never exceed the concurrency cap;
+      // over-budget spawns wait in pendingSpawns and emit as bodies die (the wave stays intact).
+      for (const desc of this.run.tick(dtSec)) this.pendingSpawns.push(desc)
+      while (this.pendingSpawns.length > 0 && this.enemies.length < MAX_CONCURRENT_BODIES) {
+        this.spawnEnemy(this.pendingSpawns.shift()!)
+      }
 
       // Aphrodite chills foes in her field BEFORE they move this frame
       this.updateSlowAuras()
@@ -342,9 +352,10 @@ export class GameScene extends Phaser.Scene {
       this.updateProjectiles(dtSec)
       this.updateSpikes()
 
-      // clear-gate: a wave ends only when fully emitted AND no enemy remains alive.
+      // clear-gate: a wave ends only when fully emitted AND no enemy remains alive. Pending (capped)
+      // spawns count as "still alive" so a deferred body can't let the wave clear out from under it.
       // When it clears, Demeter farms pay out their harvest.
-      if (this.run.settle(this.enemies.length)) this.payDemeterIncome()
+      if (this.run.settle(this.enemies.length + this.pendingSpawns.length)) this.payDemeterIncome()
     }
 
     useGameStore.getState().mirrorRun(this.run.snapshot())
@@ -551,8 +562,10 @@ export class GameScene extends Phaser.Scene {
   private updateSpikes(): void {
     for (const [ownerId, spike] of this.spikes) {
       if (spike.charges <= 0) continue
-      for (const e of this.enemies.slice()) {
+      // backward over the live array (no slice alloc) — same safety as the projectile loop
+      for (let j = this.enemies.length - 1; j >= 0; j--) {
         if (spike.charges <= 0) break
+        const e = this.enemies[j]
         if (e.flying || spike.hitIds.includes(e.id)) continue // ground-only, once per enemy
         const ep = this.path.getPointAt(e.pathT)
         const r = spike.hitRadius + damagedRadius(ENEMY_RADIUS[e.kind], e.hp / e.maxHp)
@@ -635,9 +648,11 @@ export class GameScene extends Phaser.Scene {
       const p = this.projectiles[i]
       advanceProjectile(p, dtSec)
       this.projSprites.get(p.id)?.setPosition(p.pos.x, p.pos.y)
-      // collide with enemies (snapshot so kills don't disrupt iteration)
-      for (const e of this.enemies.slice()) {
+      // collide with enemies — iterate BACKWARD over the live array (no per-frame slice alloc): a hit
+      // can only remove the current index or push split-children past the start point, both safe here.
+      for (let j = this.enemies.length - 1; j >= 0; j--) {
         if (p.pierceLeft < 0) break
+        const e = this.enemies[j]
         if (p.hitIds.includes(e.id)) continue
         if (e.flying && !p.canHitAir) continue // ground-only arrows pass under fliers
         const ep = this.path.getPointAt(e.pathT)
@@ -731,7 +746,8 @@ export class GameScene extends Phaser.Scene {
   /** Poseidon's tidal slam — damage all GROUND foes in a radius + shove survivors back down the path. */
   private fireSplash(center: Vec2, damage: number, radius: number, knockback: number): void {
     this.drawSplash(center, radius)
-    for (const e of this.enemies.slice()) {
+    for (let j = this.enemies.length - 1; j >= 0; j--) {
+      const e = this.enemies[j]
       if (e.flying) continue // a tidal wave hits the ground, not fliers
       const ep = this.path.getPointAt(e.pathT)
       if ((ep.x - center.x) ** 2 + (ep.y - center.y) ** 2 > radius * radius) continue

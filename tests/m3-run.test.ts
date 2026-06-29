@@ -42,16 +42,16 @@ describe('ledger', () => {
 })
 
 describe('wave scaling', () => {
-  it('HP compounds and is strictly increasing', () => {
+  it('HP rises gently now (×1.05 tail), not the old runaway compounding', () => {
     expect(enemyHp(1)).toBe(10)
     for (let n = 2; n <= 60; n++) expect(enemyHp(n)).toBeGreaterThanOrEqual(enemyHp(n - 1))
-    expect(enemyHp(11)).toBeGreaterThan(enemyHp(1) * 2) // ~×3.1 by wave 11
+    expect(enemyHp(40)).toBeLessThan(enemyHp(1) * 10) // ~×6.7 by w40 (was ~×84) — difficulty rides on TYPE
   })
 
-  it('count grows linearly and slowly', () => {
-    expect(enemyCount(1)).toBe(10) // 8 × 1.2 difficulty pass
+  it('count grows on a sqrt curve under a hard ceiling', () => {
+    expect(enemyCount(1)).toBe(8)
     for (let n = 2; n <= 60; n++) expect(enemyCount(n)).toBeGreaterThanOrEqual(enemyCount(n - 1))
-    expect(enemyCount(40)).toBeLessThan(40) // never an instant lag-bomb
+    expect(enemyCount(40)).toBeLessThanOrEqual(45) // capped — never an instant lag-bomb
   })
 
   it('speed rises but is hard-capped at 2× base', () => {
