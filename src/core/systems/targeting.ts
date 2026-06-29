@@ -8,6 +8,8 @@ interface Targeter {
   range: number
   /** If `false`, the tower cannot acquire FLYING enemies. Undefined = can hit anything. */
   canHitAir?: boolean
+  /** If true, the tower can acquire STEALTH enemies (a detector — Athena — is near). */
+  canDetect?: boolean
 }
 
 function dist2(a: Vec2, b: Vec2): number {
@@ -36,6 +38,7 @@ export function selectTarget(
   for (const e of enemies) {
     // ground-only towers can't acquire fliers (=== false so an unspecified caller can hit anything)
     if (e.flying && tower.canHitAir === false) continue
+    if (e.stealth && !tower.canDetect) continue // hidden — needs a detector (Athena) nearby
     const d2 = dist2(tower.pos, posOf(e))
     if (d2 > r2) continue
     const key =

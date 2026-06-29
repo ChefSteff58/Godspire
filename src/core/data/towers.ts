@@ -1,8 +1,8 @@
 import type { TargetingMode } from '../systems/targeting'
 
-// The god roster grows across M5. Built so far: Zeus, Apollo, Demeter, Hermes (mobile anti-air),
-// Hephaestus (deployable spike factory), Poseidon (AoE + knockback), Aphrodite (slow aura).
-export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon' | 'aphrodite'
+// The full v1 roster (M5). Zeus, Apollo, Demeter, Hermes (mobile anti-air), Hephaestus (spike
+// factory), Poseidon (AoE + knockback), Aphrodite (slow aura), Athena (buff aura + detection).
+export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon' | 'aphrodite' | 'athena'
 
 export interface TowerStats {
   name: string
@@ -30,6 +30,8 @@ export interface TowerStats {
   requiresWater?: boolean
   /** Slow-aura gods (Aphrodite): every enemy in range is slowed (no shooting). */
   slowAura?: { mul: number; refreshMs: number }
+  /** Support gods (Athena): buff nearby gods' damage/fire-rate + grant stealth detection. */
+  auraBuff?: { damageMul: number; fireRateMul: number; detect: boolean }
 }
 
 export const TOWER_STATS: Record<GodKind, TowerStats> = {
@@ -138,9 +140,24 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     canHitAir: false,
     slowAura: { mul: 0.55, refreshMs: 600 },
   },
+  athena: {
+    name: 'Athena',
+    blurb: 'War-council — buffs nearby gods and reveals hidden foes. No damage.',
+    icon: '🦉',
+    cost: 320,
+    range: 110, // the buff + detection radius
+    damage: 0, // pure support
+    fireRate: 1, // unused
+    footprint: 18,
+    defaultTargeting: 'first',
+    color: 0xd9c879,
+    attack: 'hitscan',
+    canHitAir: false,
+    auraBuff: { damageMul: 1.15, fireRateMul: 1.1, detect: true },
+  },
 }
 
-export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes', 'hephaestus', 'poseidon', 'aphrodite']
+export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes', 'hephaestus', 'poseidon', 'aphrodite', 'athena']
 
 /** Fraction of a tower's cost refunded when sold (BTD6-style). */
 export const SELL_REFUND_RATE = 0.7

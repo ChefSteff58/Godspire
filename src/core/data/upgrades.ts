@@ -194,6 +194,26 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       ],
     },
   },
+  athena: {
+    A: {
+      name: 'Wisdom of War',
+      blurb: 'A damage amphitheater — sharpens every blade in the war-council.',
+      tiers: [
+        { name: 'Battle Hymn', cost: 200, desc: 'aura grants nearby gods +20% damage', effect: { damageMul: 1.2 } },
+        { name: 'Phalanx Doctrine', cost: 360, desc: 'aura damage buff grows further', effect: { damageMul: 1.25 } },
+        { name: 'Aegis of Victory', cost: 760, desc: 'aura damage buff grows further', effect: { damageMul: 1.3 } },
+      ],
+    },
+    B: {
+      name: 'Strategist',
+      blurb: 'The war-room that sees all — wider reach + a faster, sharper council.',
+      tiers: [
+        { name: 'Watchtower', cost: 180, desc: '+25% aura radius, +10% aura fire-rate', effect: { rangeMul: 1.25, fireRateMul: 1.1 } },
+        { name: "All-Seeing Aegis", cost: 340, desc: '+20% radius, +15% aura fire-rate', effect: { rangeMul: 1.2, fireRateMul: 1.15 } },
+        { name: 'Grand Strategy', cost: 720, desc: '+25% radius, +20% aura fire-rate', effect: { rangeMul: 1.25, fireRateMul: 1.2 } },
+      ],
+    },
+  },
 }
 
 export interface FoldedUpgrades {
@@ -270,6 +290,18 @@ export function towerEffectiveStats(tower: Tower): EffectiveStats {
     splashRadius: (base.splash?.radius ?? 0) * f.splashRadiusMul,
     knockback: (base.splash?.knockback ?? 0) * f.knockbackMul,
     slowMul: Math.max(0.15, (base.slowAura?.mul ?? 1) * f.slowMulMul), // floor: foes always creep
+  }
+}
+
+/** Athena's support buff (or null for non-support gods). Her damage/fire-rate tiers scale the aura. */
+export function auraBuff(tower: Tower): { damageMul: number; fireRateMul: number; detect: boolean } | null {
+  const base = TOWER_STATS[tower.god].auraBuff
+  if (!base) return null
+  const f = foldUpgrades(tower.god, tower.pathA, tower.pathB)
+  return {
+    damageMul: base.damageMul * f.damageMul,
+    fireRateMul: base.fireRateMul * f.fireRateMul,
+    detect: base.detect,
   }
 }
 

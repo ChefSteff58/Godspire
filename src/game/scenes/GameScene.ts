@@ -30,6 +30,7 @@ import { TOWER_STATS, sellValue, type GodKind } from '../../core/data/towers'
 import {
   UPGRADES,
   towerEffectiveStats,
+  auraBuff,
   demeterIncome,
   nextTier,
   canUpgradePath,
@@ -303,22 +304,24 @@ export class GameScene extends Phaser.Scene {
         if (eff.fireRate <= 0 || eff.damage <= 0) continue // farms (Demeter) don't fire
         tower.cooldown -= dtSec
         if (tower.cooldown > 0) continue
+        const aura = this.auraAt(tower.pos) // Athena buffs nearby gods + reveals stealth foes
+        const fireRate = this.run.effectiveFireRate(tower.god, eff.fireRate * aura.fireRateMul)
         const dep = TOWER_STATS[tower.god].deployable
         if (dep) {
           // Hephaestus produces a trap charge instead of shooting an enemy directly.
-          tower.cooldown = 1 / this.run.effectiveFireRate(tower.god, eff.fireRate)
-          this.produceSpike(tower, eff, dep)
+          tower.cooldown = 1 / fireRate
+          this.produceSpike(tower, { damage: eff.damage * aura.damageMul, maxCharges: eff.maxCharges }, dep)
           continue
         }
         const target = selectTarget(
-          { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir },
+          { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
           this.enemies,
           this.enemyPos,
           tower.targeting,
         )
         if (!target) continue
-        tower.cooldown = 1 / this.run.effectiveFireRate(tower.god, eff.fireRate)
-        const dmg = this.run.effectiveDamage(tower.god, eff.damage)
+        tower.cooldown = 1 / fireRate
+        const dmg = this.run.effectiveDamage(tower.god, eff.damage * aura.damageMul)
         const stats = TOWER_STATS[tower.god]
         if (stats.splash) this.fireSplash(this.path.getPointAt(target.pathT), dmg, eff.splashRadius, eff.knockback)
         else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
@@ -411,6 +414,7 @@ export class GameScene extends Phaser.Scene {
       .circle(pos.x, pos.y, ENEMY_RADIUS[enemy.kind], ENEMY_BASE_COLOR[enemy.kind], 1)
       .setStrokeStyle(enemy.flying ? 3 : 2, ENEMY_STROKE[enemy.kind])
       .setDepth(enemy.flying ? 5 : 4) // fliers ride above ground foes (the airborne read)
+    if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
   }
 
@@ -448,6 +452,23 @@ export class GameScene extends Phaser.Scene {
       tower.pos.y = tower.center.y + Math.sin(tower.orbitPhase) * m.orbitRadius
       this.towerSprites.get(tower.id)?.setPosition(tower.pos.x, tower.pos.y)
     }
+  }
+
+  /** Athena: the combined buff (+ stealth detection) at a point from every covering aura tower. */
+  private auraAt(pos: Vec2): { damageMul: number; fireRateMul: number; detect: boolean } {
+    let damageMul = 1
+    let fireRateMul = 1
+    let detect = false
+    for (const a of this.towers) {
+      const buff = auraBuff(a)
+      if (!buff) continue
+      const r = towerEffectiveStats(a).range
+      if ((a.pos.x - pos.x) ** 2 + (a.pos.y - pos.y) ** 2 > r * r) continue
+      damageMul *= buff.damageMul
+      fireRateMul *= buff.fireRateMul
+      detect = detect || buff.detect
+    }
+    return { damageMul, fireRateMul, detect }
   }
 
   /** Aphrodite: slow every enemy currently inside a slow-aura tower's range. */
@@ -708,6 +729,13 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0x6fd0e8, 0.07)
         g.fillCircle(tower.pos.x, tower.pos.y, range)
         g.lineStyle(1, 0x6fd0e8, 0.3)
+        g.strokeCircle(tower.pos.x, tower.pos.y, range)
+      }
+      // Athena's war-council aura (buff + detection) is always visible too
+      if (TOWER_STATS[tower.god].auraBuff) {
+        g.fillStyle(0xd9c879, 0.06)
+        g.fillCircle(tower.pos.x, tower.pos.y, range)
+        g.lineStyle(1, 0xd9c879, 0.32)
         g.strokeCircle(tower.pos.x, tower.pos.y, range)
       }
       if (selected || showDebug) {

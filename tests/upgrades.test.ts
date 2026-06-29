@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   foldUpgrades,
   towerEffectiveStats,
+  auraBuff,
   demeterIncome,
   nextTier,
   canUpgradePath,
@@ -9,7 +10,7 @@ import {
 import { createTower, type Tower } from '../src/core/entities/tower'
 import { TOWER_STATS } from '../src/core/data/towers'
 
-const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon' | 'aphrodite', a = 0, b = 0): Tower => {
+const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon' | 'aphrodite' | 'athena', a = 0, b = 0): Tower => {
   const t = createTower(god, { x: 0, y: 0 })
   t.pathA = a
   t.pathB = b
@@ -128,6 +129,19 @@ describe('Aphrodite slow aura', () => {
     expect(towerEffectiveStats(tower('aphrodite')).slowMul).toBeCloseTo(0.55)
     expect(towerEffectiveStats(tower('aphrodite', 0, 1)).slowMul).toBeCloseTo(0.55 * 0.7) // First Frost
     expect(towerEffectiveStats(tower('aphrodite', 0, 3)).slowMul).toBeGreaterThanOrEqual(0.15) // floored
+  })
+})
+
+describe('Athena support aura', () => {
+  it('buffs nearby gods + detects, and the Wisdom path scales the damage buff', () => {
+    const base = auraBuff(tower('athena'))!
+    expect(base.detect).toBe(true)
+    expect(base.damageMul).toBeCloseTo(1.15)
+    expect(auraBuff(tower('athena', 1, 0))!.damageMul).toBeCloseTo(1.15 * 1.2) // Battle Hymn
+  })
+
+  it('non-support gods have no aura', () => {
+    expect(auraBuff(tower('zeus'))).toBeNull()
   })
 })
 

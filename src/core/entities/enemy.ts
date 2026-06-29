@@ -3,7 +3,7 @@
 // hydra (SPLITS → pierce/AoE). Gorgon-kin (stealth) / Satyr (fast) / Cyclops (tanky) are deferred
 // until their counter-gods (detection / slow) exist.
 
-export type EnemyKind = 'shade' | 'skeleton' | 'harpy' | 'talos' | 'hydra' | 'satyr'
+export type EnemyKind = 'shade' | 'skeleton' | 'harpy' | 'talos' | 'hydra' | 'satyr' | 'gorgon'
 
 export interface Enemy {
   id: string
@@ -28,6 +28,8 @@ export interface Enemy {
   slowMul: number
   /** Milliseconds left on the current slow (it lifts to 1 when this hits 0). */
   slowTimerMs: number
+  /** Hidden — single-target towers can't target it unless a detector (Athena) is near. */
+  stealth: boolean
 }
 
 /** What to spawn. The scene creates the Enemy (traits derived from kind) + overrides these. */
@@ -50,6 +52,7 @@ export const ENEMY_BASE_COLOR: Record<EnemyKind, number> = {
   talos: 0x8a8f9c,
   hydra: 0x7ac74f,
   satyr: 0xc9e265,
+  gorgon: 0x6a8a6a,
 }
 
 /** Per-kind base radius (px) — the glance cue + the collision/HP-ring size. */
@@ -60,6 +63,7 @@ export const ENEMY_RADIUS: Record<EnemyKind, number> = {
   talos: 15,
   hydra: 12,
   satyr: 8,
+  gorgon: 11,
 }
 
 /** Per-kind sprite stroke (a metallic ring reads as armor, a bright ring as airborne). */
@@ -70,16 +74,18 @@ export const ENEMY_STROKE: Record<EnemyKind, number> = {
   talos: 0x3a3d44,
   hydra: 0x3f7a2a,
   satyr: 0x8fae3a,
+  gorgon: 0x9fd09f,
 }
 
 /** Intrinsic traits per kind (the wave manager scales hp/speed/bounty; these stay fixed). */
-const ENEMY_TRAITS: Record<EnemyKind, { flying: boolean; armor: number }> = {
-  shade: { flying: false, armor: 0 },
-  skeleton: { flying: false, armor: 0 },
-  harpy: { flying: true, armor: 0 },
-  talos: { flying: false, armor: 6 },
-  hydra: { flying: false, armor: 0 },
-  satyr: { flying: false, armor: 0 },
+const ENEMY_TRAITS: Record<EnemyKind, { flying: boolean; armor: number; stealth: boolean }> = {
+  shade: { flying: false, armor: 0, stealth: false },
+  skeleton: { flying: false, armor: 0, stealth: false },
+  harpy: { flying: true, armor: 0, stealth: false },
+  talos: { flying: false, armor: 6, stealth: false },
+  hydra: { flying: false, armor: 0, stealth: false },
+  satyr: { flying: false, armor: 0, stealth: false },
+  gorgon: { flying: false, armor: 0, stealth: true },
 }
 
 let nextId = 1
@@ -101,6 +107,7 @@ export function createEnemy(kind: EnemyKind = 'shade'): Enemy {
     splitDepth: 0,
     slowMul: 1,
     slowTimerMs: 0,
+    stealth: t.stealth,
   }
 }
 

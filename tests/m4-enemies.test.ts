@@ -43,6 +43,22 @@ describe('flying / anti-air gate', () => {
   })
 })
 
+describe('stealth / detection gate', () => {
+  const tower = { pos: { x: 0, y: 0 }, range: 1000 }
+
+  it('a non-detector cannot acquire a stealth enemy; a detector can', () => {
+    const gorgon = at('gorgon', 0.3)
+    expect(createEnemy('gorgon').stealth).toBe(true)
+    expect(selectTarget(tower, [gorgon], posOf)).toBeNull() // no canDetect
+    expect(selectTarget({ ...tower, canDetect: true }, [gorgon], posOf)).toBe(gorgon)
+  })
+
+  it('detection does not break targeting of normal enemies', () => {
+    const skel = at('skeleton', 0.3)
+    expect(selectTarget(tower, [skel], posOf)).toBe(skel)
+  })
+})
+
 describe('flat armor', () => {
   it('subtracts armor with a min-1 floor (never unkillable)', () => {
     const talos = createEnemy('talos') // armor 6
@@ -142,6 +158,7 @@ describe('wave composition', () => {
     expect(enemyCounts(9).talos).toBeGreaterThanOrEqual(1) // Talos debut
     expect(enemyCounts(12).hydra).toBeGreaterThanOrEqual(1) // Hydra debut
     expect(enemyCounts(15).satyr).toBeGreaterThanOrEqual(1) // Satyr debut
+    expect(enemyCounts(18).gorgon).toBeGreaterThanOrEqual(1) // Gorgon-kin debut
   })
 
   it('shares partition the count budget exactly (no extra bodies)', () => {
