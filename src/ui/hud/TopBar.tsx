@@ -12,6 +12,7 @@ export function TopBar() {
   const showDebug = useGameStore((s) => s.showDebug)
   const toggleDebug = useGameStore((s) => s.toggleDebug)
   const openPantheon = useGameStore((s) => s.openPantheon)
+  const openLeaderboard = useGameStore((s) => s.openLeaderboard)
 
   // Flash the lives chip red on any leak — the leak is the game's only negative feedback.
   const prevLives = useRef(lives)
@@ -54,6 +55,13 @@ export function TopBar() {
           className="rounded bg-black/40 px-3 py-1 text-sm text-amber-300 transition hover:bg-black/60"
         >
           🏛️ Pantheon
+        </button>
+        <button
+          onClick={openLeaderboard}
+          title="Global leaderboard — highest wave survived"
+          className="rounded bg-black/40 px-3 py-1 text-sm text-amber-300 transition hover:bg-black/60"
+        >
+          🏆 Ranks
         </button>
         <button
           onClick={toggleDebug}

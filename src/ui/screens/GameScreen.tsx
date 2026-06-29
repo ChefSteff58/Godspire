@@ -7,6 +7,7 @@ import { TowerInspector } from '../hud/TowerInspector'
 import { FateDraftModal } from '../hud/FateDraftModal'
 import { RunOverModal } from '../hud/RunOverModal'
 import { PantheonTreePanel } from '../hud/PantheonTreePanel'
+import { LeaderboardOverlay } from '../hud/LeaderboardOverlay'
 import { DevPanel } from '../hud/DevPanel'
 
 /**
@@ -28,6 +29,7 @@ export function GameScreen() {
           <FateDraftModal />
           <RunOverModal />
           <PantheonTreePanel />
+          <LeaderboardOverlay />
         </div>
         <RightRail />
       </div>

@@ -1,4 +1,6 @@
 import { useGameStore } from '../../state/gameStore'
+import { useSessionStore } from '../../state/sessionStore'
+import { isSupabaseConfigured } from '../../lib/supabase/client'
 
 /** Shown when Olympus falls. Banks Favor by highest wave; one tap to start a fresh run. */
 export function RunOverModal() {
@@ -6,6 +8,8 @@ export function RunOverModal() {
   const summary = useGameStore((s) => s.runSummary)
   const playAgain = useGameStore((s) => s.playAgain)
   const openPantheon = useGameStore((s) => s.openPantheon)
+  const openLeaderboard = useGameStore((s) => s.openLeaderboard)
+  const isGuest = useSessionStore((s) => s.isGuest)
   if (phase !== 'over' || !summary) return null
 
   const newBest = summary.wave >= summary.bestWave && summary.wave > 0
@@ -22,6 +26,11 @@ export function RunOverModal() {
         <Stat label="Best wave" value={`${summary.bestWave}`} />
       </div>
       {newBest && <p className="text-sm font-bold text-amber-300">🏆 New best wave!</p>}
+      {newBest && isSupabaseConfigured && (
+        <p className="text-xs text-slate-300">
+          {isGuest ? '🔗 Link an account (top-left) to post this to the leaderboard.' : '🏆 Submitted to the global leaderboard!'}
+        </p>
+      )}
       <div className="flex flex-wrap justify-center gap-x-7 gap-y-3 font-mono text-center">
         <Stat label="Kills" value={`${summary.kills}`} small />
         <Stat label="Bosses slain" value={`${summary.bossesKilled}`} small highlight={summary.bossesKilled > 0} />
@@ -35,6 +44,12 @@ export function RunOverModal() {
         </p>
       )}
       <div className="flex items-center gap-3">
+        <button
+          onClick={openLeaderboard}
+          className="rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg transition hover:bg-slate-600"
+        >
+          🏆 Ranks
+        </button>
         <button
           onClick={openPantheon}
           className="rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg transition hover:bg-slate-600"
