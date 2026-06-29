@@ -47,6 +47,15 @@ export class RunController {
   private shieldCharges = 0
   private secondWindArmed = false
 
+  // ── per-run stats for the end-of-run dump (M6) ──
+  private goldSpent = 0
+  private goldEarned = 0
+  private towersBuilt = 0
+  private bossesKilled = 0
+  private livesLostThisWave = 0
+  private worstWave = 0
+  private worstWaveLives = 0
+
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1 }
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
   private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 } }
@@ -88,6 +97,13 @@ export class RunController {
     this.groupIdx = 0
     this.spawnedInGroup = 0
     this.spawnTimerMs = 0
+    this.goldSpent = 0
+    this.goldEarned = 0
+    this.towersBuilt = 0
+    this.bossesKilled = 0
+    this.livesLostThisWave = 0
+    this.worstWave = 0
+    this.worstWaveLives = 0
   }
 
   // ── intents (forwarded from React via the scene) ──
@@ -105,13 +121,24 @@ export class RunController {
     this.applyEffect(opt.boon.effect)
   }
 
-  /** Add gold directly (tower-sell refund, etc.). */
-  grantGold(amount: number): void {
+  /** Earn gold AND tally it for the end-of-run stats (the one income choke point). */
+  private earnGold(amount: number): void {
     earn(this.ledger, amount)
+    this.goldEarned += amount
+  }
+
+  /** Add gold directly (Demeter harvest, tower-sell refund, etc.). */
+  grantGold(amount: number): void {
+    this.earnGold(amount)
   }
 
   cheatGold(): void {
-    earn(this.ledger, 1000)
+    earn(this.ledger, 1000) // a cheat — deliberately NOT counted in goldEarned
+  }
+
+  /** Count a tower placement (gold for it is tracked separately in purchase). */
+  onTowerBuilt(): void {
+    this.towersBuilt++
   }
 
   toggleInvincible(): void {
@@ -124,9 +151,11 @@ export class RunController {
     return canAfford(this.ledger, cost)
   }
 
-  /** Spend for a tower placement. Returns false (and changes nothing) if too poor. */
+  /** Spend for a tower placement / upgrade. Returns false (and changes nothing) if too poor. */
   purchase(cost: number): boolean {
-    return spend(this.ledger, cost)
+    const ok = spend(this.ledger, cost)
+    if (ok) this.goldSpent += cost
+    return ok
   }
 
   // ── the loop, driven by the scene's single clock ──
@@ -166,10 +195,11 @@ export class RunController {
     return out
   }
 
-  /** A kill: pay the bounty (+ any per-kill boon) and count it. */
-  onKill(bounty: number): void {
-    earn(this.ledger, bounty + this.modifiers.goldPerKillBonus)
+  /** A kill: pay the bounty (+ any per-kill boon) and count it (+ tally bosses). */
+  onKill(bounty: number, isBoss = false): void {
+    this.earnGold(bounty + this.modifiers.goldPerKillBonus)
     this.kills++
+    if (isBoss) this.bossesKilled++
   }
 
   /**
@@ -182,6 +212,7 @@ export class RunController {
       this.shieldCharges -= 1 // shield eats the leak, no life lost
       return false
     }
+    this.livesLostThisWave += Math.min(weight, this.lives) // count ACTUAL lives lost, not raw weight
     this.lives -= weight
     if (this.lives <= 0) {
       if (this.secondWindArmed) {
@@ -190,9 +221,19 @@ export class RunController {
         return true
       }
       this.lives = 0
+      this.finalizeWorstWave() // capture the death wave before the run ends (no beginWave will run)
       this.phase = 'over'
     }
     return true
+  }
+
+  /** Roll the current wave's lives-lost into the worst-wave record, then reset for the next wave. */
+  private finalizeWorstWave(): void {
+    if (this.livesLostThisWave > this.worstWaveLives) {
+      this.worstWaveLives = this.livesLostThisWave
+      this.worstWave = this.wave
+    }
+    this.livesLostThisWave = 0
   }
 
   /**
@@ -203,7 +244,7 @@ export class RunController {
    */
   settle(liveEnemyCount: number): boolean {
     if (this.phase !== 'clearing' || liveEnemyCount > 0) return false
-    earn(this.ledger, waveIncome(this.wave, this.ledger.gold))
+    this.earnGold(waveIncome(this.wave, this.ledger.gold))
     this.phase = 'building'
     this.buildGraceMs = BUILD_GRACE_MS // restart the auto-start grace for the next wave
     this.spec = null
@@ -239,9 +280,22 @@ export class RunController {
     }
   }
 
+  /** Per-run tallies for the end-of-run stats screen (read once when the run ends). */
+  runStats(): { goldSpent: number; goldEarned: number; towersBuilt: number; bossesKilled: number; worstWave: number; worstWaveLives: number } {
+    return {
+      goldSpent: this.goldSpent,
+      goldEarned: this.goldEarned,
+      towersBuilt: this.towersBuilt,
+      bossesKilled: this.bossesKilled,
+      worstWave: this.worstWave,
+      worstWaveLives: this.worstWaveLives,
+    }
+  }
+
   // ── internals ──
 
   private beginWave(n: number): void {
+    this.finalizeWorstWave() // close out the prior wave's lives-lost before advancing
     this.wave = n
     this.spec = waveSpec(n)
     this.groupIdx = 0
@@ -258,7 +312,7 @@ export class RunController {
   private applyEffect(e: BoonEffect): void {
     switch (e.kind) {
       case 'goldGrant':
-        earn(this.ledger, e.value)
+        this.earnGold(e.value)
         break
       case 'livesGrant':
         this.addLives(e.value)

@@ -42,9 +42,10 @@ describe('level curve', () => {
 })
 
 describe('favor + applyRunRewards', () => {
-  it('favorFromRun sums waves, win bonus, kills', () => {
-    expect(favorFromRun({ waveReached: 5, victory: false, kills: 12 })).toBe(62) // 50 + 0 + 12
+  it('favorFromRun sums waves, win bonus, kills, and bosses', () => {
+    expect(favorFromRun({ waveReached: 5, victory: false, kills: 12 })).toBe(62) // 50 + 0 + 12 (+0 bosses)
     expect(favorFromRun({ waveReached: 20, victory: true, kills: 30 })).toBe(430) // 200 + 200 + 30
+    expect(favorFromRun({ waveReached: 20, victory: false, kills: 30, bossesKilled: 1 })).toBe(280) // 200 + 30 + 50
   })
 
   it('does not mutate the previous progress and reports levels gained', () => {
@@ -61,7 +62,20 @@ describe('favor + applyRunRewards', () => {
     expect(progress.stats.runsPlayed).toBe(1)
     expect(progress.stats.bestWave).toBe(20)
     expect(progress.stats.totalKills).toBe(30)
+    expect(progress.stats.bossesKilled).toBe(0) // none provided → 0
     expect(progress.updatedAt).toBe(NOW)
+  })
+
+  it('accumulates the M6 lifetime stats (bosses / gold spent / towers built)', () => {
+    const { progress, favorGained } = applyRunRewards(
+      emptyProgress(EARLIER),
+      { waveReached: 40, victory: false, kills: 50, bossesKilled: 2, goldSpent: 3000, towersBuilt: 12 },
+      NOW,
+    )
+    expect(progress.stats.bossesKilled).toBe(2)
+    expect(progress.stats.totalGoldSpent).toBe(3000)
+    expect(progress.stats.totalTowersBuilt).toBe(12)
+    expect(favorGained).toBe(40 * 10 + 50 + 2 * 50) // waves + kills + bosses
   })
 })
 
@@ -107,10 +121,10 @@ describe('mergeProgress', () => {
   })
 
   it('stats are monotonic-max across both sides', () => {
-    const local = make({ stats: { runsPlayed: 5, bestWave: 12, totalKills: 100 }, updatedAt: EARLIER })
-    const cloud = make({ stats: { runsPlayed: 3, bestWave: 18, totalKills: 80 }, updatedAt: NOW })
+    const local = make({ stats: { runsPlayed: 5, bestWave: 12, totalKills: 100, bossesKilled: 4, totalGoldSpent: 9000, totalTowersBuilt: 30 }, updatedAt: EARLIER })
+    const cloud = make({ stats: { runsPlayed: 3, bestWave: 18, totalKills: 80, bossesKilled: 2, totalGoldSpent: 12000, totalTowersBuilt: 25 }, updatedAt: NOW })
     const merged = mergeProgress(local, cloud)
-    expect(merged.stats).toEqual({ runsPlayed: 5, bestWave: 18, totalKills: 100 })
+    expect(merged.stats).toEqual({ runsPlayed: 5, bestWave: 18, totalKills: 100, bossesKilled: 4, totalGoldSpent: 12000, totalTowersBuilt: 30 })
   })
 })
 

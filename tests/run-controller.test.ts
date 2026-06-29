@@ -78,3 +78,34 @@ describe('RunController — boon effects', () => {
     expect(run.effectiveDamage('apollo', 10)).toBe(10) // unaffected
   })
 })
+
+describe('RunController — end-of-run stats (M6)', () => {
+  it('tallies gold spent, towers built, bosses killed, and gold earned', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    run.purchase(200) // affordable from the 650 start
+    run.purchase(100)
+    run.onTowerBuilt()
+    run.onTowerBuilt()
+    run.onKill(10, false)
+    run.onKill(120, true) // a boss
+    const s = run.runStats()
+    expect(s.goldSpent).toBe(300)
+    expect(s.towersBuilt).toBe(2)
+    expect(s.bossesKilled).toBe(1)
+    expect(s.goldEarned).toBeGreaterThanOrEqual(130) // the two bounties
+  })
+
+  it('records the bloodiest wave (most lives lost), finalized at run end', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    run['beginWave'](2)
+    run.onLeak(60) // 60 lost on wave 2 (the bloodiest)
+    run['beginWave'](3) // finalizes wave 2 → worst so far (60)
+    run.onLeak(40) // lethal on wave 3 (40 lives left → only 40 ACTUAL lost, < 60) → run ends
+    expect(run.phase).toBe('over')
+    const s = run.runStats()
+    expect(s.worstWave).toBe(2)
+    expect(s.worstWaveLives).toBe(60)
+  })
+})

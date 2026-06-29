@@ -8,6 +8,7 @@ const EPOCH = '1970-01-01T00:00:00.000Z'
 const FAVOR_PER_WAVE = 10
 const FAVOR_WIN_BONUS = 200
 const FAVOR_PER_KILL = 1
+const FAVOR_PER_BOSS = 50 // slaying a boss is a milestone
 
 // Level curve constants. xpForLevel(level) = BASE_XP*(level-1) + GROWTH*(level-1)^2.
 const BASE_XP = 100
@@ -20,7 +21,7 @@ export function emptyProgress(now: string = EPOCH): PlayerProgress {
     favor: 0,
     unlockedNodes: [],
     settings: { muted: false },
-    stats: { runsPlayed: 0, bestWave: 0, totalKills: 0 },
+    stats: { runsPlayed: 0, bestWave: 0, totalKills: 0, bossesKilled: 0, totalGoldSpent: 0, totalTowersBuilt: 0 },
     updatedAt: now,
   }
 }
@@ -63,7 +64,8 @@ export function favorFromRun(run: RunResult): number {
   return (
     FAVOR_PER_WAVE * Math.max(0, Math.floor(run.waveReached)) +
     (run.victory ? FAVOR_WIN_BONUS : 0) +
-    FAVOR_PER_KILL * Math.max(0, Math.floor(run.kills))
+    FAVOR_PER_KILL * Math.max(0, Math.floor(run.kills)) +
+    FAVOR_PER_BOSS * Math.max(0, Math.floor(run.bossesKilled ?? 0))
   )
 }
 
@@ -84,6 +86,9 @@ export function applyRunRewards(
       runsPlayed: prev.stats.runsPlayed + 1,
       bestWave: Math.max(prev.stats.bestWave, Math.max(0, Math.floor(run.waveReached))),
       totalKills: prev.stats.totalKills + Math.max(0, Math.floor(run.kills)),
+      bossesKilled: prev.stats.bossesKilled + Math.max(0, Math.floor(run.bossesKilled ?? 0)),
+      totalGoldSpent: prev.stats.totalGoldSpent + Math.max(0, Math.floor(run.goldSpent ?? 0)),
+      totalTowersBuilt: prev.stats.totalTowersBuilt + Math.max(0, Math.floor(run.towersBuilt ?? 0)),
     },
     updatedAt: now,
   }
@@ -135,6 +140,9 @@ export function mergeProgress(
       runsPlayed: Math.max(local.stats.runsPlayed, cloud.stats.runsPlayed),
       bestWave: Math.max(local.stats.bestWave, cloud.stats.bestWave),
       totalKills: Math.max(local.stats.totalKills, cloud.stats.totalKills),
+      bossesKilled: Math.max(local.stats.bossesKilled, cloud.stats.bossesKilled),
+      totalGoldSpent: Math.max(local.stats.totalGoldSpent, cloud.stats.totalGoldSpent),
+      totalTowersBuilt: Math.max(local.stats.totalTowersBuilt, cloud.stats.totalTowersBuilt),
     },
     updatedAt: newer.updatedAt,
   }
@@ -161,6 +169,9 @@ export function migrateProgress(raw: unknown): PlayerProgress {
         runsPlayed: num(stats.runsPlayed, 0),
         bestWave: num(stats.bestWave, 0),
         totalKills: num(stats.totalKills, 0),
+        bossesKilled: num(stats.bossesKilled, 0), // absent in old saves → 0
+        totalGoldSpent: num(stats.totalGoldSpent, 0),
+        totalTowersBuilt: num(stats.totalTowersBuilt, 0),
       },
       updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : base.updatedAt,
     }

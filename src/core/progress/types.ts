@@ -28,13 +28,26 @@ export interface PlayerStats {
   runsPlayed: number
   bestWave: number
   totalKills: number
+  /** Lifetime bosses slain (M6). */
+  bossesKilled: number
+  /** Lifetime gold spent on towers + upgrades. */
+  totalGoldSpent: number
+  /** Lifetime tower placements. */
+  totalTowersBuilt: number
 }
 
-/** Lean run summary handed in when a run ends. Boss/god-variety terms arrive with those systems. */
+/** Run summary handed in when a run ends. The M6 stat terms are optional (older callers omit them). */
 export interface RunResult {
   waveReached: number
   victory: boolean
   kills: number
+  bossesKilled?: number
+  goldSpent?: number
+  goldEarned?: number
+  towersBuilt?: number
+  /** The wave on which the most lives were lost (for the end-of-run "bloodiest wave"). */
+  worstWave?: number
+  worstWaveLives?: number
 }
 
 /** Run-start buffs the engine reads. Derived from unlocked nodes; NEVER persisted. */

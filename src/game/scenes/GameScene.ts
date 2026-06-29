@@ -402,10 +402,32 @@ export class GameScene extends Phaser.Scene {
   private endRun(): void {
     this.runEnded = true
     const session = useSessionStore.getState()
-    const result = { waveReached: this.run.wave, victory: false, kills: this.run.kills }
+    const s = this.run.runStats()
+    const result = {
+      waveReached: this.run.wave,
+      victory: false,
+      kills: this.run.kills,
+      bossesKilled: s.bossesKilled,
+      goldSpent: s.goldSpent,
+      goldEarned: s.goldEarned,
+      towersBuilt: s.towersBuilt,
+      worstWave: s.worstWave,
+      worstWaveLives: s.worstWaveLives,
+    }
     const bestWave = Math.max(session.progress.stats.bestWave, this.run.wave)
     void session.applyRun(result)
-    useGameStore.getState().setRunSummary({ wave: this.run.wave, favor: favorFromRun(result), bestWave })
+    useGameStore.getState().setRunSummary({
+      wave: this.run.wave,
+      favor: favorFromRun(result),
+      bestWave,
+      kills: this.run.kills,
+      bossesKilled: s.bossesKilled,
+      goldEarned: s.goldEarned,
+      goldSpent: s.goldSpent,
+      towersBuilt: s.towersBuilt,
+      worstWave: s.worstWave,
+      worstWaveLives: s.worstWaveLives,
+    })
   }
 
   private onEnemyLeak(enemy: Enemy): void {
@@ -744,7 +766,7 @@ export class GameScene extends Phaser.Scene {
     const poof = this.add.circle(at.x, at.y, isBoss ? 20 : 12, color, 0.7).setDepth(7)
     this.tweens.add({ targets: poof, scale: isBoss ? 4 : 2.4, alpha: 0, duration: isBoss ? 360 : 200, onComplete: () => poof.destroy() })
     this.removeEnemy(enemy)
-    this.run.onKill(enemy.bounty)
+    this.run.onKill(enemy.bounty, enemy.kind === 'boss')
   }
 
   /** A cheap particle burst — small circles that fly outward and fade. */
@@ -1075,6 +1097,7 @@ export class GameScene extends Phaser.Scene {
   private placeTower(god: GodKind, pos: Vec2): void {
     const tower = createTower(god, pos)
     this.towers.push(tower)
+    this.run.onTowerBuilt()
     const stats = TOWER_STATS[god]
     if (stats.mobile) {
       // Mobile god: a fixed HOME BASE badge at the center (identity + click target), and a small

@@ -21,6 +21,18 @@ export function RunOverModal() {
         <Stat label="Best wave" value={`${summary.bestWave}`} />
       </div>
       {newBest && <p className="text-sm font-bold text-amber-300">🏆 New best wave!</p>}
+      <div className="flex flex-wrap justify-center gap-x-7 gap-y-3 font-mono text-center">
+        <Stat label="Kills" value={`${summary.kills}`} small />
+        <Stat label="Bosses slain" value={`${summary.bossesKilled}`} small highlight={summary.bossesKilled > 0} />
+        <Stat label="Gold earned" value={`🪙${summary.goldEarned}`} small />
+        <Stat label="Gold spent" value={`🪙${summary.goldSpent}`} small />
+        <Stat label="Towers built" value={`${summary.towersBuilt}`} small />
+      </div>
+      {summary.worstWaveLives > 0 && (
+        <p className="text-xs text-slate-400">
+          Bloodiest wave: <span className="font-bold text-rose-300">Wave {summary.worstWave}</span> (−{summary.worstWaveLives} lives)
+        </p>
+      )}
       <button
         onClick={playAgain}
         className="rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
@@ -31,10 +43,10 @@ export function RunOverModal() {
   )
 }
 
-function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function Stat({ label, value, highlight, small }: { label: string; value: string; highlight?: boolean; small?: boolean }) {
   return (
     <div className="flex flex-col">
-      <span className={`text-3xl font-bold ${highlight ? 'text-amber-300' : 'text-slate-100'}`}>{value}</span>
+      <span className={`${small ? 'text-xl' : 'text-3xl'} font-bold ${highlight ? 'text-amber-300' : 'text-slate-100'}`}>{value}</span>
       <span className="text-xs uppercase tracking-wide text-slate-500">{label}</span>
     </div>
   )

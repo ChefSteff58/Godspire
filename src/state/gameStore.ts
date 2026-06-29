@@ -10,6 +10,14 @@ export interface RunSummary {
   wave: number
   favor: number
   bestWave: number
+  kills: number
+  bossesKilled: number
+  goldEarned: number
+  goldSpent: number
+  towersBuilt: number
+  /** The wave on which the most lives were lost (0 if none lost — e.g. a leak-free death by negative grant). */
+  worstWave: number
+  worstWaveLives: number
 }
 
 /** One upgrade path's state for the selected tower's panel. */
