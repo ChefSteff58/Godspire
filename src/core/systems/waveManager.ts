@@ -16,10 +16,6 @@ const HP_BEND_WAVE = 30
 const SPEED_PER_WAVE = 0.01
 const SPEED_CAP_MUL = 2 // never faster than 2× base
 
-// A leak late in a run should HURT — a Talos breaching at wave 30 must cost far more than at wave 9.
-// leakWeight compounds with the wave so late mistakes are punishing (×1.6 per 10 waves).
-const LEAK_RATE = 1.6
-
 /** One contiguous run of a single kind within a wave. */
 export interface SpawnGroup {
   kind: EnemyKind
@@ -65,24 +61,23 @@ export function spawnIntervalMs(n: number): number {
   return Math.max(380, 950 - 12 * (Math.max(1, Math.floor(n)) - 1))
 }
 
-/** Lives a leaking enemy costs, scaled up the run so late breaches sting (compounds ×1.6/10 waves). */
-export function leakWeightAt(base: number, n: number): number {
-  const w = Math.max(1, Math.floor(n))
-  return Math.max(base, Math.round(base * LEAK_RATE ** ((w - 1) / 10)))
-}
-
 // ── the roster composition (M4) ──
 // Per-kind: when it debuts, its hp/speed multipliers on the wave curve, and flat bounty/leakWeight.
 // (flying/armor are intrinsic to the kind — set in createEnemy, not here.)
+//
+// leakWeight is PER-KIND by the creature's THREAT — a stronger foe costs many more lives when it
+// breaches (a Talos leak hurts far more than a Shade). It does NOT scale with the wave number;
+// late-run lethality comes from tougher COMPOSITION (more of the heavy kinds), not from inflating
+// the same creature's cost. Lives base ~100, so a handful of heavy leaks is a real threat.
 const ORDER: readonly EnemyKind[] = ['shade', 'skeleton', 'harpy', 'talos', 'hydra', 'satyr', 'gorgon']
 const KIND: Record<EnemyKind, { intro: number; hpMul: number; speedMul: number; bounty: number; leakWeight: number }> = {
-  shade: { intro: 1, hpMul: 0.6, speedMul: 1.0, bounty: 3, leakWeight: 1 },
-  skeleton: { intro: 3, hpMul: 1.0, speedMul: 1.0, bounty: 5, leakWeight: 1 },
-  harpy: { intro: 6, hpMul: 0.8, speedMul: 1.15, bounty: 7, leakWeight: 1 },
-  talos: { intro: 9, hpMul: 1.5, speedMul: 0.75, bounty: 12, leakWeight: 2 },
-  hydra: { intro: 12, hpMul: 1.4, speedMul: 0.9, bounty: 9, leakWeight: 1 },
-  satyr: { intro: 15, hpMul: 0.7, speedMul: 1.6, bounty: 6, leakWeight: 1 }, // FAST → demands a slow
-  gorgon: { intro: 18, hpMul: 1.0, speedMul: 1.0, bounty: 8, leakWeight: 1 }, // STEALTH → demands detection
+  shade: { intro: 1, hpMul: 0.6, speedMul: 1.0, bounty: 3, leakWeight: 1 }, // chaff — let it trickle
+  skeleton: { intro: 3, hpMul: 1.0, speedMul: 1.0, bounty: 5, leakWeight: 2 }, // the 1-RBE yardstick
+  satyr: { intro: 15, hpMul: 0.7, speedMul: 1.6, bounty: 6, leakWeight: 3 }, // FAST → leaks easily but fragile
+  harpy: { intro: 6, hpMul: 0.8, speedMul: 1.15, bounty: 7, leakWeight: 5 }, // flying → a structural anti-air gap
+  gorgon: { intro: 18, hpMul: 1.0, speedMul: 1.0, bounty: 8, leakWeight: 7 }, // STEALTH → it was invisible to you
+  hydra: { intro: 12, hpMul: 1.4, speedMul: 0.9, bounty: 9, leakWeight: 4 }, // splits — children inherit halved
+  talos: { intro: 9, hpMul: 1.5, speedMul: 0.75, bounty: 12, leakWeight: 10 }, // armored wall → a leak is a disaster
 }
 // Blend weights once multiple kinds are unlocked; talos/hydra are capped so they stay a minority.
 const WEIGHT: Record<EnemyKind, number> = { shade: 5, skeleton: 4, harpy: 3, talos: 1.5, hydra: 1.5, satyr: 2.5, gorgon: 2.5 }
@@ -130,7 +125,7 @@ function makeGroup(kind: EnemyKind, count: number, n: number): SpawnGroup {
     hp: Math.max(1, Math.round(enemyHp(n) * k.hpMul)),
     speed: Math.round(enemySpeed(n) * k.speedMul),
     bounty: k.bounty,
-    leakWeight: leakWeightAt(k.leakWeight, n),
+    leakWeight: k.leakWeight, // per-kind by threat (NOT wave-scaled)
     intervalMs: spawnIntervalMs(n),
   }
 }

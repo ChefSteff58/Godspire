@@ -138,7 +138,9 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     color: 0xff6fae,
     attack: 'hitscan',
     canHitAir: false,
-    slowAura: { mul: 0.55, refreshMs: 600, maxTargets: 5 }, // charms the lead 5 foes, not the whole lane
+    // charms a STABLE set of the lead 5 foes (not the whole lane); a short refresh so a foe she
+    // releases recovers its speed almost immediately (≤250ms) — the rest stay truly unaffected.
+    slowAura: { mul: 0.55, refreshMs: 250, maxTargets: 5 },
   },
   athena: {
     name: 'Athena',

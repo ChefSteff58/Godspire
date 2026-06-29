@@ -157,7 +157,7 @@ export function onDeath(enemy: Enemy): SpawnDesc[] {
     hp: childHp,
     speed: enemy.speed * 1.15,
     bounty: Math.max(1, Math.round(enemy.bounty * 0.4)),
-    leakWeight: enemy.leakWeight,
+    leakWeight: Math.max(1, Math.round(enemy.leakWeight * 0.5)), // weaker bodies cost fewer lives
     splitDepth: enemy.splitDepth + 1,
     spawnAtT: enemy.pathT,
   })

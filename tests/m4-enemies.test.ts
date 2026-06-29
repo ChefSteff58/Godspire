@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { selectTarget } from '../src/core/systems/targeting'
 import { createEnemy, damageEnemy, onDeath, applySlow, advanceEnemy, SPLIT_DEPTH_CAP, type Enemy } from '../src/core/entities/enemy'
-import { enemyCounts, waveSpec, leakWeightAt } from '../src/core/systems/waveManager'
+import { enemyCounts, waveSpec } from '../src/core/systems/waveManager'
 import { TOWER_STATS } from '../src/core/data/towers'
 
 const posOf = (e: Enemy) => ({ x: e.pathT * 100, y: 0 })
@@ -145,18 +145,27 @@ describe('slow status (Aphrodite)', () => {
   })
 })
 
-describe('leak weight scaling', () => {
-  it('compounds up the run so late breaches cost far more lives', () => {
-    expect(leakWeightAt(1, 1)).toBe(1) // wave 1: base
-    expect(leakWeightAt(2, 1)).toBe(2) // Talos base at wave 1
-    expect(leakWeightAt(2, 31)).toBeGreaterThan(2 * 3) // ~×4 by wave 31
-    // strictly non-decreasing with the wave
-    let prev = 0
-    for (const w of [1, 5, 10, 20, 30, 40]) {
-      const lw = leakWeightAt(2, w)
-      expect(lw).toBeGreaterThanOrEqual(prev)
-      prev = lw
-    }
+describe('leak weight by kind (threat, NOT wave-scaled)', () => {
+  const leakOf = (wave: number, kind: string) => waveSpec(wave).groups.find((g) => g.kind === kind)?.leakWeight
+
+  it('stronger kinds cost more lives — a Harpy/Talos leak hurts far more than a Shade', () => {
+    const w = 20 // all of shade/skeleton/harpy/talos present
+    expect(leakOf(w, 'shade')).toBe(1)
+    expect(leakOf(w, 'harpy')).toBeGreaterThan(leakOf(w, 'shade')!) // harpy >> shade (the user's example)
+    expect(leakOf(w, 'talos')).toBeGreaterThan(leakOf(w, 'harpy')!) // armored juggernaut costs the most
+  })
+
+  it('does NOT change with the wave number (same kind = same cost early and late)', () => {
+    expect(leakOf(9, 'talos')).toBe(leakOf(40, 'talos')) // a Talos costs the same at w9 and w40
+    expect(leakOf(6, 'harpy')).toBe(leakOf(30, 'harpy'))
+  })
+
+  it('Hydra split-children inherit a REDUCED leak weight (weaker bodies)', () => {
+    const hydra = createEnemy('hydra')
+    hydra.leakWeight = 4
+    hydra.maxHp = 100
+    const kids = onDeath(hydra)
+    expect(kids[0].leakWeight).toBe(2) // round(4 × 0.5)
   })
 })
 

@@ -64,6 +64,8 @@ export class GameScene extends Phaser.Scene {
   // Hephaestus spike traps, one per owner tower (keyed by tower id).
   private readonly spikes = new Map<string, Spike>()
   private readonly spikeGfx = new Map<string, Phaser.GameObjects.Graphics>()
+  // Aphrodite holds a STABLE set of charmed enemy ids per tower, so the slowed foes don't churn.
+  private readonly charmedByTower = new Map<string, Set<string>>()
   private overlay!: Phaser.GameObjects.Graphics
   private ghost!: Phaser.GameObjects.Graphics
   private pointer: Vec2 = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 }
@@ -97,6 +99,7 @@ export class GameScene extends Phaser.Scene {
     this.projSprites.clear()
     this.spikes.clear()
     this.spikeGfx.clear() // old graphics are destroyed by scene.restart
+    this.charmedByTower.clear()
     this.elapsedAccumMs = 0
     this.elapsedSec = 0
 
@@ -480,21 +483,52 @@ export class GameScene extends Phaser.Scene {
     return { damageMul, fireRateMul, detect }
   }
 
-  /** Aphrodite: charm only the LEAD foes in range, up to her cap — she can't hold the whole lane. */
+  /**
+   * Aphrodite: charm a STABLE set of up to N foes (not the whole lane). A charmed foe stays charmed
+   * while alive + in range; freed slots are filled by the lead un-charmed foe. Holding membership by
+   * id (instead of re-sorting every frame) stops the slowed set from churning/flickering, and foes
+   * outside the set are genuinely unaffected.
+   */
   private updateSlowAuras(): void {
+    let byId: Map<string, Enemy> | null = null
     for (const tower of this.towers) {
       const aura = TOWER_STATS[tower.god].slowAura
       if (!aura) continue
+      if (!byId) {
+        byId = new Map()
+        for (const e of this.enemies) byId.set(e.id, e)
+      }
       const eff = towerEffectiveStats(tower)
+      const cap = Math.max(0, Math.floor(eff.slowTargets))
       const r2 = eff.range * eff.range
-      const inRange = this.enemies.filter((e) => {
+      const inRange = (e: Enemy): boolean => {
         const ep = this.path.getPointAt(e.pathT)
         return (tower.pos.x - ep.x) ** 2 + (tower.pos.y - ep.y) ** 2 <= r2
-      })
-      // prioritize the foes furthest along (most urgent), then apply the slow to the first N
-      inRange.sort((a, b) => b.pathT - a.pathT)
-      for (let i = 0; i < inRange.length && i < eff.slowTargets; i++) {
-        applySlow(inRange[i], eff.slowMul, aura.refreshMs)
+      }
+      let charmed = this.charmedByTower.get(tower.id)
+      if (!charmed) {
+        charmed = new Set()
+        this.charmedByTower.set(tower.id, charmed)
+      }
+      // 1. release any charmed foe that died or walked out of range (its slow lifts on its own ≤refreshMs)
+      for (const id of [...charmed]) {
+        const e = byId.get(id)
+        if (!e || !inRange(e)) charmed.delete(id)
+      }
+      // 2. fill free slots with the lead (furthest-along) in-range foes not already held
+      if (charmed.size < cap) {
+        const fresh = this.enemies
+          .filter((e) => !charmed!.has(e.id) && inRange(e))
+          .sort((a, b) => b.pathT - a.pathT)
+        for (const e of fresh) {
+          if (charmed.size >= cap) break
+          charmed.add(e.id)
+        }
+      }
+      // 3. hold the slow on exactly the charmed set (stable → smooth; everyone else stays free)
+      for (const id of charmed) {
+        const e = byId.get(id)
+        if (e) applySlow(e, eff.slowMul, aura.refreshMs)
       }
     }
   }
@@ -732,27 +766,29 @@ export class GameScene extends Phaser.Scene {
     g.clear()
 
     for (const tower of this.towers) {
-      // Range ring shows ONLY for the selected tower (or every tower in debug) — not always-on.
+      // Range ring shows ONLY for the selected tower (or every tower in debug) — never always-on,
+      // including the support auras (Aphrodite / Athena), which now behave like every other range ring.
       const selected = tower.id === this.selectedTowerId
       const eff = towerEffectiveStats(tower)
       const range = eff.range
-      // Aphrodite's chilling field is always visible (it's her whole identity)
-      if (TOWER_STATS[tower.god].slowAura) {
-        g.fillStyle(0x6fd0e8, 0.07)
-        g.fillCircle(tower.pos.x, tower.pos.y, range)
-        g.lineStyle(1, 0x6fd0e8, 0.3)
-        g.strokeCircle(tower.pos.x, tower.pos.y, range)
-      }
-      // Athena's war-council aura (buff + detection) is always visible too
-      if (TOWER_STATS[tower.god].auraBuff) {
-        g.fillStyle(0xd9c879, 0.06)
-        g.fillCircle(tower.pos.x, tower.pos.y, range)
-        g.lineStyle(1, 0xd9c879, 0.32)
-        g.strokeCircle(tower.pos.x, tower.pos.y, range)
-      }
       if (selected || showDebug) {
-        g.lineStyle(1.5, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
-        g.strokeCircle(tower.pos.x, tower.pos.y, range)
+        const slow = TOWER_STATS[tower.god].slowAura
+        const buff = TOWER_STATS[tower.god].auraBuff
+        if (slow) {
+          // Aphrodite's charm field — themed fill so the area reads, but only while selected
+          g.fillStyle(0x6fd0e8, 0.1)
+          g.fillCircle(tower.pos.x, tower.pos.y, range)
+          g.lineStyle(1.5, 0x6fd0e8, selected ? 0.85 : 0.45)
+          g.strokeCircle(tower.pos.x, tower.pos.y, range)
+        } else if (buff) {
+          g.fillStyle(0xd9c879, 0.08)
+          g.fillCircle(tower.pos.x, tower.pos.y, range)
+          g.lineStyle(1.5, 0xd9c879, selected ? 0.85 : 0.45)
+          g.strokeCircle(tower.pos.x, tower.pos.y, range)
+        } else {
+          g.lineStyle(1.5, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
+          g.strokeCircle(tower.pos.x, tower.pos.y, range)
+        }
         // mobile gods: also trace the orbit path so its sweep is legible
         const m = TOWER_STATS[tower.god].mobile
         if (m) {
@@ -921,6 +957,7 @@ export class GameScene extends Phaser.Scene {
     this.towerSprites.delete(id)
     this.homeBaseGfx.get(id)?.destroy() // remove a mobile god's home base with it
     this.homeBaseGfx.delete(id)
+    this.charmedByTower.delete(id) // drop an Aphrodite's charm set
     this.spikes.delete(id) // remove a Hephaestus trap with its forge
     this.spikeGfx.get(id)?.destroy()
     this.spikeGfx.delete(id)
