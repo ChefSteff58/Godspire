@@ -14,7 +14,7 @@ export interface BossMechanic {
   damageCap?: number
   /** Flat armor granted on spawn (on top of the cap). */
   armorBonus?: number
-  /** Minotaur: 0 = fully immune to slow, 1 = full slow effect (in between = partial). */
+  /** Minotaur: fraction of a slow's strength RESISTED — 1 = immune, 0 = full slow (0.5 = halved). */
   slowResist?: number
   /** Minotaur: ignores Poseidon knockback. */
   knockbackImmune?: boolean

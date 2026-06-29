@@ -434,6 +434,17 @@ export class GameScene extends Phaser.Scene {
     if (desc.bossId !== undefined) enemy.bossId = desc.bossId
     if (desc.damageCap !== undefined) enemy.damageCap = desc.damageCap
     if (desc.armor !== undefined) enemy.armor = desc.armor // boss armor overrides the kind trait
+    if (enemy.kind === 'boss' && enemy.bossId) {
+      // derive the live mechanic fields from the roster (Minotaur's CC-resist + charge)
+      const m = bossById(enemy.bossId).mechanic
+      if (m.slowResist !== undefined) enemy.slowResist = m.slowResist
+      if (m.knockbackImmune) enemy.knockbackImmune = true
+      if (m.charge) {
+        enemy.charge = m.charge
+        enemy.baseSpeed = enemy.speed
+        enemy.chargeTimerMs = m.charge.periodMs
+      }
+    }
     this.enemies.push(enemy)
     if (enemy.kind === 'harpy') this.telegraphHarpy()
     if (enemy.kind === 'boss') this.telegraphBoss(enemy)
@@ -781,7 +792,7 @@ export class GameScene extends Phaser.Scene {
       const ep = this.path.getPointAt(e.pathT)
       if ((ep.x - center.x) ** 2 + (ep.y - center.y) ** 2 > radius * radius) continue
       this.hitEnemy(e, damage)
-      if (knockback > 0 && e.hp > 0) e.pathT = Math.max(0, e.pathT - knockback) // shove survivors back
+      if (knockback > 0 && e.hp > 0 && !e.knockbackImmune) e.pathT = Math.max(0, e.pathT - knockback) // shove survivors back
     }
   }
 

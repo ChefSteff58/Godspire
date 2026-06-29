@@ -36,6 +36,16 @@ export interface Enemy {
   bossId?: BossId
   /** Nemean: no single hit may exceed this (applied before armor in damageEnemy). */
   damageCap?: number
+  /** Minotaur: fraction of a slow's strength resisted (1 = immune, 0/undefined = full slow). */
+  slowResist?: number
+  /** Minotaur: ignores Poseidon knockback. */
+  knockbackImmune?: boolean
+  /** Minotaur: periodic speed-burst params (set at spawn from the roster). */
+  charge?: { periodMs: number; burstMul: number; durationMs: number }
+  /** Charge runtime state: ms to the next burst, ms left in the current burst, the un-charged speed. */
+  chargeTimerMs?: number
+  chargeActiveMs?: number
+  baseSpeed?: number
 }
 
 /** What to spawn. The scene creates the Enemy (traits derived from kind) + overrides these. */
@@ -141,6 +151,7 @@ export function createEnemy(kind: EnemyKind = 'shade'): Enemy {
  * Returns true if it reached the end (leaked into Olympus) this step.
  */
 export function advanceEnemy(enemy: Enemy, dtSeconds: number, pathLength: number): boolean {
+  tickCharge(enemy, dtSeconds) // Minotaur speed bursts (mutates enemy.speed)
   if (enemy.slowTimerMs > 0) {
     enemy.slowTimerMs -= dtSeconds * 1000
     if (enemy.slowTimerMs <= 0) enemy.slowMul = 1 // slow lifts
@@ -153,9 +164,29 @@ export function advanceEnemy(enemy: Enemy, dtSeconds: number, pathLength: number
   return false
 }
 
-/** Apply a slow (the strongest active one wins) and refresh its duration. */
+/** Minotaur charge: every `periodMs`, sprint at `burstMul` for `durationMs`, then settle to base. */
+function tickCharge(enemy: Enemy, dtSeconds: number): void {
+  if (!enemy.charge || enemy.baseSpeed === undefined) return
+  const dtMs = dtSeconds * 1000
+  if (enemy.chargeActiveMs && enemy.chargeActiveMs > 0) {
+    enemy.chargeActiveMs -= dtMs
+    if (enemy.chargeActiveMs <= 0) enemy.speed = enemy.baseSpeed // burst over
+    return
+  }
+  enemy.chargeTimerMs = (enemy.chargeTimerMs ?? enemy.charge.periodMs) - dtMs
+  if (enemy.chargeTimerMs <= 0) {
+    enemy.chargeActiveMs = enemy.charge.durationMs
+    enemy.chargeTimerMs = enemy.charge.periodMs
+    enemy.speed = enemy.baseSpeed * enemy.charge.burstMul // CHARGE!
+  }
+}
+
+/** Apply a slow (the strongest active one wins), weakened by the enemy's slowResist. */
 export function applySlow(enemy: Enemy, mul: number, durationMs: number): void {
-  enemy.slowMul = Math.min(enemy.slowMul, mul)
+  const resist = enemy.slowResist ?? 0 // 0 = no resistance (full slow), 1 = immune
+  // no-resist fast path keeps normal enemies EXACT (the blend below would add float drift)
+  const eff = resist === 0 ? mul : 1 - (1 - mul) * (1 - resist)
+  enemy.slowMul = Math.min(enemy.slowMul, eff)
   enemy.slowTimerMs = Math.max(enemy.slowTimerMs, durationMs)
 }
 
