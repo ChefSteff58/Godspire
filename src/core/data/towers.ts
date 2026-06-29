@@ -1,8 +1,8 @@
 import type { TargetingMode } from '../systems/targeting'
 
-// The god roster grows across M5. Built so far: Zeus (hitscan), Apollo (piercing projectile),
-// Demeter (money farm), Hermes (mobile anti-air), Hephaestus (deployable spike factory).
-export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus'
+// The god roster grows across M5. Built so far: Zeus, Apollo, Demeter, Hermes (mobile anti-air),
+// Hephaestus (deployable spike factory), Poseidon (water-gated AoE + knockback).
+export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon'
 
 export interface TowerStats {
   name: string
@@ -24,6 +24,10 @@ export interface TowerStats {
   mobile?: { orbitRadius: number; angularSpeed: number }
   /** Deployable gods (Hephaestus) stock a spike trap on the path instead of shooting. */
   deployable?: { maxCharges: number; hitRadius: number }
+  /** AoE gods (Poseidon): each shot damages all ground foes in a radius + knocks them back. */
+  splash?: { radius: number; knockback: number }
+  /** Must be placed on water terrain (the Styx pool) — Poseidon. */
+  requiresWater?: boolean
 }
 
 export const TOWER_STATS: Record<GodKind, TowerStats> = {
@@ -101,9 +105,25 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     canHitAir: false,
     deployable: { maxCharges: 6, hitRadius: 18 },
   },
+  poseidon: {
+    name: 'Poseidon',
+    blurb: 'Tidal slam — area damage + knockback. Must build on water.',
+    icon: '🔱',
+    cost: 300,
+    range: 150,
+    damage: 8,
+    fireRate: 0.8,
+    footprint: 20,
+    defaultTargeting: 'first',
+    color: 0x2f8fd0,
+    attack: 'hitscan', // unused — splash overrides
+    canHitAir: false,
+    splash: { radius: 55, knockback: 0.03 },
+    requiresWater: true,
+  },
 }
 
-export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes', 'hephaestus']
+export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes', 'hephaestus', 'poseidon']
 
 /** Fraction of a tower's cost refunded when sold (BTD6-style). */
 export const SELL_REFUND_RATE = 0.7

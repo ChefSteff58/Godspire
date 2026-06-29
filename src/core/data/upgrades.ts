@@ -28,6 +28,9 @@ export interface UpgradeEffect {
   grantsAir?: boolean
   /** Hephaestus: extra spike-trap charges. */
   maxChargesAdd?: number
+  /** Poseidon: blast radius / knockback multipliers. */
+  splashRadiusMul?: number
+  knockbackMul?: number
 }
 
 export interface UpgradeTier {
@@ -149,6 +152,26 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       ],
     },
   },
+  poseidon: {
+    A: {
+      name: 'Tsunami',
+      blurb: 'Wider blasts and harder knockback — mass crowd control on the straights.',
+      tiers: [
+        { name: 'Breaker Wave', cost: 200, desc: '+30% blast radius, +50% knockback, +20% damage', effect: { splashRadiusMul: 1.3, knockbackMul: 1.5, damageMul: 1.2 } },
+        { name: 'Storm Surge', cost: 380, desc: '+25% radius, +50% knockback, +30% damage', effect: { splashRadiusMul: 1.25, knockbackMul: 1.5, damageMul: 1.3 } },
+        { name: 'Wrath of the Deep', cost: 820, desc: '+30% radius, +100% knockback, +40% damage', effect: { splashRadiusMul: 1.3, knockbackMul: 2, damageMul: 1.4 } },
+      ],
+    },
+    B: {
+      name: 'Maelstrom',
+      blurb: 'Relentless torpedoes — hits harder and faster (the tank-cracker).',
+      tiers: [
+        { name: 'Torpedo Bay', cost: 200, desc: '+60% damage', effect: { damageMul: 1.6 } },
+        { name: 'Depth Charges', cost: 380, desc: '+50% damage, +30% fire rate', effect: { damageMul: 1.5, fireRateMul: 1.3 } },
+        { name: 'Kraken Rising', cost: 800, desc: '+80% damage, +30% fire rate', effect: { damageMul: 1.8, fireRateMul: 1.3 } },
+      ],
+    },
+  },
 }
 
 export interface FoldedUpgrades {
@@ -161,11 +184,13 @@ export interface FoldedUpgrades {
   incomeWaveScaleAdd: number
   grantsAir: boolean
   maxChargesAdd: number
+  splashRadiusMul: number
+  knockbackMul: number
 }
 
 /** Accumulate every purchased tier's effects (paths multiply for muls, add for adds). Pure. */
 export function foldUpgrades(god: GodKind, pathATier: number, pathBTier: number): FoldedUpgrades {
-  const f: FoldedUpgrades = { damageMul: 1, fireRateMul: 1, rangeMul: 1, pierceAdd: 0, projectileSpeedMul: 1, incomePerWaveAdd: 0, incomeWaveScaleAdd: 0, grantsAir: false, maxChargesAdd: 0 }
+  const f: FoldedUpgrades = { damageMul: 1, fireRateMul: 1, rangeMul: 1, pierceAdd: 0, projectileSpeedMul: 1, incomePerWaveAdd: 0, incomeWaveScaleAdd: 0, grantsAir: false, maxChargesAdd: 0, splashRadiusMul: 1, knockbackMul: 1 }
   const applyPath = (path: UpgradePathKey, tier: number) => {
     const p = UPGRADES[god]?.[path]
     if (!p) return
@@ -180,6 +205,8 @@ export function foldUpgrades(god: GodKind, pathATier: number, pathBTier: number)
       f.incomeWaveScaleAdd += e.incomeWaveScaleAdd ?? 0
       f.grantsAir = f.grantsAir || (e.grantsAir ?? false)
       f.maxChargesAdd += e.maxChargesAdd ?? 0
+      f.splashRadiusMul *= e.splashRadiusMul ?? 1
+      f.knockbackMul *= e.knockbackMul ?? 1
     }
   }
   applyPath('A', pathATier)
@@ -197,6 +224,9 @@ export interface EffectiveStats {
   canHitAir: boolean
   /** Hephaestus: spike-trap charge capacity (base + upgrades). */
   maxCharges: number
+  /** Poseidon: AoE blast radius + per-hit knockback (base × upgrades). */
+  splashRadius: number
+  knockback: number
 }
 
 /** A tower's combat stats after its upgrades (base × folded multipliers). Pure. */
@@ -211,6 +241,8 @@ export function towerEffectiveStats(tower: Tower): EffectiveStats {
     projectileSpeed: (base.projectileSpeed ?? 500) * f.projectileSpeedMul,
     canHitAir: (base.canHitAir ?? false) || f.grantsAir,
     maxCharges: (base.deployable?.maxCharges ?? 0) + f.maxChargesAdd,
+    splashRadius: (base.splash?.radius ?? 0) * f.splashRadiusMul,
+    knockback: (base.splash?.knockback ?? 0) * f.knockbackMul,
   }
 }
 

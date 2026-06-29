@@ -316,7 +316,8 @@ export class GameScene extends Phaser.Scene {
         tower.cooldown = 1 / this.run.effectiveFireRate(tower.god, eff.fireRate)
         const dmg = this.run.effectiveDamage(tower.god, eff.damage)
         const stats = TOWER_STATS[tower.god]
-        if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
+        if (stats.splash) this.fireSplash(this.path.getPointAt(target.pathT), dmg, eff.splashRadius, eff.knockback)
+        else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
         else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
       }
 
@@ -640,6 +641,26 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: g, alpha: 0, duration: 150, onComplete: () => g.destroy() })
   }
 
+  /** Poseidon's tidal slam — damage all GROUND foes in a radius + shove survivors back down the path. */
+  private fireSplash(center: Vec2, damage: number, radius: number, knockback: number): void {
+    this.drawSplash(center, radius)
+    for (const e of this.enemies.slice()) {
+      if (e.flying) continue // a tidal wave hits the ground, not fliers
+      const ep = this.path.getPointAt(e.pathT)
+      if ((ep.x - center.x) ** 2 + (ep.y - center.y) ** 2 > radius * radius) continue
+      this.hitEnemy(e, damage)
+      if (knockback > 0 && e.hp > 0) e.pathT = Math.max(0, e.pathT - knockback) // shove survivors back
+    }
+  }
+
+  private drawSplash(center: Vec2, radius: number): void {
+    const c = this.add
+      .circle(center.x, center.y, radius * 0.45, 0x3a8fb5, 0.4)
+      .setStrokeStyle(2, 0x9fe0ff, 0.6)
+      .setDepth(7)
+    this.tweens.add({ targets: c, scale: 2.3, alpha: 0, duration: 280, onComplete: () => c.destroy() })
+  }
+
   /** Hermes' quick dart — a thin straight tracer, distinct from Zeus's jagged bolt. */
   private drawDart(from: Vec2, to: Vec2): void {
     const g = this.add.graphics().setDepth(8)
@@ -703,15 +724,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── placement ──
+  /** Can this god be placed here? Adds water-gating (Poseidon) on top of the pure canPlace. */
+  private canPlaceGod(god: GodKind, pos: Vec2): boolean {
+    const stats = TOWER_STATS[god]
+    const terrain = stats.requiresWater ? 'water' : undefined
+    if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints(), terrain }).ok) return false
+    if (stats.requiresWater && !this.onWater(pos)) return false
+    return true
+  }
+
+  private onWater(pos: Vec2): boolean {
+    for (const o of OBSTACLES) {
+      if (o.terrain !== 'water' || o.shape.kind !== 'circle') continue
+      if (Math.hypot(pos.x - o.shape.x, pos.y - o.shape.y) <= o.shape.r) return true
+    }
+    return false
+  }
+
   private renderGhost(): void {
     const g = this.ghost
     g.clear()
     const placingGod = useGameStore.getState().placingGod
     if (!placingGod) return
     const stats = TOWER_STATS[placingGod]
-    const ok =
-      canPlace(this.pointer, stats.footprint, { towers: this.towerFootprints() }).ok &&
-      this.run.canAfford(stats.cost)
+    const ok = this.canPlaceGod(placingGod, this.pointer) && this.run.canAfford(stats.cost)
     const tint = ok ? 0x6be36b : 0xff5566
     g.fillStyle(tint, 0.45)
     g.fillCircle(this.pointer.x, this.pointer.y, stats.footprint)
@@ -726,7 +762,7 @@ export class GameScene extends Phaser.Scene {
     const placingGod = store.placingGod
     if (placingGod) {
       const stats = TOWER_STATS[placingGod]
-      if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints() }).ok) return // invalid: keep placing
+      if (!this.canPlaceGod(placingGod, pos)) return // invalid spot: keep placing
       if (!this.run.purchase(stats.cost)) return // too poor: keep placing
       this.placeTower(placingGod, pos)
       store.cancelPlacing()

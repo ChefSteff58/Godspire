@@ -9,7 +9,7 @@ import {
 import { createTower, type Tower } from '../src/core/entities/tower'
 import { TOWER_STATS } from '../src/core/data/towers'
 
-const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus', a = 0, b = 0): Tower => {
+const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus' | 'poseidon', a = 0, b = 0): Tower => {
   const t = createTower(god, { x: 0, y: 0 })
   t.pathA = a
   t.pathB = b
@@ -102,6 +102,23 @@ describe('Hephaestus deployable', () => {
 
   it('non-deployable gods report 0 capacity', () => {
     expect(towerEffectiveStats(tower('zeus')).maxCharges).toBe(0)
+  })
+})
+
+describe('Poseidon AoE', () => {
+  it('has a base blast + knockback that the Tsunami path widens', () => {
+    expect(TOWER_STATS.poseidon.splash?.radius).toBe(55)
+    expect(TOWER_STATS.poseidon.requiresWater).toBe(true)
+    const base = towerEffectiveStats(tower('poseidon'))
+    expect(base.splashRadius).toBe(55)
+    expect(base.knockback).toBeCloseTo(0.03)
+    const t1 = towerEffectiveStats(tower('poseidon', 1, 0)) // Breaker Wave: +30% radius, +50% knockback
+    expect(t1.splashRadius).toBeCloseTo(55 * 1.3)
+    expect(t1.knockback).toBeCloseTo(0.03 * 1.5)
+  })
+
+  it('non-AoE gods report 0 splash', () => {
+    expect(towerEffectiveStats(tower('zeus')).splashRadius).toBe(0)
   })
 })
 
