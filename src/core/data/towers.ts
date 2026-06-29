@@ -1,8 +1,8 @@
 import type { TargetingMode } from '../systems/targeting'
 
 // The god roster grows across M5. Built so far: Zeus (hitscan), Apollo (piercing projectile),
-// Demeter (money farm — deals no damage; pays gold each wave), Hermes (mobile anti-air).
-export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes'
+// Demeter (money farm), Hermes (mobile anti-air), Hephaestus (deployable spike factory).
+export type GodKind = 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus'
 
 export interface TowerStats {
   name: string
@@ -22,6 +22,8 @@ export interface TowerStats {
   canHitAir?: boolean
   /** Mobile gods (Hermes) orbit their placed point; pos updates each frame. */
   mobile?: { orbitRadius: number; angularSpeed: number }
+  /** Deployable gods (Hephaestus) stock a spike trap on the path instead of shooting. */
+  deployable?: { maxCharges: number; hitRadius: number }
 }
 
 export const TOWER_STATS: Record<GodKind, TowerStats> = {
@@ -84,9 +86,24 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     canHitAir: true, // the dedicated anti-air specialist
     mobile: { orbitRadius: 50, angularSpeed: 1.6 }, // ~4s loop around the placed point
   },
+  hephaestus: {
+    name: 'Hephaestus',
+    blurb: 'Forges spike traps on the path — last-line leak insurance.',
+    icon: '🔨',
+    cost: 230,
+    range: 110, // how far from his forge he can reach the path
+    damage: 8, // per-charge spike damage
+    fireRate: 0.6, // charges produced per second
+    footprint: 18,
+    defaultTargeting: 'first',
+    color: 0xc8763a,
+    attack: 'hitscan', // unused — he deploys traps, doesn't shoot
+    canHitAir: false,
+    deployable: { maxCharges: 6, hitRadius: 18 },
+  },
 }
 
-export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes']
+export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes', 'hephaestus']
 
 /** Fraction of a tower's cost refunded when sold (BTD6-style). */
 export const SELL_REFUND_RATE = 0.7

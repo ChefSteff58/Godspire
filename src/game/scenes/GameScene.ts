@@ -41,6 +41,9 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 const MAX_DELTA_MS = 50
 const BOUNDS = { w: GAME_WIDTH, h: GAME_HEIGHT }
 
+/** A Hephaestus spike trap on the path — pops each ground enemy once, consuming a charge. */
+type Spike = { pos: Vec2; charges: number; damage: number; hitRadius: number; hitIds: string[] }
+
 /**
  * GameScene owns the game loop. M2.5: flat top-down map with dead zones, fast-forward (timeScale),
  * Zeus hitscan + Apollo piercing projectiles, and hit/HP "juice." Logic lives in src/core; this
@@ -54,6 +57,9 @@ export class GameScene extends Phaser.Scene {
   private readonly towerSprites = new Map<string, Phaser.GameObjects.Container>()
   private projectiles: Projectile[] = []
   private readonly projSprites = new Map<string, Phaser.GameObjects.Rectangle>()
+  // Hephaestus spike traps, one per owner tower (keyed by tower id).
+  private readonly spikes = new Map<string, Spike>()
+  private readonly spikeGfx = new Map<string, Phaser.GameObjects.Graphics>()
   private overlay!: Phaser.GameObjects.Graphics
   private ghost!: Phaser.GameObjects.Graphics
   private pointer: Vec2 = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 }
@@ -84,6 +90,8 @@ export class GameScene extends Phaser.Scene {
     this.towerSprites.clear()
     this.projectiles = []
     this.projSprites.clear()
+    this.spikes.clear()
+    this.spikeGfx.clear() // old graphics are destroyed by scene.restart
     this.elapsedAccumMs = 0
     this.elapsedSec = 0
 
@@ -291,6 +299,13 @@ export class GameScene extends Phaser.Scene {
         if (eff.fireRate <= 0 || eff.damage <= 0) continue // farms (Demeter) don't fire
         tower.cooldown -= dtSec
         if (tower.cooldown > 0) continue
+        const dep = TOWER_STATS[tower.god].deployable
+        if (dep) {
+          // Hephaestus produces a trap charge instead of shooting an enemy directly.
+          tower.cooldown = 1 / this.run.effectiveFireRate(tower.god, eff.fireRate)
+          this.produceSpike(tower, eff, dep)
+          continue
+        }
         const target = selectTarget(
           { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir },
           this.enemies,
@@ -306,6 +321,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.updateProjectiles(dtSec)
+      this.updateSpikes()
 
       // clear-gate: a wave ends only when fully emitted AND no enemy remains alive.
       // When it clears, Demeter farms pay out their harvest.
@@ -427,6 +443,76 @@ export class GameScene extends Phaser.Scene {
       tower.pos.y = tower.center.y + Math.sin(tower.orbitPhase) * m.orbitRadius
       this.towerSprites.get(tower.id)?.setPosition(tower.pos.x, tower.pos.y)
     }
+  }
+
+  // ── Hephaestus spike traps (deployable) ──
+  /** Produce/refill a Hephaestus trap at the nearest path point (one trap per tower). */
+  private produceSpike(tower: Tower, eff: { damage: number; maxCharges: number }, dep: { hitRadius: number }): void {
+    let spike = this.spikes.get(tower.id)
+    const dmg = this.run.effectiveDamage(tower.god, eff.damage)
+    if (!spike) {
+      spike = { pos: this.nearestPathPoint(tower.pos), charges: 0, damage: dmg, hitRadius: dep.hitRadius, hitIds: [] }
+      this.spikes.set(tower.id, spike)
+    }
+    spike.damage = dmg // keep current (boons/upgrades may have changed it)
+    spike.charges = Math.min(spike.charges + 1, eff.maxCharges)
+    this.drawSpike(tower.id, spike)
+  }
+
+  /** Each frame: a charged trap pops every ground enemy that walks over it (once each). */
+  private updateSpikes(): void {
+    for (const [ownerId, spike] of this.spikes) {
+      if (spike.charges <= 0) continue
+      for (const e of this.enemies.slice()) {
+        if (spike.charges <= 0) break
+        if (e.flying || spike.hitIds.includes(e.id)) continue // ground-only, once per enemy
+        const ep = this.path.getPointAt(e.pathT)
+        const r = spike.hitRadius + damagedRadius(ENEMY_RADIUS[e.kind], e.hp / e.maxHp)
+        if ((spike.pos.x - ep.x) ** 2 + (spike.pos.y - ep.y) ** 2 <= r * r) {
+          spike.hitIds.push(e.id)
+          spike.charges -= 1
+          this.hitEnemy(e, spike.damage)
+        }
+      }
+      this.drawSpike(ownerId, spike)
+    }
+  }
+
+  /** Closest world point on the path to `pos` (coarse scan; called once per trap). */
+  private nearestPathPoint(pos: Vec2): Vec2 {
+    let best = this.path.getPointAt(0)
+    let bestD = Infinity
+    for (let t = 0; t <= 1; t += 0.01) {
+      const p = this.path.getPointAt(t)
+      const d = (p.x - pos.x) ** 2 + (p.y - pos.y) ** 2
+      if (d < bestD) {
+        bestD = d
+        best = p
+      }
+    }
+    return best
+  }
+
+  private drawSpike(ownerId: string, spike: Spike): void {
+    let g = this.spikeGfx.get(ownerId)
+    if (!g) {
+      g = this.add.graphics().setDepth(3)
+      this.spikeGfx.set(ownerId, g)
+    }
+    g.clear()
+    if (spike.charges <= 0) return
+    const n = Math.min(spike.charges, 8) // a little caltrop pile that grows with charges
+    g.lineStyle(2, 0xd6a15a, 0.95)
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2
+      const len = spike.hitRadius * 0.8
+      g.beginPath()
+      g.moveTo(spike.pos.x, spike.pos.y)
+      g.lineTo(spike.pos.x + Math.cos(a) * len, spike.pos.y + Math.sin(a) * len)
+      g.strokePath()
+    }
+    g.fillStyle(0x7a4a1e, 0.6)
+    g.fillCircle(spike.pos.x, spike.pos.y, 3)
   }
 
   // ── firing ──
@@ -718,6 +804,9 @@ export class GameScene extends Phaser.Scene {
     this.run.grantGold(sellValue(t.god))
     this.towerSprites.get(id)?.destroy()
     this.towerSprites.delete(id)
+    this.spikes.delete(id) // remove a Hephaestus trap with its forge
+    this.spikeGfx.get(id)?.destroy()
+    this.spikeGfx.delete(id)
     this.towers.splice(idx, 1)
     this.deselectTower()
   }

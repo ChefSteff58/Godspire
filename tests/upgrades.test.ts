@@ -9,7 +9,7 @@ import {
 import { createTower, type Tower } from '../src/core/entities/tower'
 import { TOWER_STATS } from '../src/core/data/towers'
 
-const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes', a = 0, b = 0): Tower => {
+const tower = (god: 'zeus' | 'apollo' | 'demeter' | 'hermes' | 'hephaestus', a = 0, b = 0): Tower => {
   const t = createTower(god, { x: 0, y: 0 })
   t.pathA = a
   t.pathB = b
@@ -89,6 +89,19 @@ describe('anti-air (canHitAir)', () => {
     const h = createTower('hermes', { x: 100, y: 200 })
     expect(h.center).toEqual({ x: 100, y: 200 })
     expect(h.orbitPhase).toBe(0)
+  })
+})
+
+describe('Hephaestus deployable', () => {
+  it('has a base trap capacity that the Caltrop Forge path grows', () => {
+    expect(TOWER_STATS.hephaestus.deployable?.maxCharges).toBe(6)
+    expect(towerEffectiveStats(tower('hephaestus')).maxCharges).toBe(6)
+    expect(towerEffectiveStats(tower('hephaestus', 1, 0)).maxCharges).toBe(6 + 4) // Sharpened Spikes
+    expect(towerEffectiveStats(tower('hephaestus', 2, 0)).maxCharges).toBe(6 + 4 + 6) // + Bronze Caltrops
+  })
+
+  it('non-deployable gods report 0 capacity', () => {
+    expect(towerEffectiveStats(tower('zeus')).maxCharges).toBe(0)
   })
 })
 

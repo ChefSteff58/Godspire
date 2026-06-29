@@ -26,6 +26,8 @@ export interface UpgradeEffect {
   incomeWaveScaleAdd?: number
   /** Grants anti-air (the Zeus Stormcaller tier — "the storm reaches the sky"). */
   grantsAir?: boolean
+  /** Hephaestus: extra spike-trap charges. */
+  maxChargesAdd?: number
 }
 
 export interface UpgradeTier {
@@ -127,6 +129,26 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       ],
     },
   },
+  hephaestus: {
+    A: {
+      name: 'Caltrop Forge',
+      blurb: 'A bigger, deadlier stockpile — pure end-of-track leak insurance.',
+      tiers: [
+        { name: 'Sharpened Spikes', cost: 150, desc: '+50% damage, +4 trap charges', effect: { damageMul: 1.5, maxChargesAdd: 4 } },
+        { name: 'Bronze Caltrops', cost: 300, desc: '+60% damage, +6 charges', effect: { damageMul: 1.6, maxChargesAdd: 6 } },
+        { name: 'Mountain of Iron', cost: 700, desc: '+80% damage, +10 charges', effect: { damageMul: 1.8, maxChargesAdd: 10 } },
+      ],
+    },
+    B: {
+      name: 'Line of Automatons',
+      blurb: 'A relentless forge — spikes faster so the trap never runs dry.',
+      tiers: [
+        { name: 'Stoked Bellows', cost: 160, desc: '+60% production, +20% damage', effect: { fireRateMul: 1.6, damageMul: 1.2 } },
+        { name: 'Automaton Crew', cost: 320, desc: '+50% production, +30% damage', effect: { fireRateMul: 1.5, damageMul: 1.3 } },
+        { name: 'Forge of the Gods', cost: 720, desc: '+60% production, +50% damage', effect: { fireRateMul: 1.6, damageMul: 1.5 } },
+      ],
+    },
+  },
 }
 
 export interface FoldedUpgrades {
@@ -138,11 +160,12 @@ export interface FoldedUpgrades {
   incomePerWaveAdd: number
   incomeWaveScaleAdd: number
   grantsAir: boolean
+  maxChargesAdd: number
 }
 
 /** Accumulate every purchased tier's effects (paths multiply for muls, add for adds). Pure. */
 export function foldUpgrades(god: GodKind, pathATier: number, pathBTier: number): FoldedUpgrades {
-  const f: FoldedUpgrades = { damageMul: 1, fireRateMul: 1, rangeMul: 1, pierceAdd: 0, projectileSpeedMul: 1, incomePerWaveAdd: 0, incomeWaveScaleAdd: 0, grantsAir: false }
+  const f: FoldedUpgrades = { damageMul: 1, fireRateMul: 1, rangeMul: 1, pierceAdd: 0, projectileSpeedMul: 1, incomePerWaveAdd: 0, incomeWaveScaleAdd: 0, grantsAir: false, maxChargesAdd: 0 }
   const applyPath = (path: UpgradePathKey, tier: number) => {
     const p = UPGRADES[god]?.[path]
     if (!p) return
@@ -156,6 +179,7 @@ export function foldUpgrades(god: GodKind, pathATier: number, pathBTier: number)
       f.incomePerWaveAdd += e.incomePerWaveAdd ?? 0
       f.incomeWaveScaleAdd += e.incomeWaveScaleAdd ?? 0
       f.grantsAir = f.grantsAir || (e.grantsAir ?? false)
+      f.maxChargesAdd += e.maxChargesAdd ?? 0
     }
   }
   applyPath('A', pathATier)
@@ -171,6 +195,8 @@ export interface EffectiveStats {
   projectileSpeed: number
   /** Can this tower (base + upgrades) strike flying enemies? */
   canHitAir: boolean
+  /** Hephaestus: spike-trap charge capacity (base + upgrades). */
+  maxCharges: number
 }
 
 /** A tower's combat stats after its upgrades (base × folded multipliers). Pure. */
@@ -184,6 +210,7 @@ export function towerEffectiveStats(tower: Tower): EffectiveStats {
     pierce: (base.pierce ?? 0) + f.pierceAdd,
     projectileSpeed: (base.projectileSpeed ?? 500) * f.projectileSpeedMul,
     canHitAir: (base.canHitAir ?? false) || f.grantsAir,
+    maxCharges: (base.deployable?.maxCharges ?? 0) + f.maxChargesAdd,
   }
 }
 
