@@ -4,12 +4,13 @@ A witty-heroic **Greek-mythology roguelike tower defense** for the browser. Comm
 gods to defend Mount Olympus against the monsters storming up from Tartarus — across
 escalating runs, drafting gods and boons from the Fates.
 
-> Status: **Milestone 3 done + run-loop polish** — the roguelike run loop (costed placement, gold
-> economy, ~100 lives, endless clear-gated waves, the Fate Draft, Play-Again banking Favor), now
-> with **drag-and-drop placement**, an **auto-start** toggle, and a **20-boon draft pool** (rarity-
-> weighted, with gate shields / second wind / coin-flip gambles and soft-capped stacking). The
-> 8-god roster + boon design are locked ([docs/design](docs/design/roster-and-boons.md)). Next up:
-> the enemy roster (M4) — then the gods, built in the order that design doc prescribes.
+> Status: **Milestones 3–5 done** — a full, playable roguelike. The run loop (costed placement,
+> gold economy, ~100 lives, endless clear-gated waves, the Fate Draft of ~20 boons, Play-Again
+> banking Favor); the **7-enemy roster** (swarm/baseline/flying/armor/splits/fast/stealth, each with
+> one crisp counter); and the **8-god roster** with 2×3 upgrade paths each — Zeus, Apollo, Demeter
+> (money farm), Hermes (mobile anti-air), Hephaestus (spike factory), Poseidon (water AoE + knockback),
+> Aphrodite (slow field), Athena (buff aura + detection). Click-to-place + sell + auto-start.
+> 98 unit tests. Next up: bosses + the campaign/endless polish (M6) and the leaderboard (M7).
 
 ## Tech stack
 
