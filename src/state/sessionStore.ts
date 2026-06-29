@@ -10,6 +10,7 @@ import {
 import { isSupabaseConfigured } from '../lib/supabase/client'
 import { ensureSession, linkEmail, linkGoogle, signOut, subscribeAuth } from '../lib/supabase/auth'
 import { loadProfile, updateProfileName } from '../lib/supabase/profiles'
+import { submitScore as submitScoreToBoard } from '../lib/supabase/leaderboard'
 import { loadProgress, saveProgress } from '../lib/persistence/progressRepo'
 import {
   readLocalProgress,
@@ -40,6 +41,7 @@ interface SessionStore {
 
   boot: () => Promise<void>
   applyRun: (run: RunResult) => Promise<void>
+  submitScore: () => Promise<void>
   getModifiers: () => Modifiers
   unlockNode: (nodeId: string) => Promise<void>
   setDisplayName: (name: string) => Promise<void>
@@ -118,6 +120,16 @@ export const useSessionStore = create<SessionStore>((set, get) => {
       writeLocalProgress(progress)
       const { userId } = get()
       if (userId && isSupabaseConfigured) await cloudSave(userId, progress)
+    },
+
+    /**
+     * Post the career best wave to the global board. ACCOUNT-REQUIRED: guests (anonymous) and the
+     * offline/local-only state are skipped — only a linked account posts. Best-effort, never throws.
+     */
+    submitScore: async () => {
+      const { userId, isGuest, displayName, progress } = get()
+      if (!isSupabaseConfigured || !userId || isGuest) return
+      await submitScoreToBoard(userId, displayName, progress.stats.bestWave, 'endless')
     },
 
     getModifiers: () => deriveModifiers(get().progress.unlockedNodes),

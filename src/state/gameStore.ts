@@ -70,7 +70,9 @@ interface GameStore {
   autoStart: boolean
   /** The Pantheon skill-tree overlay is open (pauses the run while shown). */
   pantheonOpen: boolean
-  /** Speed to restore when the Pantheon overlay closes (stashed on open). */
+  /** The leaderboard overlay is open (pauses the run while shown). */
+  leaderboardOpen: boolean
+  /** Speed to restore when a full-screen menu overlay closes (stashed on open). */
   preMenuScale: number
 
   // M3 run mirrors (written only by mirrorRun)
@@ -100,6 +102,8 @@ interface GameStore {
   toggleAutoStart: () => void
   openPantheon: () => void
   closePantheon: () => void
+  openLeaderboard: () => void
+  closeLeaderboard: () => void
 
   mirrorRun: (s: RunSnapshot) => void
   setRunSummary: (s: RunSummary | null) => void
@@ -142,6 +146,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   timeScale: 1,
   autoStart: true, // rounds auto-chain (BTD6 auto-play); the first wave still waits for a manual start
   pantheonOpen: false,
+  leaderboardOpen: false,
   preMenuScale: 1,
   intents: [],
   ...FRESH_RUN,
@@ -152,9 +157,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   toggleDebug: () => set((s) => ({ showDebug: !s.showDebug })),
   setSpeed: (timeScale) => set({ timeScale }),
   toggleAutoStart: () => set((s) => ({ autoStart: !s.autoStart })),
-  // Pantheon overlay pauses the run (stash the prior speed, restore it on close).
+  // Full-screen menu overlays pause the run (stash the prior speed, restore it on close).
   openPantheon: () => set((s) => ({ pantheonOpen: true, preMenuScale: s.timeScale === 0 ? 1 : s.timeScale, timeScale: 0 })),
   closePantheon: () => set((s) => ({ pantheonOpen: false, timeScale: s.preMenuScale })),
+  openLeaderboard: () => set((s) => ({ leaderboardOpen: true, preMenuScale: s.timeScale === 0 ? 1 : s.timeScale, timeScale: 0 })),
+  closeLeaderboard: () => set((s) => ({ leaderboardOpen: false, timeScale: s.preMenuScale })),
 
   // one batched write per frame — never tear gold/lives across separate setters
   mirrorRun: (s) =>

@@ -421,7 +421,10 @@ export class GameScene extends Phaser.Scene {
       worstWaveLives: s.worstWaveLives,
     }
     const bestWave = Math.max(session.progress.stats.bestWave, this.run.wave)
-    void session.applyRun(result)
+    const newBest = this.run.wave > session.progress.stats.bestWave // strictly beats the prior record
+    void session.applyRun(result) // bumps stats.bestWave synchronously before submitScore reads it
+    if (newBest) void session.submitScore() // account-gated inside; fire-and-forget
+
     useGameStore.getState().setRunSummary({
       wave: this.run.wave,
       favor: favorFromRun(result),
