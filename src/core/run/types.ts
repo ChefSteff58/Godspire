@@ -17,6 +17,10 @@ export interface RunModifiers {
   /** Extra gold per kill, ADDED on top of an enemy's base bounty. */
   goldPerKillBonus: number
   godDamageMul: Record<GodKind, number>
+  /** Bonus damage vs bosses (meta only; applied at hit-time). */
+  bossDamageMul: number
+  /** Per-wave income multiplier (meta only). */
+  incomeMul: number
 }
 
 // SpawnDesc moved to core/entities/enemy.ts (it's enemy-shaped, and onDeath returns it).

@@ -135,6 +135,7 @@ export class GameScene extends Phaser.Scene {
 
     if (import.meta.env.DEV) {
       ;(window as unknown as Record<string, unknown>).godspireScene = this
+      ;(window as unknown as Record<string, unknown>).godspireSession = useSessionStore
     }
   }
 
@@ -741,7 +742,9 @@ export class GameScene extends Phaser.Scene {
 
   // ── damage + feedback ──
   private hitEnemy(enemy: Enemy, dmg: number): void {
-    const dead = damageEnemy(enemy, dmg)
+    // Pantheon Titan-Slayer adds damage vs bosses (before the boss's own damage cap clamps it).
+    const amount = enemy.kind === 'boss' ? dmg * this.run.bossDamageMul : dmg
+    const dead = damageEnemy(enemy, amount)
     const pos = this.path.getPointAt(enemy.pathT)
     if (dead) {
       this.killEnemy(enemy, pos)

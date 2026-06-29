@@ -99,6 +99,13 @@ export const BASE_MODIFIERS: Modifiers = {
   startingGold: 650,
   startingLives: 100,
   towerDamageMul: 1,
+  fireRateMul: 1,
+  bossDamageMul: 1,
+  incomeMul: 1,
+  goldPerKillAdd: 0,
+  startingShield: 0,
+  secondWindStart: false,
+  draftBonusOptions: 0,
 }
 
 /** Fold unlocked nodes into run-start modifiers. Unknown ids are ignored (never throws). */
@@ -114,8 +121,33 @@ export function deriveModifiers(
     if (e.kind === 'startingGoldAdd') mods.startingGold += e.value
     else if (e.kind === 'startingLivesAdd') mods.startingLives += e.value
     else if (e.kind === 'towerDamageMul') mods.towerDamageMul *= e.value
+    else if (e.kind === 'fireRateMul') mods.fireRateMul *= e.value
+    else if (e.kind === 'bossDamageMul') mods.bossDamageMul *= e.value
+    else if (e.kind === 'incomeMul') mods.incomeMul *= e.value
+    else if (e.kind === 'goldPerKillAdd') mods.goldPerKillAdd += e.value
+    else if (e.kind === 'startingShieldAdd') mods.startingShield += e.value
+    else if (e.kind === 'draftOptionsAdd') mods.draftBonusOptions += e.value
+    else if (e.kind === 'secondWindStart') mods.secondWindStart = true
   }
   return mods
+}
+
+/**
+ * Can this node be unlocked right now? True iff it exists, isn't already owned, all its
+ * prerequisites are owned, and the player has enough unspent points. Pure.
+ */
+export function canUnlock(
+  nodeId: string,
+  progress: PlayerProgress,
+  nodes: readonly SkillNode[] = PANTHEON_NODES,
+): boolean {
+  const node = nodes.find((n) => n.id === nodeId)
+  if (!node) return false
+  if (progress.unlockedNodes.includes(nodeId)) return false
+  for (const pre of node.prerequisites ?? []) {
+    if (!progress.unlockedNodes.includes(pre)) return false
+  }
+  return availablePoints(progress, nodes) >= node.cost
 }
 
 /**

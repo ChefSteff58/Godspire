@@ -5,6 +5,7 @@ import {
   applyRunRewards,
   mergeProgress,
   deriveModifiers,
+  canUnlock,
 } from '../core/progress/rules'
 import { isSupabaseConfigured } from '../lib/supabase/client'
 import { ensureSession, linkEmail, linkGoogle, signOut, subscribeAuth } from '../lib/supabase/auth'
@@ -40,6 +41,7 @@ interface SessionStore {
   boot: () => Promise<void>
   applyRun: (run: RunResult) => Promise<void>
   getModifiers: () => Modifiers
+  unlockNode: (nodeId: string) => Promise<void>
   setDisplayName: (name: string) => Promise<void>
   linkEmail: (email: string) => Promise<{ ok: boolean; error?: string }>
   linkGoogle: () => Promise<{ ok: boolean; error?: string }>
@@ -119,6 +121,20 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     },
 
     getModifiers: () => deriveModifiers(get().progress.unlockedNodes),
+
+    unlockNode: async (nodeId) => {
+      const progress = get().progress
+      if (!canUnlock(nodeId, progress)) return // guards: exists, unowned, prereqs met, affordable
+      const updated: PlayerProgress = {
+        ...progress,
+        unlockedNodes: [...progress.unlockedNodes, nodeId],
+        updatedAt: now(),
+      }
+      set({ progress: updated })
+      writeLocalProgress(updated)
+      const { userId } = get()
+      if (userId && isSupabaseConfigured) await cloudSave(userId, updated)
+    },
 
     setDisplayName: async (name) => {
       const clean = name.trim().slice(0, 32) || DEFAULT_NAME

@@ -56,9 +56,9 @@ export class RunController {
   private worstWave = 0
   private worstWaveLives = 0
 
-  private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1 }
+  private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1, fireRateMul: 1, bossDamageMul: 1, incomeMul: 1, goldPerKillAdd: 0, startingShield: 0, secondWindStart: false, draftBonusOptions: 0 }
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
-  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 } }
+  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1 }
   private persistentEffects: BoonEffect[] = []
 
   draft: DraftOption[] | null = null
@@ -82,8 +82,8 @@ export class RunController {
     this.ledger = createLedger(meta.startingGold)
     this.lives = meta.startingLives
     this.maxLives = meta.startingLives
-    this.shieldCharges = 0
-    this.secondWindArmed = false
+    this.shieldCharges = meta.startingShield ?? 0 // Pantheon Gate Wards
+    this.secondWindArmed = meta.secondWindStart ?? false // Pantheon Breath of Nike
     this.wave = 0
     this.kills = 0
     this.phase = 'building'
@@ -249,12 +249,12 @@ export class RunController {
    */
   settle(liveEnemyCount: number): boolean {
     if (this.phase !== 'clearing' || liveEnemyCount > 0) return false
-    this.earnGold(waveIncome(this.wave, this.ledger.gold))
+    this.earnGold(Math.round(waveIncome(this.wave, this.ledger.gold) * this.modifiers.incomeMul)) // Pantheon income
     this.phase = 'building'
     this.buildGraceMs = BUILD_GRACE_MS // restart the auto-start grace for the next wave
     this.spec = null
     if (this.wave >= this.nextDraftWave) {
-      this.draft = generateDraft(this.wave, this.rng)
+      this.draft = generateDraft(this.wave, this.rng, 3 + (this.meta.draftBonusOptions ?? 0)) // Pantheon draft luck
       this.nextDraftWave = scheduleNextDraft(this.wave, this.rng)
     }
     return true // a wave just cleared this frame (the scene pays Demeter income)
@@ -268,6 +268,11 @@ export class RunController {
 
   effectiveFireRate(_god: GodKind, baseFireRate: number): number {
     return baseFireRate * this.modifiers.fireRateMul
+  }
+
+  /** Pantheon Titan-Slayer: bonus damage vs bosses (applied at hit-time in the scene). */
+  get bossDamageMul(): number {
+    return this.modifiers.bossDamageMul
   }
 
   snapshot(): RunSnapshot {

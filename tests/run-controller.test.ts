@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { RunController } from '../src/game/run/RunController'
 import { BOON_POOL } from '../src/core/run/boons'
+import { deriveModifiers } from '../src/core/progress/rules'
 import type { Modifiers } from '../src/core/progress/types'
 
 const META: Modifiers = { startingGold: 650, startingLives: 100, towerDamageMul: 1 }
@@ -76,6 +77,38 @@ describe('RunController — boon effects', () => {
     pick(run, 'core-zeus-king-of-storms') // godDamageMul zeus 1.3
     expect(run.effectiveDamage('zeus', 10)).toBeCloseTo(13)
     expect(run.effectiveDamage('apollo', 10)).toBe(10) // unaffected
+  })
+})
+
+describe('RunController — Pantheon meta buffs at run start (M6.5)', () => {
+  it('seeds starting gold/lives/shields + arms Second Wind from the unlocked tree', () => {
+    const meta = deriveModifiers([
+      'harvest_gold_1', 'harvest_gold_2', // +150 +250 gold
+      'wisdom_life_1', 'wisdom_life_2', // +10 +20 lives
+      'wisdom_shield_1', // +3 shields
+      'wisdom_secondwind', // start with a Second Wind
+    ])
+    const run = new RunController(() => 0.5)
+    run.start(meta)
+    const s = run.snapshot()
+    expect(s.gold).toBe(650 + 150 + 250)
+    expect(s.lives).toBe(100 + 10 + 20)
+    expect(s.shieldCharges).toBe(3)
+    // burn the 3 gate-shields (each eats one leak), THEN Breath of Nike catches the lethal one
+    run.onLeak(1)
+    run.onLeak(1)
+    run.onLeak(1)
+    expect(run.snapshot().shieldCharges).toBe(0)
+    expect(run.lives).toBe(130) // shields absorbed, no life lost
+    run.onLeak(99999)
+    expect(run.lives).toBe(25)
+  })
+
+  it('exposes the boss-damage multiplier from Titan-Slayer', () => {
+    const meta = deriveModifiers(['war_boss'])
+    const run = new RunController(() => 0.5)
+    run.start(meta)
+    expect(run.bossDamageMul).toBeCloseTo(1.3)
   })
 })
 

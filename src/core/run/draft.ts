@@ -15,11 +15,11 @@ export type DraftOption =
 
 type Rng = () => number
 
-/** Build a 3-card draft: 3 DISTINCT boons, sampled WEIGHTED by rarity (rarer = scarcer). Pure. */
-export function generateDraft(_wave: number, rng: Rng = Math.random): DraftOption[] {
+/** Build a draft: `count` DISTINCT boons, sampled WEIGHTED by rarity (rarer = scarcer). Pure. */
+export function generateDraft(_wave: number, rng: Rng = Math.random, count = 3): DraftOption[] {
   const pool = BOON_POOL.slice()
   const picks: Boon[] = []
-  for (let n = 0; n < 3 && pool.length > 0; n++) {
+  for (let n = 0; n < count && pool.length > 0; n++) {
     const total = pool.reduce((s, b) => s + RARITY_WEIGHT[b.rarity], 0)
     let r = rng() * total
     let idx = 0

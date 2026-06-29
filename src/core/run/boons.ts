@@ -86,7 +86,15 @@ export const BOON_POOL: readonly Boon[] = [
 export function baseRunModifiers(meta: Modifiers): RunModifiers {
   const godDamageMul = {} as Record<GodKind, number>
   for (const g of GOD_ORDER) godDamageMul[g] = 1
-  return { towerDamageMul: meta.towerDamageMul, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul }
+  // Seed run modifiers from the meta skill tree (defensive `?? default` so a partial meta is safe).
+  return {
+    towerDamageMul: meta.towerDamageMul,
+    fireRateMul: meta.fireRateMul ?? 1,
+    goldPerKillBonus: meta.goldPerKillAdd ?? 0,
+    godDamageMul,
+    bossDamageMul: meta.bossDamageMul ?? 1,
+    incomeMul: meta.incomeMul ?? 1,
+  }
 }
 
 /**

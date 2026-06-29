@@ -55,6 +55,20 @@ export interface Modifiers {
   startingGold: number
   startingLives: number
   towerDamageMul: number
+  // ── M6.5 Pantheon additions ──
+  fireRateMul: number
+  /** Bonus damage vs bosses (applied at hit-time). */
+  bossDamageMul: number
+  /** Multiplier on per-wave income. */
+  incomeMul: number
+  /** Extra gold per kill. */
+  goldPerKillAdd: number
+  /** Gate-shield charges the run starts with. */
+  startingShield: number
+  /** Start each run with a Second Wind armed. */
+  secondWindStart: boolean
+  /** Extra options shown in each Fate Draft. */
+  draftBonusOptions: number
 }
 
 // ── Skill tree (placeholder content for M0.5; full tree + prereqs/tiers land in M6.5) ──
@@ -64,8 +78,16 @@ export type NodeEffect =
   | { kind: 'startingGoldAdd'; value: number }
   | { kind: 'startingLivesAdd'; value: number }
   | { kind: 'towerDamageMul'; value: number }
+  // ── M6.5 ──
+  | { kind: 'fireRateMul'; value: number }
+  | { kind: 'bossDamageMul'; value: number }
+  | { kind: 'incomeMul'; value: number }
+  | { kind: 'goldPerKillAdd'; value: number }
+  | { kind: 'startingShieldAdd'; value: number }
+  | { kind: 'draftOptionsAdd'; value: number }
+  | { kind: 'secondWindStart' }
 
-/** A Pantheon Tree node. (prerequisites/tier graph come with the tree UI in M6.5.) */
+/** A Pantheon Tree node. */
 export interface SkillNode {
   id: string
   branch: SkillBranch
@@ -73,4 +95,8 @@ export interface SkillNode {
   description: string
   cost: number
   effect: NodeEffect
+  /** Node ids that must be unlocked before this one (M6.5). */
+  prerequisites?: string[]
+  /** Row within the branch column, for the tree UI layout (1-based). */
+  tier?: number
 }
