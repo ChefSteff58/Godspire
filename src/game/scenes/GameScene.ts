@@ -362,7 +362,10 @@ export class GameScene extends Phaser.Scene {
       // clear-gate: a wave ends only when fully emitted AND no enemy remains alive. Pending (capped)
       // spawns count as "still alive" so a deferred body can't let the wave clear out from under it.
       // When it clears, Demeter farms pay out their harvest.
-      if (this.run.settle(this.enemies.length + this.pendingSpawns.length)) this.payDemeterIncome()
+      if (this.run.settle(this.enemies.length + this.pendingSpawns.length)) {
+        this.payDemeterIncome()
+        this.cameras.main.flash(220, 70, 56, 10) // juice: a soft gold pulse celebrates a cleared wave
+      }
     }
 
     useGameStore.getState().mirrorRun(this.run.snapshot())
@@ -450,6 +453,7 @@ export class GameScene extends Phaser.Scene {
     const flash = this.add.circle(end.x, end.y, 26, 0xff2d3a, 0.6).setDepth(9)
     this.tweens.add({ targets: flash, scale: 2.2, alpha: 0, duration: 320, onComplete: () => flash.destroy() })
     this.cameras.main.shake(120, 0.004)
+    this.cameras.main.flash(160, 90, 12, 16) // juice: a dim red screen pulse — the leak STINGS
   }
 
   private spawnEnemy(desc: SpawnDesc): void {
@@ -486,6 +490,9 @@ export class GameScene extends Phaser.Scene {
       .setDepth(isBoss ? 6 : enemy.flying ? 5 : 4) // bosses ride above everything
     if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
+    // juice: pop into existence (squash-stretch) instead of blinking in
+    sprite.setScale(0.4)
+    this.tweens.add({ targets: sprite, scale: 1, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
   }
 
   /** One-time hint the first time a Harpy appears — the only enemy with a hard counter requirement. */
@@ -509,7 +516,10 @@ export class GameScene extends Phaser.Scene {
   private telegraphBoss(enemy: Enemy): void {
     if (!enemy.bossId) return
     const boss = bossById(enemy.bossId)
-    this.cameras.main.shake(220, 0.006)
+    // juice: a dramatic entrance — shake + a brief punch-zoom that settles back
+    this.cameras.main.shake(300, 0.008)
+    this.cameras.main.zoomTo(1.08, 320, 'Sine.easeInOut')
+    this.time.delayedCall(1100, () => this.cameras.main.zoomTo(1, 480, 'Sine.easeInOut'))
     const t = this.add
       .text(GAME_WIDTH / 2, 80, `⚠ ${boss.name.toUpperCase()} ⚠\n${boss.telegraph}`, {
         fontFamily: 'Georgia, serif',
@@ -715,7 +725,13 @@ export class GameScene extends Phaser.Scene {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i]
       advanceProjectile(p, dtSec)
-      this.projSprites.get(p.id)?.setPosition(p.pos.x, p.pos.y)
+      const ps = this.projSprites.get(p.id)
+      ps?.setPosition(p.pos.x, p.pos.y)
+      // juice: a short fading trail so fast shots read as motion (in the projectile's color)
+      if (ps && Math.random() < 0.55) {
+        const t = this.add.circle(p.pos.x, p.pos.y, 3, ps.fillColor, 0.5).setDepth(6)
+        this.tweens.add({ targets: t, alpha: 0, scale: 0.2, duration: 170, onComplete: () => t.destroy() })
+      }
       // collide with enemies — iterate BACKWARD over the live array (no per-frame slice alloc): a hit
       // can only remove the current index or push split-children past the start point, both safe here.
       for (let j = this.enemies.length - 1; j >= 0; j--) {
