@@ -10,7 +10,7 @@ import {
 import { isSupabaseConfigured } from '../lib/supabase/client'
 import { ensureSession, linkEmail, linkGoogle, signOut, subscribeAuth } from '../lib/supabase/auth'
 import { loadProfile, updateProfileName } from '../lib/supabase/profiles'
-import { submitScore as submitScoreToBoard } from '../lib/supabase/leaderboard'
+import { submitScore as submitScoreToBoard, fetchMyBest } from '../lib/supabase/leaderboard'
 import { loadProgress, saveProgress } from '../lib/persistence/progressRepo'
 import {
   readLocalProgress,
@@ -123,13 +123,18 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     },
 
     /**
-     * Post the career best wave to the global board. ACCOUNT-REQUIRED: guests (anonymous) and the
-     * offline/local-only state are skipped — only a linked account posts. Best-effort, never throws.
+     * Ensure the career best wave is on the global board. ACCOUNT-REQUIRED: guests (anonymous) and
+     * the offline state are skipped. Posts ONLY when the career best beats the player's existing board
+     * entry — so a best set BEFORE linking still gets posted (and re-calls are cheap no-ops, no dupes).
+     * Best-effort, never throws. Safe to call on every run-end + whenever the board opens.
      */
     submitScore: async () => {
       const { userId, isGuest, displayName, progress } = get()
       if (!isSupabaseConfigured || !userId || isGuest) return
-      await submitScoreToBoard(userId, displayName, progress.stats.bestWave, 'endless')
+      const best = progress.stats.bestWave
+      if (best < 1) return
+      const boardBest = await fetchMyBest(userId, 'endless')
+      if (best > boardBest) await submitScoreToBoard(userId, displayName, best, 'endless')
     },
 
     getModifiers: () => deriveModifiers(get().progress.unlockedNodes),

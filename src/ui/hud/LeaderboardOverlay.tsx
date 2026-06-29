@@ -13,19 +13,22 @@ export function LeaderboardOverlay() {
   const close = useGameStore((s) => s.closeLeaderboard)
   const userId = useSessionStore((s) => s.userId)
   const isGuest = useSessionStore((s) => s.isGuest)
+  const submitScore = useSessionStore((s) => s.submitScore)
   const [rows, setRows] = useState<RankedScore[] | null>(null) // null = still loading
 
   useEffect(() => {
     if (!open || !isSupabaseConfigured) return
     let alive = true
     setRows(null)
-    void fetchLeaderboard('endless', 200).then((raw) => {
+    void (async () => {
+      await submitScore() // make sure your best is posted (no-op for guests / already-posted) before reading
+      const raw = await fetchLeaderboard('endless', 200)
       if (alive) setRows(rankScores(raw).slice(0, 25))
-    })
+    })()
     return () => {
       alive = false
     }
-  }, [open])
+  }, [open, submitScore])
 
   if (!open) return null
 

@@ -39,6 +39,25 @@ export async function submitScore(
   }
 }
 
+/** The player's current best wave already on the board (0 if none / offline). Used to avoid dupes. */
+export async function fetchMyBest(userId: string, mode: LeaderboardMode = 'endless'): Promise<number> {
+  if (!supabase) return 0
+  try {
+    const { data, error } = await supabase
+      .from('scores')
+      .select('highest_wave')
+      .eq('user_id', userId)
+      .eq('mode', mode)
+      .order('highest_wave', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error || !data) return 0
+    return (data as { highest_wave: number }).highest_wave ?? 0
+  } catch {
+    return 0
+  }
+}
+
 /** Fetch raw score rows for a mode (public read). Returns `[]` on error / offline. */
 export async function fetchLeaderboard(mode: LeaderboardMode = 'endless', limit = 200): Promise<ScoreRow[]> {
   if (!supabase) return []
