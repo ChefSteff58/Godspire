@@ -145,6 +145,11 @@ export class RunController {
     this.invincible = !this.invincible
   }
 
+  /** DEV only: jump straight to a wave (boss testing / tuning). */
+  devJumpToWave(n: number): void {
+    this.beginWave(Math.max(1, Math.floor(n)))
+  }
+
   // ── purchasing (placement) ──
 
   canAfford(cost: number): boolean {

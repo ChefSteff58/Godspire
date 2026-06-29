@@ -142,6 +142,11 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < frames; i++) this.update(0, dtMs)
   }
 
+  /** DEV only: jump straight to a wave (e.g. `godspireScene.devJumpToWave(40)` to test a boss). */
+  devJumpToWave(n: number): void {
+    this.run.devJumpToWave(n)
+  }
+
   getEnemies(): readonly Enemy[] {
     return this.enemies
   }

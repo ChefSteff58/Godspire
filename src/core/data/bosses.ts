@@ -74,7 +74,7 @@ export const BOSS_ROSTER: readonly BossArchetype[] = [
     color: 0x6b6f8a,
     stroke: 0xd6d9f0,
     radius: 30,
-    hpMul: 9,
+    hpMul: 7,
     speedMul: 0.65,
     bounty: 170,
     leakWeight: 22,
@@ -124,7 +124,9 @@ export function bossScaledStats(
   baseSpeed: number,
 ): BossSpawnStats {
   const occ = Math.max(0, occurrence)
-  const hpScale = 1 + 0.6 * occ
+  // Gentler than first-pass (was 0.6) — the wave HP curve already compounds, so a steep occurrence
+  // multiplier double-compounded into late-boss walls. 0.4 keeps recurrences a real step up, not a brick.
+  const hpScale = 1 + 0.4 * occ
   const capScale = 1 + 0.25 * occ
   const bountyScale = 1 + 0.3 * occ
   return {
