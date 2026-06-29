@@ -11,6 +11,7 @@ export function TopBar() {
   const kills = useGameStore((s) => s.kills)
   const showDebug = useGameStore((s) => s.showDebug)
   const toggleDebug = useGameStore((s) => s.toggleDebug)
+  const openPantheon = useGameStore((s) => s.openPantheon)
 
   // Flash the lives chip red on any leak — the leak is the game's only negative feedback.
   const prevLives = useRef(lives)
@@ -47,6 +48,13 @@ export function TopBar() {
       </div>
       <div className="flex items-center gap-2">
         <SpeedControls />
+        <button
+          onClick={openPantheon}
+          title="Spend Favor on permanent upgrades"
+          className="rounded bg-black/40 px-3 py-1 text-sm text-amber-300 transition hover:bg-black/60"
+        >
+          🏛️ Pantheon
+        </button>
         <button
           onClick={toggleDebug}
           className={`rounded px-3 py-1 text-sm transition ${

@@ -6,6 +6,7 @@ import { WaveControls } from '../hud/WaveControls'
 import { TowerInspector } from '../hud/TowerInspector'
 import { FateDraftModal } from '../hud/FateDraftModal'
 import { RunOverModal } from '../hud/RunOverModal'
+import { PantheonTreePanel } from '../hud/PantheonTreePanel'
 import { DevPanel } from '../hud/DevPanel'
 
 /**
@@ -26,6 +27,7 @@ export function GameScreen() {
           <TowerInspector />
           <FateDraftModal />
           <RunOverModal />
+          <PantheonTreePanel />
         </div>
         <RightRail />
       </div>

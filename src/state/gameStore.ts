@@ -68,6 +68,10 @@ interface GameStore {
   timeScale: number
   /** Player preference: auto-start each wave after a short grace (survives Play Again). */
   autoStart: boolean
+  /** The Pantheon skill-tree overlay is open (pauses the run while shown). */
+  pantheonOpen: boolean
+  /** Speed to restore when the Pantheon overlay closes (stashed on open). */
+  preMenuScale: number
 
   // M3 run mirrors (written only by mirrorRun)
   gold: number
@@ -94,6 +98,8 @@ interface GameStore {
   toggleDebug: () => void
   setSpeed: (timeScale: number) => void
   toggleAutoStart: () => void
+  openPantheon: () => void
+  closePantheon: () => void
 
   mirrorRun: (s: RunSnapshot) => void
   setRunSummary: (s: RunSummary | null) => void
@@ -135,6 +141,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   showDebug: false,
   timeScale: 1,
   autoStart: true, // rounds auto-chain (BTD6 auto-play); the first wave still waits for a manual start
+  pantheonOpen: false,
+  preMenuScale: 1,
   intents: [],
   ...FRESH_RUN,
 
@@ -144,6 +152,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   toggleDebug: () => set((s) => ({ showDebug: !s.showDebug })),
   setSpeed: (timeScale) => set({ timeScale }),
   toggleAutoStart: () => set((s) => ({ autoStart: !s.autoStart })),
+  // Pantheon overlay pauses the run (stash the prior speed, restore it on close).
+  openPantheon: () => set((s) => ({ pantheonOpen: true, preMenuScale: s.timeScale === 0 ? 1 : s.timeScale, timeScale: 0 })),
+  closePantheon: () => set((s) => ({ pantheonOpen: false, timeScale: s.preMenuScale })),
 
   // one batched write per frame — never tear gold/lives across separate setters
   mirrorRun: (s) =>

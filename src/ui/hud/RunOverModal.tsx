@@ -5,6 +5,7 @@ export function RunOverModal() {
   const phase = useGameStore((s) => s.phase)
   const summary = useGameStore((s) => s.runSummary)
   const playAgain = useGameStore((s) => s.playAgain)
+  const openPantheon = useGameStore((s) => s.openPantheon)
   if (phase !== 'over' || !summary) return null
 
   const newBest = summary.wave >= summary.bestWave && summary.wave > 0
@@ -33,12 +34,20 @@ export function RunOverModal() {
           Bloodiest wave: <span className="font-bold text-rose-300">Wave {summary.worstWave}</span> (−{summary.worstWaveLives} lives)
         </p>
       )}
-      <button
-        onClick={playAgain}
-        className="rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
-      >
-        ⚔️ Play again
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={openPantheon}
+          className="rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg transition hover:bg-slate-600"
+        >
+          🏛️ Pantheon
+        </button>
+        <button
+          onClick={playAgain}
+          className="rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
+        >
+          ⚔️ Play again
+        </button>
+      </div>
     </div>
   )
 }
