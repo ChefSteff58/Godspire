@@ -185,11 +185,13 @@ describe('wave composition', () => {
     expect(enemyCounts(18).gorgon).toBeGreaterThanOrEqual(1) // Gorgon-kin debut
   })
 
-  it('shares partition the count budget exactly (no extra bodies)', () => {
+  it('the CHAFF shares partition the count budget exactly (the boss is the only extra body)', () => {
     for (const w of [1, 3, 6, 9, 12, 20]) {
       const c = enemyCounts(w)
       const total = Object.values(c).reduce((s, n) => s + n, 0)
-      expect(total).toBe(waveSpec(w).groups.reduce((s, g) => s + g.count, 0))
+      // the boss (every 20th wave) is a deliberate +1 on top of the partitioned chaff budget
+      const chaff = waveSpec(w).groups.filter((g) => g.kind !== 'boss').reduce((s, g) => s + g.count, 0)
+      expect(total).toBe(chaff)
     }
   })
 

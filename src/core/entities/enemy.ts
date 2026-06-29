@@ -3,7 +3,9 @@
 // hydra (SPLITS → pierce/AoE). Gorgon-kin (stealth) / Satyr (fast) / Cyclops (tanky) are deferred
 // until their counter-gods (detection / slow) exist.
 
-export type EnemyKind = 'shade' | 'skeleton' | 'harpy' | 'talos' | 'hydra' | 'satyr' | 'gorgon'
+import { bossById, type BossId } from '../data/bosses'
+
+export type EnemyKind = 'shade' | 'skeleton' | 'harpy' | 'talos' | 'hydra' | 'satyr' | 'gorgon' | 'boss'
 
 export interface Enemy {
   id: string
@@ -30,6 +32,10 @@ export interface Enemy {
   slowTimerMs: number
   /** Hidden — single-target towers can't target it unless a detector (Athena) is near. */
   stealth: boolean
+  /** Set on boss enemies — selects the archetype in BOSS_ROSTER for visuals + mechanics. */
+  bossId?: BossId
+  /** Nemean: no single hit may exceed this (applied before armor in damageEnemy). */
+  damageCap?: number
 }
 
 /** What to spawn. The scene creates the Enemy (traits derived from kind) + overrides these. */
@@ -42,6 +48,10 @@ export interface SpawnDesc {
   /** Hydra children carry their lineage depth + birth point (mid-path). */
   splitDepth?: number
   spawnAtT?: number
+  /** Boss spawns carry their archetype + mechanic overrides. */
+  bossId?: BossId
+  damageCap?: number
+  armor?: number
 }
 
 /** Per-kind identity color (the damage-state ramp darkens within a kind, so hue = kind). */
@@ -53,6 +63,7 @@ export const ENEMY_BASE_COLOR: Record<EnemyKind, number> = {
   hydra: 0x7ac74f,
   satyr: 0xc9e265,
   gorgon: 0x6a8a6a,
+  boss: 0xd9a441, // fallback — the real color comes from BOSS_ROSTER (see enemyColor)
 }
 
 /** Per-kind base radius (px) — the glance cue + the collision/HP-ring size. */
@@ -64,6 +75,7 @@ export const ENEMY_RADIUS: Record<EnemyKind, number> = {
   hydra: 12,
   satyr: 8,
   gorgon: 11,
+  boss: 26, // fallback — the real radius comes from BOSS_ROSTER (see enemyRadius)
 }
 
 /** Per-kind sprite stroke (a metallic ring reads as armor, a bright ring as airborne). */
@@ -75,6 +87,7 @@ export const ENEMY_STROKE: Record<EnemyKind, number> = {
   hydra: 0x3f7a2a,
   satyr: 0x8fae3a,
   gorgon: 0x9fd09f,
+  boss: 0xfff1c0, // fallback — the real stroke comes from BOSS_ROSTER (see enemyStroke)
 }
 
 /** Intrinsic traits per kind (the wave manager scales hp/speed/bounty; these stay fixed). */
@@ -86,6 +99,18 @@ const ENEMY_TRAITS: Record<EnemyKind, { flying: boolean; armor: number; stealth:
   hydra: { flying: false, armor: 0, stealth: false },
   satyr: { flying: false, armor: 0, stealth: false },
   gorgon: { flying: false, armor: 0, stealth: true },
+  boss: { flying: false, armor: 0, stealth: false }, // boss armor comes from its mechanic (set at spawn)
+}
+
+/** A boss reads its visuals from BOSS_ROSTER; everything else from the per-kind records. */
+export function enemyRadius(e: Enemy): number {
+  return e.kind === 'boss' && e.bossId ? bossById(e.bossId).radius : ENEMY_RADIUS[e.kind]
+}
+export function enemyColor(e: Enemy): number {
+  return e.kind === 'boss' && e.bossId ? bossById(e.bossId).color : ENEMY_BASE_COLOR[e.kind]
+}
+export function enemyStroke(e: Enemy): number {
+  return e.kind === 'boss' && e.bossId ? bossById(e.bossId).stroke : ENEMY_STROKE[e.kind]
 }
 
 let nextId = 1
@@ -140,7 +165,10 @@ export function applySlow(enemy: Enemy, mul: number, durationMs: number): void {
  * single hits (Zeus Tyrant) shrug off armor and rapid weak shots crater against it.
  */
 export function damageEnemy(enemy: Enemy, amount: number): boolean {
-  const dealt = Math.max(1, amount - enemy.armor)
+  // A boss damage cap (Nemean) clamps the INCOMING hit first, THEN armor subtracts, THEN the
+  // min-1 floor — so one huge bolt can't one-shot it, but it's still never literally unkillable.
+  const capped = enemy.damageCap !== undefined ? Math.min(amount, enemy.damageCap) : amount
+  const dealt = Math.max(1, capped - enemy.armor)
   enemy.hp -= dealt
   return enemy.hp <= 0
 }

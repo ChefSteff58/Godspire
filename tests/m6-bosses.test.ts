@@ -1,0 +1,103 @@
+import { describe, it, expect } from 'vitest'
+import { waveSpec } from '../src/core/systems/waveManager'
+import { bossForWave, bossOccurrence, bossScaledStats, BOSS_ROSTER, bossById } from '../src/core/data/bosses'
+import { createEnemy, damageEnemy } from '../src/core/entities/enemy'
+
+describe('boss cadence (every 20 waves, cycling)', () => {
+  it('no boss except on a multiple of 20', () => {
+    expect(bossForWave(9)).toBeNull()
+    expect(bossForWave(10)).toBeNull() // every-10 is an elite surge, but bosses are every 20
+    expect(bossForWave(19)).toBeNull()
+    expect(bossForWave(0)).toBeNull()
+    expect(bossForWave(20)).not.toBeNull()
+  })
+
+  it('cycles the roster in order and repeats', () => {
+    expect(bossForWave(20)!.id).toBe('nemean')
+    expect(bossForWave(40)!.id).toBe('minotaur')
+    expect(bossForWave(60)!.id).toBe('cyclops')
+    expect(bossForWave(80)!.id).toBe('nemean') // wraps back, now occurrence 3
+  })
+
+  it('occurrence counts up every 20 waves', () => {
+    expect(bossOccurrence(20)).toBe(0)
+    expect(bossOccurrence(40)).toBe(1)
+    expect(bossOccurrence(80)).toBe(3)
+  })
+})
+
+describe('boss scaling (stronger each recurrence)', () => {
+  it('a later occurrence of the same boss is much tougher', () => {
+    const nemean = bossById('nemean')
+    const early = bossScaledStats(nemean, 0, 25, 50) // ~wave 20 base
+    const late = bossScaledStats(nemean, 3, 476, 50) // ~wave 80 base (wraps to nemean)
+    expect(late.hp).toBeGreaterThan(early.hp * 3)
+    expect(late.bounty).toBeGreaterThan(early.bounty) // reward scales too
+    expect(late.damageCap!).toBeGreaterThan(early.damageCap!) // cap stays relevant vs rising DPS
+    expect(early.leakWeight).toBe(late.leakWeight) // leak cost is FIXED (never a late one-shot)
+  })
+})
+
+describe('boss injection into the wave spec', () => {
+  it('appends exactly one boss as the LAST group on a boss wave', () => {
+    const spec = waveSpec(20)
+    const last = spec.groups[spec.groups.length - 1]
+    expect(last.kind).toBe('boss')
+    expect(last.count).toBe(1)
+    expect(last.bossId).toBe('nemean')
+    expect(spec.groups.filter((g) => g.kind === 'boss')).toHaveLength(1)
+  })
+
+  it('a non-boss wave has no boss group', () => {
+    expect(waveSpec(19).groups.some((g) => g.kind === 'boss')).toBe(false)
+    expect(waveSpec(21).groups.some((g) => g.kind === 'boss')).toBe(false)
+  })
+})
+
+describe('Nemean damage cap (in damageEnemy)', () => {
+  const boss = () => {
+    const e = createEnemy('boss')
+    e.bossId = 'nemean'
+    e.hp = 1000
+    e.maxHp = 1000
+    e.armor = 10
+    e.damageCap = 80
+    return e
+  }
+
+  it('clamps a huge single hit to the cap, then subtracts armor', () => {
+    const e = boss()
+    damageEnemy(e, 5000) // capped to 80, minus armor 10 → 70
+    expect(e.hp).toBe(930)
+  })
+
+  it('a sub-cap hit takes full (post-armor) damage', () => {
+    const e = boss()
+    damageEnemy(e, 50) // under the cap → max(1, 50-10) = 40
+    expect(e.hp).toBe(960)
+  })
+
+  it('is never literally unkillable (min-1 floor still applies)', () => {
+    const e = boss()
+    damageEnemy(e, 5) // max(1, min(5,80)-10) = max(1,-5) = 1
+    expect(e.hp).toBe(999)
+  })
+
+  it('normal enemies are unaffected (no damageCap)', () => {
+    const skel = createEnemy('skeleton')
+    skel.hp = 100
+    damageEnemy(skel, 30)
+    expect(skel.hp).toBe(70)
+  })
+})
+
+describe('roster integrity', () => {
+  it('has the 3 archetypes with required visuals + mechanics', () => {
+    expect(BOSS_ROSTER.map((b) => b.id)).toEqual(['nemean', 'minotaur', 'cyclops'])
+    for (const b of BOSS_ROSTER) {
+      expect(b.radius).toBeGreaterThan(15) // bigger than any normal enemy
+      expect(b.leakWeight).toBeGreaterThan(10) // a leak is a disaster
+      expect(b.bounty).toBeGreaterThan(50) // killing it pays well
+    }
+  })
+})

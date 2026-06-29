@@ -10,14 +10,15 @@ import {
   damageEnemy,
   onDeath,
   applySlow,
-  ENEMY_BASE_COLOR,
-  ENEMY_RADIUS,
-  ENEMY_STROKE,
+  enemyRadius,
+  enemyColor,
+  enemyStroke,
   damagedColor,
   damagedRadius,
   type Enemy,
   type SpawnDesc,
 } from '../../core/entities/enemy'
+import { bossById } from '../../core/data/bosses'
 import { createTower, type Tower } from '../../core/entities/tower'
 import {
   createProjectile,
@@ -430,13 +431,18 @@ export class GameScene extends Phaser.Scene {
     enemy.leakWeight = desc.leakWeight
     if (desc.splitDepth !== undefined) enemy.splitDepth = desc.splitDepth
     if (desc.spawnAtT !== undefined) enemy.pathT = desc.spawnAtT // split children appear mid-path
+    if (desc.bossId !== undefined) enemy.bossId = desc.bossId
+    if (desc.damageCap !== undefined) enemy.damageCap = desc.damageCap
+    if (desc.armor !== undefined) enemy.armor = desc.armor // boss armor overrides the kind trait
     this.enemies.push(enemy)
     if (enemy.kind === 'harpy') this.telegraphHarpy()
+    if (enemy.kind === 'boss') this.telegraphBoss(enemy)
     const pos = this.path.getPointAt(enemy.pathT)
+    const isBoss = enemy.kind === 'boss'
     const sprite = this.add
-      .circle(pos.x, pos.y, ENEMY_RADIUS[enemy.kind], ENEMY_BASE_COLOR[enemy.kind], 1)
-      .setStrokeStyle(enemy.flying ? 3 : 2, ENEMY_STROKE[enemy.kind])
-      .setDepth(enemy.flying ? 5 : 4) // fliers ride above ground foes (the airborne read)
+      .circle(pos.x, pos.y, enemyRadius(enemy), enemyColor(enemy), 1)
+      .setStrokeStyle(isBoss ? 4 : enemy.flying ? 3 : 2, enemyStroke(enemy))
+      .setDepth(isBoss ? 6 : enemy.flying ? 5 : 4) // bosses ride above everything
     if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
   }
@@ -456,6 +462,27 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(20)
     this.tweens.add({ targets: t, alpha: 0, delay: 3500, duration: 800, onComplete: () => t.destroy() })
+  }
+
+  /** A dramatic banner every time a boss arrives (unlike the once-per-run Harpy hint). */
+  private telegraphBoss(enemy: Enemy): void {
+    if (!enemy.bossId) return
+    const boss = bossById(enemy.bossId)
+    this.cameras.main.shake(220, 0.006)
+    const t = this.add
+      .text(GAME_WIDTH / 2, 80, `⚠ ${boss.name.toUpperCase()} ⚠\n${boss.telegraph}`, {
+        fontFamily: 'Georgia, serif',
+        fontSize: '17px',
+        color: '#ffe6a0',
+        align: 'center',
+        backgroundColor: '#000000c0',
+        padding: { x: 16, y: 9 },
+      })
+      .setOrigin(0.5)
+      .setDepth(20)
+    t.setScale(0.6)
+    this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.easeOut' })
+    this.tweens.add({ targets: t, alpha: 0, delay: 4200, duration: 900, onComplete: () => t.destroy() })
   }
 
   private removeEnemy(enemy: Enemy): void {
@@ -568,7 +595,7 @@ export class GameScene extends Phaser.Scene {
         const e = this.enemies[j]
         if (e.flying || spike.hitIds.includes(e.id)) continue // ground-only, once per enemy
         const ep = this.path.getPointAt(e.pathT)
-        const r = spike.hitRadius + damagedRadius(ENEMY_RADIUS[e.kind], e.hp / e.maxHp)
+        const r = spike.hitRadius + damagedRadius(enemyRadius(e), e.hp / e.maxHp)
         if ((spike.pos.x - ep.x) ** 2 + (spike.pos.y - ep.y) ** 2 <= r * r) {
           spike.hitIds.push(e.id)
           spike.charges -= 1
@@ -656,7 +683,7 @@ export class GameScene extends Phaser.Scene {
         if (p.hitIds.includes(e.id)) continue
         if (e.flying && !p.canHitAir) continue // ground-only arrows pass under fliers
         const ep = this.path.getPointAt(e.pathT)
-        const hitR = damagedRadius(ENEMY_RADIUS[e.kind], e.hp / e.maxHp) + 5
+        const hitR = damagedRadius(enemyRadius(e), e.hp / e.maxHp) + 5
         if ((p.pos.x - ep.x) ** 2 + (p.pos.y - ep.y) ** 2 <= hitR * hitR) {
           p.hitIds.push(e.id)
           p.pierceLeft -= 1
@@ -685,10 +712,10 @@ export class GameScene extends Phaser.Scene {
     const sprite = this.enemySprites.get(enemy.id)
     if (sprite) {
       const frac = enemy.hp / enemy.maxHp
-      sprite.setRadius(damagedRadius(ENEMY_RADIUS[enemy.kind], frac))
+      sprite.setRadius(damagedRadius(enemyRadius(enemy), frac))
       sprite.setFillStyle(0xffffff) // brief flash
       this.time.delayedCall(70, () => {
-        if (sprite.active) sprite.setFillStyle(damagedColor(ENEMY_BASE_COLOR[enemy.kind], frac))
+        if (sprite.active) sprite.setFillStyle(damagedColor(enemyColor(enemy), frac))
       })
       this.tweens.add({ targets: sprite, scale: 1.15, duration: 55, yoyo: true })
     }
@@ -696,13 +723,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private killEnemy(enemy: Enemy, at: Vec2): void {
-    // Hydra split: children MUST enter this.enemies (via spawnEnemy) BEFORE settle() reads .length
-    // this frame, or the clear-gate false-triggers between the parent's death and the kids' birth.
+    // Hydra split / Cyclops adds: children MUST enter this.enemies (via spawnEnemy) BEFORE settle()
+    // reads .length this frame, or the clear-gate false-triggers between the death and the kids' birth.
     for (const child of onDeath(enemy)) this.spawnEnemy(child)
-    const color = ENEMY_BASE_COLOR[enemy.kind]
-    this.burst(at.x, at.y, 14, color, 28, 3, 240)
-    const poof = this.add.circle(at.x, at.y, 12, color, 0.7).setDepth(7)
-    this.tweens.add({ targets: poof, scale: 2.4, alpha: 0, duration: 200, onComplete: () => poof.destroy() })
+    const color = enemyColor(enemy)
+    const isBoss = enemy.kind === 'boss'
+    this.burst(at.x, at.y, isBoss ? 40 : 14, color, isBoss ? 70 : 28, isBoss ? 8 : 3, isBoss ? 520 : 240)
+    if (isBoss) this.cameras.main.shake(320, 0.013) // a felled boss rocks the screen
+    const poof = this.add.circle(at.x, at.y, isBoss ? 20 : 12, color, 0.7).setDepth(7)
+    this.tweens.add({ targets: poof, scale: isBoss ? 4 : 2.4, alpha: 0, duration: isBoss ? 360 : 200, onComplete: () => poof.destroy() })
     this.removeEnemy(enemy)
     this.run.onKill(enemy.bounty)
   }
@@ -832,13 +861,34 @@ export class GameScene extends Phaser.Scene {
       if (e.hp >= e.maxHp) continue
       const p = this.path.getPointAt(e.pathT)
       const frac = Math.max(0, e.hp / e.maxHp)
-      const r = damagedRadius(ENEMY_RADIUS[e.kind], frac) + 4
+      const r = damagedRadius(enemyRadius(e), frac) + 4
       g.lineStyle(2, 0x000000, 0.4)
       g.strokeCircle(p.x, p.y, r)
       g.lineStyle(2, frac > 0.5 ? 0x6be36b : frac > 0.25 ? 0xe8b04a : 0xd2402f, 0.95)
       g.beginPath()
       g.arc(p.x, p.y, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2, false)
       g.strokePath()
+    }
+
+    this.renderBossBars(g)
+  }
+
+  /** A prominent floating health bar above each live boss (additive to the per-enemy HP ring). */
+  private renderBossBars(g: Phaser.GameObjects.Graphics): void {
+    for (const e of this.enemies) {
+      if (e.kind !== 'boss') continue
+      const p = this.path.getPointAt(e.pathT)
+      const frac = Math.max(0, Math.min(1, e.hp / e.maxHp))
+      const w = enemyRadius(e) * 2 + 24
+      const h = 7
+      const x = p.x - w / 2
+      const y = p.y - enemyRadius(e) - 16
+      g.fillStyle(0x000000, 0.55)
+      g.fillRect(x - 1, y - 1, w + 2, h + 2)
+      g.fillStyle(0x3a1014, 1)
+      g.fillRect(x, y, w, h)
+      g.fillStyle(frac > 0.5 ? 0xf5d061 : frac > 0.25 ? 0xe8843a : 0xd2402f, 1)
+      g.fillRect(x, y, w * frac, h)
     }
   }
 

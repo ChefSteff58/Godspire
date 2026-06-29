@@ -161,7 +161,7 @@ export class RunController {
       if (this.spawnTimerMs < group.intervalMs) break // wait for the next spawn tick
       this.spawnTimerMs -= group.intervalMs
       this.spawnedInGroup++
-      out.push({ kind: group.kind, hp: group.hp, speed: group.speed, bounty: group.bounty, leakWeight: group.leakWeight, splitDepth: 0 })
+      out.push({ kind: group.kind, hp: group.hp, speed: group.speed, bounty: group.bounty, leakWeight: group.leakWeight, splitDepth: 0, bossId: group.bossId, damageCap: group.damageCap, armor: group.armor })
     }
     return out
   }

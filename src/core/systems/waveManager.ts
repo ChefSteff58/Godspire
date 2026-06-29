@@ -5,6 +5,7 @@
 // loops, projectile collisions); enemy *HP* compounds; speed rises but is capped.
 
 import type { EnemyKind } from '../entities/enemy'
+import { bossForWave, bossOccurrence, bossScaledStats, type BossId } from '../data/bosses'
 
 const BASE_HP = 10
 const BASE_SPEED = 60 // px/sec, matches createEnemy's default
@@ -26,6 +27,10 @@ export interface SpawnGroup {
   bounty: number
   leakWeight: number
   intervalMs: number
+  /** Boss group only: archetype + mechanic overrides carried through to the SpawnDesc. */
+  bossId?: BossId
+  damageCap?: number
+  armor?: number
 }
 
 /** A wave = an ordered list of groups, emitted back-to-back. */
@@ -84,6 +89,7 @@ const KIND: Record<EnemyKind, { intro: number; hpMul: number; speedMul: number; 
   gorgon: { intro: 18, hpMul: 1.4, speedMul: 1.0, bounty: 8, leakWeight: 7 }, // STEALTH → it was invisible to you
   hydra: { intro: 12, hpMul: 1.6, speedMul: 0.9, bounty: 9, leakWeight: 4 }, // splits — children inherit halved
   talos: { intro: 9, hpMul: 2.6, speedMul: 0.75, bounty: 12, leakWeight: 10 }, // armored wall → tankiest, leak = disaster
+  boss: { intro: 9999, hpMul: 1, speedMul: 1, bounty: 0, leakWeight: 0 }, // INERT — bosses are injected by waveSpec, never via enemyCounts/ORDER
 }
 
 // COMPOSITION is the headline difficulty engine: weights DRIFT with the wave so the lane sweeps from a
@@ -96,6 +102,7 @@ const WEIGHT_CURVE: Record<EnemyKind, { base: number; slope: number; floor: numb
   hydra: { base: 1.0, slope: 0.05, floor: 1.0 }, // climbs
   gorgon: { base: 1.4, slope: 0.06, floor: 1.4 }, // climbs
   talos: { base: 0.9, slope: 0.06, floor: 0.9 }, // climbs hardest
+  boss: { base: 0, slope: 0, floor: 0 }, // INERT — never part of the chaff composition
 }
 /** Blend weight for a kind at a given wave — chaff falls off, heavy kinds rise. Pure. */
 export function weightAt(kind: EnemyKind, wave: number): number {
@@ -117,7 +124,7 @@ export function isEliteWave(n: number): boolean {
 export function enemyCounts(n: number): Record<EnemyKind, number> {
   const wave = Math.max(1, Math.floor(n))
   const total = enemyCount(wave)
-  const counts: Record<EnemyKind, number> = { shade: 0, skeleton: 0, harpy: 0, talos: 0, hydra: 0, satyr: 0, gorgon: 0 }
+  const counts: Record<EnemyKind, number> = { shade: 0, skeleton: 0, harpy: 0, talos: 0, hydra: 0, satyr: 0, gorgon: 0, boss: 0 }
   const unlocked = ORDER.filter((k) => wave >= KIND[k].intro)
 
   const debut = unlocked.find((k) => k !== 'shade' && KIND[k].intro === wave)
@@ -164,10 +171,33 @@ function makeGroup(kind: EnemyKind, count: number, n: number): SpawnGroup {
   }
 }
 
-/** The full spawn script for wave `n` — one group per present kind (skipping zero-count kinds). */
+/** A single-enemy boss group (every 20th wave), scaled stronger each recurrence. */
+function bossGroup(wave: number): SpawnGroup | null {
+  const boss = bossForWave(wave)
+  if (!boss) return null
+  const s = bossScaledStats(boss, bossOccurrence(wave), enemyHp(wave), enemySpeed(wave))
+  return {
+    kind: 'boss',
+    count: 1,
+    hp: s.hp,
+    speed: s.speed,
+    bounty: s.bounty,
+    leakWeight: s.leakWeight,
+    intervalMs: spawnIntervalMs(wave),
+    bossId: boss.id,
+    damageCap: s.damageCap,
+    armor: s.armor,
+  }
+}
+
+/** The full spawn script for wave `n` — one group per present kind, plus a boss LAST on boss waves. */
 export function waveSpec(n: number): WaveSpec {
   const wave = Math.max(1, Math.floor(n))
   const counts = enemyCounts(wave)
   const groups = ORDER.filter((k) => counts[k] > 0).map((k) => makeGroup(k, counts[k], wave))
+  // Inject the boss as the FINAL group so the clear-gate (phase→clearing after the last group) and
+  // the 60-body cap both treat it correctly — it can never let the wave clear out from under it.
+  const boss = bossGroup(wave)
+  if (boss) groups.push(boss)
   return { wave, groups }
 }
