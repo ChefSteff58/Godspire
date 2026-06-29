@@ -33,7 +33,7 @@ export function generateDraft(_wave: number, rng: Rng = Math.random): DraftOptio
   return picks.map((boon) => ({ type: 'boon', boon }))
 }
 
-/** The wave at which the NEXT draft fires — every 3–5 waves (jittered). Never before wave 1. */
-export function scheduleNextDraft(wave: number, rng: Rng = Math.random): number {
-  return Math.max(1, Math.floor(wave)) + 3 + Math.floor(rng() * 3) // +3..+5
+/** The wave at which the NEXT draft fires — a Fate Draft every 5 waves (5, 10, 15, …). */
+export function scheduleNextDraft(wave: number, _rng: Rng = Math.random): number {
+  return Math.max(0, Math.floor(wave)) + 5
 }

@@ -26,8 +26,9 @@ export function earn(ledger: Ledger, amount: number): void {
 }
 
 // ── wave income (flat-only for M3; interest is a deferred hook left at rate 0) ──
-export const WAVE_INCOME_FLAT_BASE = 40
-export const WAVE_INCOME_PER_WAVE = 8
+// Difficulty pass: income trimmed ~20% (was 40 / 8) to tighten the economy.
+export const WAVE_INCOME_FLAT_BASE = 32
+export const WAVE_INCOME_PER_WAVE = 6
 /** Interest is DEFERRED to M5 — keep the hook but disabled so we tune one economy lever in M3. */
 export const INTEREST_RATE = 0
 export const INTEREST_CAP = 150

@@ -49,9 +49,9 @@ describe('wave scaling', () => {
   })
 
   it('count grows linearly and slowly', () => {
-    expect(enemyCount(1)).toBe(8)
+    expect(enemyCount(1)).toBe(10) // 8 × 1.2 difficulty pass
     for (let n = 2; n <= 60; n++) expect(enemyCount(n)).toBeGreaterThanOrEqual(enemyCount(n - 1))
-    expect(enemyCount(40)).toBeLessThan(30) // never an instant lag-bomb
+    expect(enemyCount(40)).toBeLessThan(40) // never an instant lag-bomb
   })
 
   it('speed rises but is hard-capped at 2× base', () => {
@@ -114,8 +114,8 @@ describe('draft', () => {
     expect(new Set(ids).size).toBe(3)
   })
 
-  it('schedules the next draft 3–5 waves out', () => {
-    expect(scheduleNextDraft(10, () => 0)).toBe(13)
-    expect(scheduleNextDraft(10, () => 0.99)).toBe(15)
+  it('schedules the next draft every 5 waves', () => {
+    expect(scheduleNextDraft(0)).toBe(5)
+    expect(scheduleNextDraft(10)).toBe(15)
   })
 })

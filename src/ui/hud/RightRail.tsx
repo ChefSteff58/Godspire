@@ -5,12 +5,13 @@ import { GOD_ORDER, TOWER_STATS } from '../../core/data/towers'
 export function RightRail() {
   const placingGod = useGameStore((s) => s.placingGod)
   const beginPlacing = useGameStore((s) => s.beginPlacing)
+  const cancelPlacing = useGameStore((s) => s.cancelPlacing)
   const gold = useGameStore((s) => s.gold)
 
   return (
     <aside className="flex w-44 shrink-0 flex-col gap-2 overflow-y-auto border-l border-white/10 bg-slate-900/90 p-2">
       <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Gods</h3>
-      <p className="px-1 text-[11px] leading-tight text-slate-500">Drag a god onto open ground.</p>
+      <p className="px-1 text-[11px] leading-tight text-slate-500">Click a god, then click the map to place.</p>
       {GOD_ORDER.map((god) => {
         const stats = TOWER_STATS[god]
         const active = placingGod === god
@@ -18,15 +19,9 @@ export function RightRail() {
         return (
           <button
             key={god}
-            onPointerDown={(e) => {
-              if (affordable) {
-                e.preventDefault() // start a drag, don't let the press steal focus/selection
-                beginPlacing(god)
-              }
-            }}
+            onClick={() => (active ? cancelPlacing() : beginPlacing(god))}
             disabled={!affordable && !active}
             title={stats.blurb}
-            style={{ touchAction: 'none' }}
             className={`flex items-center gap-2 rounded-lg p-2 text-left transition ${
               active
                 ? 'bg-amber-400 text-slate-900'

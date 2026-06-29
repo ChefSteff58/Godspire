@@ -51,3 +51,9 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
 }
 
 export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo']
+
+/** Fraction of a tower's cost refunded when sold (BTD6-style). */
+export const SELL_REFUND_RATE = 0.7
+export function sellValue(god: GodKind): number {
+  return Math.floor(TOWER_STATS[god].cost * SELL_REFUND_RATE)
+}

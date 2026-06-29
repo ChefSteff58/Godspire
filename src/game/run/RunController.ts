@@ -101,6 +101,11 @@ export class RunController {
     this.applyEffect(opt.boon.effect)
   }
 
+  /** Add gold directly (tower-sell refund, etc.). */
+  grantGold(amount: number): void {
+    earn(this.ledger, amount)
+  }
+
   cheatGold(): void {
     earn(this.ledger, 1000)
   }

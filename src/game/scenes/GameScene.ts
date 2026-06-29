@@ -22,7 +22,7 @@ import {
   type Projectile,
 } from '../../core/entities/projectile'
 import { selectTarget } from '../../core/systems/targeting'
-import { TOWER_STATS, type GodKind } from '../../core/data/towers'
+import { TOWER_STATS, sellValue, type GodKind } from '../../core/data/towers'
 import { favorFromRun } from '../../core/progress/rules'
 import type { SpawnDesc } from '../../core/run/types'
 import type { Vec2 } from '../../core/types'
@@ -53,6 +53,7 @@ export class GameScene extends Phaser.Scene {
   private run = new RunController()
   private runEnded = false
   private draftWasOpen = false
+  private selectedTowerId: string | null = null
 
   constructor() {
     super('Game')
@@ -81,17 +82,22 @@ export class GameScene extends Phaser.Scene {
     this.run.start(useSessionStore.getState().getModifiers())
     this.runEnded = false
     this.draftWasOpen = false
+    this.selectedTowerId = null
     useGameStore.getState().setElapsed(0)
     useGameStore.getState().setRunSummary(null)
+    useGameStore.getState().setSelectedTower(null)
     useGameStore.getState().mirrorRun(this.run.snapshot())
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.worldX, y: p.worldY }
     })
-    // Drag-and-drop placement: the rail begins a drag (sets placingGod); releasing the pointer
-    // over the canvas DROPS the god here. (Releasing off-canvas cancels — handled in GameCanvas.)
-    this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.onDrop(p))
-    this.input.keyboard?.on('keydown-ESC', () => useGameStore.getState().cancelPlacing())
+    // Click-to-place (clearer than drag on a laptop): click a god in the rail, then click the
+    // field to place. Clicking empty ground while not placing selects/deselects a tower.
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p))
+    this.input.keyboard?.on('keydown-ESC', () => {
+      useGameStore.getState().cancelPlacing()
+      this.deselectTower()
+    })
 
     if (import.meta.env.DEV) {
       ;(window as unknown as Record<string, unknown>).godspireScene = this
@@ -294,6 +300,7 @@ export class GameScene extends Phaser.Scene {
     for (const it of useGameStore.getState().drainIntents()) {
       if (it.type === 'startWave') this.run.requestStartWave()
       else if (it.type === 'pickDraft') this.run.pickDraft(it.index)
+      else if (it.type === 'sellTower') this.sellSelectedTower()
       else if (it.type === 'cheatGold') this.run.cheatGold()
       else if (it.type === 'cheatInvincible') this.run.toggleInvincible()
       else if (it.type === 'playAgain') {
@@ -492,8 +499,12 @@ export class GameScene extends Phaser.Scene {
     g.clear()
 
     for (const tower of this.towers) {
-      g.lineStyle(1, 0x6a7aa8, showDebug ? 0.55 : 0.16)
-      g.strokeCircle(tower.pos.x, tower.pos.y, tower.range)
+      // Range ring shows ONLY for the selected tower (or every tower in debug) — not always-on.
+      const selected = tower.id === this.selectedTowerId
+      if (selected || showDebug) {
+        g.lineStyle(1.5, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
+        g.strokeCircle(tower.pos.x, tower.pos.y, tower.range)
+      }
       if (showDebug) {
         const target = selectTarget(tower, this.enemies, this.enemyPos, tower.targeting)
         if (target) {
@@ -536,23 +547,54 @@ export class GameScene extends Phaser.Scene {
     g.strokeCircle(this.pointer.x, this.pointer.y, stats.range)
   }
 
-  /** Drop the dragged god at the release point if it's a valid, affordable spot. */
-  private onDrop(p: Phaser.Input.Pointer): void {
+  /** Click: place the god being placed, otherwise select/deselect a placed tower. */
+  private onPointerDown(p: Phaser.Input.Pointer): void {
     const store = useGameStore.getState()
-    const placingGod = store.placingGod
-    if (!placingGod) return
     const pos = { x: p.worldX, y: p.worldY }
-    const stats = TOWER_STATS[placingGod]
-    if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints() }).ok) {
-      store.cancelPlacing() // dropped on an invalid spot — cancel the drag
+    const placingGod = store.placingGod
+    if (placingGod) {
+      const stats = TOWER_STATS[placingGod]
+      if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints() }).ok) return // invalid: keep placing
+      if (!this.run.purchase(stats.cost)) return // too poor: keep placing
+      this.placeTower(placingGod, pos)
+      store.cancelPlacing()
       return
     }
-    if (!this.run.purchase(stats.cost)) {
-      store.cancelPlacing() // can't afford — cancel
-      return
+    this.selectTowerAt(pos)
+  }
+
+  private selectTowerAt(pos: Vec2): void {
+    let hit: Tower | null = null
+    for (const t of this.towers) {
+      const r = TOWER_STATS[t.god].footprint + 4
+      if ((t.pos.x - pos.x) ** 2 + (t.pos.y - pos.y) ** 2 <= r * r) {
+        hit = t
+        break
+      }
     }
-    this.placeTower(placingGod, pos)
-    store.cancelPlacing()
+    this.selectedTowerId = hit ? hit.id : null
+    useGameStore
+      .getState()
+      .setSelectedTower(hit ? { id: hit.id, god: hit.god, sellValue: sellValue(hit.god) } : null)
+  }
+
+  private deselectTower(): void {
+    this.selectedTowerId = null
+    useGameStore.getState().setSelectedTower(null)
+  }
+
+  /** Sell the selected tower: refund part of its cost and remove it. */
+  private sellSelectedTower(): void {
+    const id = this.selectedTowerId
+    if (!id) return
+    const idx = this.towers.findIndex((t) => t.id === id)
+    if (idx < 0) return
+    const t = this.towers[idx]
+    this.run.grantGold(sellValue(t.god))
+    this.towerSprites.get(id)?.destroy()
+    this.towerSprites.delete(id)
+    this.towers.splice(idx, 1)
+    this.deselectTower()
   }
 
   private placeTower(god: GodKind, pos: Vec2): void {

@@ -41,9 +41,10 @@ export function enemyHp(n: number): number {
   return Math.round(BASE_HP * enemyHpMul(n))
 }
 
-/** Linear count growth — keeps the frame budget bounded while HP climbs. */
+/** Linear count growth — keeps the frame budget bounded while HP climbs. (+20% difficulty pass.) */
+const COUNT_DIFFICULTY_MUL = 1.2
 export function enemyCount(n: number): number {
-  return Math.round(8 + 0.5 * (Math.max(1, Math.floor(n)) - 1))
+  return Math.round((8 + 0.5 * (Math.max(1, Math.floor(n)) - 1)) * COUNT_DIFFICULTY_MUL)
 }
 
 /** Speed rises slowly and is hard-capped at 2× base (pins ~wave 100). */

@@ -3,6 +3,7 @@ import { TopBar } from '../hud/TopBar'
 import { RightRail } from '../hud/RightRail'
 import { PlacingHint } from '../hud/PlacingHint'
 import { WaveControls } from '../hud/WaveControls'
+import { TowerInspector } from '../hud/TowerInspector'
 import { FateDraftModal } from '../hud/FateDraftModal'
 import { RunOverModal } from '../hud/RunOverModal'
 import { DevPanel } from '../hud/DevPanel'
@@ -22,6 +23,7 @@ export function GameScreen() {
           <DevPanel />
           <PlacingHint />
           <WaveControls />
+          <TowerInspector />
           <FateDraftModal />
           <RunOverModal />
         </div>

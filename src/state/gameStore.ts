@@ -11,11 +11,19 @@ export interface RunSummary {
   bestWave: number
 }
 
+/** The placed tower the player has selected (clicked). Drives the range ring + sell panel. */
+export interface SelectedTower {
+  id: string
+  god: GodKind
+  sellValue: number
+}
+
 /** React→Phaser intents. Enqueued by the UI, drained by GameScene each frame (even while paused). */
 export type RunIntent =
   | { type: 'startWave' }
   | { type: 'pickDraft'; index: number }
   | { type: 'playAgain' }
+  | { type: 'sellTower' }
   | { type: 'cheatGold' }
   | { type: 'cheatInvincible' }
 
@@ -47,6 +55,8 @@ interface GameStore {
   runSummary: RunSummary | null
   /** The speed to restore after a draft pause — stashed so 3× FF survives the modal. */
   preDraftScale: number
+  /** The currently-selected placed tower (set by the scene on click), or null. */
+  selectedTower: SelectedTower | null
 
   // intent queue
   intents: RunIntent[]
@@ -61,6 +71,7 @@ interface GameStore {
   mirrorRun: (s: RunSnapshot) => void
   setRunSummary: (s: RunSummary | null) => void
   setPreDraftScale: (scale: number) => void
+  setSelectedTower: (sel: SelectedTower | null) => void
   resetRun: () => void
   drainIntents: () => RunIntent[]
 
@@ -68,6 +79,7 @@ interface GameStore {
   requestStartWave: () => void
   pickDraft: (index: number) => void
   playAgain: () => void
+  sellTower: () => void
   cheatGold: () => void
   cheatInvincible: () => void
 }
@@ -85,6 +97,7 @@ const FRESH_RUN = {
   canStartWave: true,
   runSummary: null,
   preDraftScale: 1,
+  selectedTower: null,
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -119,6 +132,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }),
   setRunSummary: (runSummary) => set({ runSummary }),
   setPreDraftScale: (preDraftScale) => set({ preDraftScale }),
+  setSelectedTower: (selectedTower) => set({ selectedTower }),
   resetRun: () => set({ ...FRESH_RUN, elapsed: 0, placingGod: null, intents: [] }),
   drainIntents: () => {
     const q = get().intents
@@ -129,6 +143,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   requestStartWave: () => set((s) => ({ intents: [...s.intents, { type: 'startWave' }] })),
   pickDraft: (index) => set((s) => ({ intents: [...s.intents, { type: 'pickDraft', index }] })),
   playAgain: () => set((s) => ({ intents: [...s.intents, { type: 'playAgain' }] })),
+  sellTower: () => set((s) => ({ intents: [...s.intents, { type: 'sellTower' }] })),
   cheatGold: () => set((s) => ({ intents: [...s.intents, { type: 'cheatGold' }] })),
   cheatInvincible: () => set((s) => ({ intents: [...s.intents, { type: 'cheatInvincible' }] })),
 }))
