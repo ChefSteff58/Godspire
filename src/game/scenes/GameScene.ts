@@ -40,6 +40,8 @@ import { favorFromRun } from '../../core/progress/rules'
 import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
 import { hasSprite } from '../assets/manifest'
+import { DirAnimSprite } from '../render/DirAnimSprite'
+import { dir8, dirToTarget } from '../render/facing'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
 const MAX_DELTA_MS = 50
@@ -65,7 +67,12 @@ export class GameScene extends Phaser.Scene {
   private pendingSpawns: SpawnDesc[] = []
   // Arc = placeholder disc; Image = dropped-in sprite. Both support setPosition/scale tweens/destroy;
   // the damage-state code branches on which one is live (see hitEnemy).
-  private readonly enemySprites = new Map<string, Phaser.GameObjects.Arc | Phaser.GameObjects.Image>()
+  private readonly enemySprites = new Map<
+    string,
+    Phaser.GameObjects.Arc | Phaser.GameObjects.Image | Phaser.GameObjects.Sprite
+  >()
+  // Directional + animated pixel controllers (when 8-dir art exists), keyed by enemy / tower id.
+  private readonly enemyArt = new Map<string, DirAnimSprite>()
   private towers: Tower[] = []
   private readonly towerSprites = new Map<
     string,
@@ -73,7 +80,7 @@ export class GameScene extends Phaser.Scene {
   >()
   // HD sprite gods: the animated tower Sprite + its frame keys, keyed by tower id. On fire the tower
   // lunges and swaps idle→action (when the action frame exists), then snaps back.
-  private readonly towerArt = new Map<string, { sprite: Phaser.GameObjects.Sprite; idleKey: string; actionKey: string }>()
+  private readonly towerArt = new Map<string, DirAnimSprite>()
   // Mobile gods (Hermes) get a static "home base" badge at their orbit center — the click target.
   private readonly homeBaseGfx = new Map<string, Phaser.GameObjects.Container>()
   private projectiles: Projectile[] = []
@@ -113,6 +120,7 @@ export class GameScene extends Phaser.Scene {
     this.towers = []
     this.towerSprites.clear()
     this.towerArt.clear()
+    this.enemyArt.clear()
     this.homeBaseGfx.clear()
     this.projectiles = []
     this.projSprites.clear()
@@ -323,7 +331,8 @@ export class GameScene extends Phaser.Scene {
       // Aphrodite chills foes in her field BEFORE they move this frame
       this.updateSlowAuras()
 
-      // advance enemies; sync sprites; leak → lose lives + juice
+      // advance enemies; sync sprites; face their heading + cycle the walk; leak → lose lives + juice
+      const dtMs = dtSec * 1000
       for (let i = this.enemies.length - 1; i >= 0; i--) {
         const enemy = this.enemies[i]
         const leaked = advanceEnemy(enemy, dtSec, this.path.length)
@@ -333,6 +342,11 @@ export class GameScene extends Phaser.Scene {
         }
         const pos = this.path.getPointAt(enemy.pathT)
         this.enemySprites.get(enemy.id)?.setPosition(pos.x, pos.y)
+        const eart = this.enemyArt.get(enemy.id)
+        if (eart) {
+          eart.setFacing(dir8(this.path.getAngleAt(enemy.pathT))) // face the way it's walking
+          eart.update(dtMs)
+        }
       }
 
       // mobile gods (Hermes) orbit their placed center — move them before they acquire/fire
@@ -366,8 +380,9 @@ export class GameScene extends Phaser.Scene {
         if (stats.splash) this.fireSplash(this.path.getPointAt(target.pathT), dmg, eff.splashRadius, eff.knockback)
         else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
         else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
-        this.towerAttackTell(tower.id) // HD sprite gods lunge + frame-swap when they fire
+        this.towerAttackTell(tower, target) // pixel gods: a quick lunge toward the target on each shot
       }
+      this.updateTowerAnims(dtMs) // face nearest target + play attack/idle + advance frames
 
       this.updateProjectiles(dtSec)
       this.updateSpikes()
@@ -499,17 +514,29 @@ export class GameScene extends Phaser.Scene {
     const isBoss = enemy.kind === 'boss'
     const depth = isBoss ? 6 : enemy.flying ? 5 : 4 // bosses ride above everything
     const texKey = isBoss && enemy.bossId ? enemy.bossId : enemy.kind
-    const sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Image = hasSprite(texKey)
-      ? this.addSpriteScaled(texKey, pos.x, pos.y, enemyRadius(enemy) * 2).setDepth(depth)
-      : this.add
-          .circle(pos.x, pos.y, enemyRadius(enemy), enemyColor(enemy), 1)
-          .setStrokeStyle(isBoss ? 4 : enemy.flying ? 3 : 2, enemyStroke(enemy))
-          .setDepth(depth)
+    // Pixel art reads best drawn larger than the hitbox disc; bosses get real presence.
+    const artPx = isBoss ? 116 : Math.max(enemyRadius(enemy) * 3, 46)
+    const sizePx = DirAnimSprite.hasDirectional(this, texKey) ? artPx : enemyRadius(enemy) * 2
+    let sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Image | Phaser.GameObjects.Sprite
+    if (DirAnimSprite.hasDirectional(this, texKey)) {
+      // 8-direction pixel art: faces its heading + cycles a walk while it advances down the path
+      const art = new DirAnimSprite(this, texKey, pos.x, pos.y, sizePx, depth)
+      art.play('walk')
+      this.enemyArt.set(enemy.id, art)
+      sprite = art.sprite
+    } else if (hasSprite(texKey)) {
+      sprite = this.addSpriteScaled(texKey, pos.x, pos.y, sizePx).setDepth(depth)
+    } else {
+      sprite = this.add
+        .circle(pos.x, pos.y, enemyRadius(enemy), enemyColor(enemy), 1)
+        .setStrokeStyle(isBoss ? 4 : enemy.flying ? 3 : 2, enemyStroke(enemy))
+        .setDepth(depth)
+    }
     if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
     // juice: pop into existence (squash-stretch) instead of blinking in — relative to the baseline scale
     // so a scaled sprite keeps its intended size (a placeholder disc's baseline is 1).
-    const base = (sprite.getData('baseScale') as number) ?? 1
+    const base = (sprite.getData('baseScale') as number) ?? sprite.scale
     sprite.setScale(base * 0.4)
     this.tweens.add({ targets: sprite, scale: base, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
   }
@@ -558,6 +585,7 @@ export class GameScene extends Phaser.Scene {
   private removeEnemy(enemy: Enemy): void {
     this.enemySprites.get(enemy.id)?.destroy()
     this.enemySprites.delete(enemy.id)
+    this.enemyArt.delete(enemy.id)
     const idx = this.enemies.indexOf(enemy)
     if (idx >= 0) this.enemies.splice(idx, 1)
   }
@@ -1148,14 +1176,38 @@ export class GameScene extends Phaser.Scene {
     return img.setScale(s).setData('baseScale', s)
   }
 
-  /** An HD sprite tower's "cast" tell: a quick scale-punch + (if present) a brief swap to its action frame. */
-  private towerAttackTell(towerId: string): void {
-    const art = this.towerArt.get(towerId)
+  /** A quick lunge toward the target on each shot. Facing + the cast animation are driven per-frame. */
+  private towerAttackTell(tower: Tower, target: Enemy): void {
+    const art = this.towerArt.get(tower.id)
     if (!art || !art.sprite.active) return
-    this.tweens.add({ targets: art.sprite, scaleX: '*=1.1', scaleY: '*=1.1', duration: 70, yoyo: true })
-    if (art.sprite.texture.key !== art.actionKey && this.textures.exists(art.actionKey)) {
-      art.sprite.setTexture(art.actionKey)
-      this.time.delayedCall(150, () => art.sprite.active && art.sprite.setTexture(art.idleKey))
+    const tx = this.path.getPointAt(target.pathT).x
+    this.tweens.add({ targets: art.sprite, scaleX: '*=1.1', scaleY: '*=1.1', duration: 80, yoyo: true })
+    this.tweens.add({ targets: art.sprite, x: tower.pos.x + (tx < tower.pos.x ? -5 : 5), duration: 80, yoyo: true })
+  }
+
+  /** Per-frame: each pixel tower faces its nearest in-range target and plays its cast (else idles), advancing frames. */
+  private updateTowerAnims(dtMs: number): void {
+    for (const tower of this.towers) {
+      const art = this.towerArt.get(tower.id)
+      if (!art) continue
+      const eff = towerEffectiveStats(tower)
+      const aura = this.auraAt(tower.pos)
+      const target =
+        eff.fireRate > 0 && eff.damage > 0
+          ? selectTarget(
+              { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
+              this.enemies,
+              this.enemyPos,
+              tower.targeting,
+            )
+          : null
+      if (target) {
+        art.setFacing(dirToTarget(tower.pos, this.path.getPointAt(target.pathT)))
+        art.play('attack')
+      } else {
+        art.play('idle')
+      }
+      art.update(dtMs)
     }
   }
 
@@ -1183,14 +1235,13 @@ export class GameScene extends Phaser.Scene {
     this.towers.push(tower)
     this.run.onTowerBuilt()
     const stats = TOWER_STATS[god]
-    // HD sprite gods: draw the art at tower size with a looped idle bob; on fire the tower lunges and
-    // swaps to its action frame (when <god>_action.png exists). Generalises to every god as art lands.
-    if (!stats.mobile && hasSprite(god)) {
-      const spr = this.add.sprite(pos.x, pos.y, god).setDepth(6)
-      spr.setScale(TOWER_SPRITE_PX / Math.max(spr.width, spr.height))
-      this.towerSprites.set(tower.id, spr)
-      this.towerArt.set(tower.id, { sprite: spr, idleKey: god, actionKey: `${god}_action` })
-      this.tweens.add({ targets: spr, y: pos.y - 3, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    // Pixel gods: an 8-direction sprite that faces its target and casts when firing, with a looped idle
+    // bob. Falls back to the disc badge until a god's directional art (`<god>_south` …) is dropped in.
+    if (!stats.mobile && DirAnimSprite.hasDirectional(this, god)) {
+      const art = new DirAnimSprite(this, god, pos.x, pos.y, TOWER_SPRITE_PX, 6)
+      this.towerSprites.set(tower.id, art.sprite)
+      this.towerArt.set(tower.id, art)
+      this.tweens.add({ targets: art.sprite, y: pos.y - 3, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
       return
     }
     if (stats.mobile) {

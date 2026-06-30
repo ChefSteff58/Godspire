@@ -10,6 +10,7 @@ export function createConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig 
     type: Phaser.AUTO,
     parent,
     backgroundColor: '#0b0e17',
+    pixelArt: true, // crisp nearest-neighbour scaling for the PixelLab sprite roster
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
