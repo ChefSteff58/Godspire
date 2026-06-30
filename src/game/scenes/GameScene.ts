@@ -47,6 +47,8 @@ const BOUNDS = { w: GAME_WIDTH, h: GAME_HEIGHT }
 // Frame-budget guard: never let more than this many bodies live at once (targeting/collision loops
 // are O(towers × enemies) / O(projectiles × enemies)). Over-budget wave spawns DEFER, they don't drop.
 const MAX_CONCURRENT_BODIES = 60
+// On-screen height (px) an HD god sprite is drawn at — bigger than the placeholder discs so the art reads.
+const TOWER_SPRITE_PX = 72
 
 /** A Hephaestus spike trap on the path — pops each ground enemy once, consuming a charge. */
 type Spike = { pos: Vec2; charges: number; damage: number; hitRadius: number; hitIds: string[] }
@@ -65,7 +67,13 @@ export class GameScene extends Phaser.Scene {
   // the damage-state code branches on which one is live (see hitEnemy).
   private readonly enemySprites = new Map<string, Phaser.GameObjects.Arc | Phaser.GameObjects.Image>()
   private towers: Tower[] = []
-  private readonly towerSprites = new Map<string, Phaser.GameObjects.Container>()
+  private readonly towerSprites = new Map<
+    string,
+    Phaser.GameObjects.Container | Phaser.GameObjects.Sprite | Phaser.GameObjects.Image
+  >()
+  // HD sprite gods: the animated tower Sprite + its frame keys, keyed by tower id. On fire the tower
+  // lunges and swaps idle→action (when the action frame exists), then snaps back.
+  private readonly towerArt = new Map<string, { sprite: Phaser.GameObjects.Sprite; idleKey: string; actionKey: string }>()
   // Mobile gods (Hermes) get a static "home base" badge at their orbit center — the click target.
   private readonly homeBaseGfx = new Map<string, Phaser.GameObjects.Container>()
   private projectiles: Projectile[] = []
@@ -104,6 +112,7 @@ export class GameScene extends Phaser.Scene {
     this.enemySprites.clear()
     this.towers = []
     this.towerSprites.clear()
+    this.towerArt.clear()
     this.homeBaseGfx.clear()
     this.projectiles = []
     this.projSprites.clear()
@@ -357,6 +366,7 @@ export class GameScene extends Phaser.Scene {
         if (stats.splash) this.fireSplash(this.path.getPointAt(target.pathT), dmg, eff.splashRadius, eff.knockback)
         else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
         else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
+        this.towerAttackTell(tower.id) // HD sprite gods lunge + frame-swap when they fire
       }
 
       this.updateProjectiles(dtSec)
@@ -1102,6 +1112,7 @@ export class GameScene extends Phaser.Scene {
     this.run.grantGold(sellValue(t.god))
     this.towerSprites.get(id)?.destroy()
     this.towerSprites.delete(id)
+    this.towerArt.delete(id)
     this.homeBaseGfx.get(id)?.destroy() // remove a mobile god's home base with it
     this.homeBaseGfx.delete(id)
     this.charmedByTower.delete(id) // drop an Aphrodite's charm set
@@ -1137,6 +1148,17 @@ export class GameScene extends Phaser.Scene {
     return img.setScale(s).setData('baseScale', s)
   }
 
+  /** An HD sprite tower's "cast" tell: a quick scale-punch + (if present) a brief swap to its action frame. */
+  private towerAttackTell(towerId: string): void {
+    const art = this.towerArt.get(towerId)
+    if (!art || !art.sprite.active) return
+    this.tweens.add({ targets: art.sprite, scaleX: '*=1.1', scaleY: '*=1.1', duration: 70, yoyo: true })
+    if (art.sprite.texture.key !== art.actionKey && this.textures.exists(art.actionKey)) {
+      art.sprite.setTexture(art.actionKey)
+      this.time.delayedCall(150, () => art.sprite.active && art.sprite.setTexture(art.idleKey))
+    }
+  }
+
   /** The standard god badge — a dropped-in sprite if present, else a colored disc with the god's initial. */
   private makeBadge(god: GodKind, radius = 16): Phaser.GameObjects.Container {
     const stats = TOWER_STATS[god]
@@ -1161,6 +1183,16 @@ export class GameScene extends Phaser.Scene {
     this.towers.push(tower)
     this.run.onTowerBuilt()
     const stats = TOWER_STATS[god]
+    // HD sprite gods: draw the art at tower size with a looped idle bob; on fire the tower lunges and
+    // swaps to its action frame (when <god>_action.png exists). Generalises to every god as art lands.
+    if (!stats.mobile && hasSprite(god)) {
+      const spr = this.add.sprite(pos.x, pos.y, god).setDepth(6)
+      spr.setScale(TOWER_SPRITE_PX / Math.max(spr.width, spr.height))
+      this.towerSprites.set(tower.id, spr)
+      this.towerArt.set(tower.id, { sprite: spr, idleKey: god, actionKey: `${god}_action` })
+      this.tweens.add({ targets: spr, y: pos.y - 3, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+      return
+    }
     if (stats.mobile) {
       // Mobile god: a fixed HOME BASE badge at the center (identity + click target), and a small
       // marker that actually orbits/strikes. Clicking the base manages a god that won't sit still.

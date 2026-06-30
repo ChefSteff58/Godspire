@@ -20,6 +20,13 @@ nothing ever breaks.
 
 Examples: `zeus.png`, `harpy.png`, `nemean.png`.
 
+### Second frame (animation) — `<key>_action.png`
+
+Each creature can have an optional **action frame** that the engine swaps in for motion:
+`zeus.png` (idle) + `zeus_action.png` (attack pose). Gods → attack pose on fire; monsters → an
+alternate walk pose for a walk-cycle. Generate the action frame **from** the idle frame (edit the pose
+only) so the two share the same size + feet position, or the swap will jump.
+
 ## Art rules (for a cohesive set)
 
 - **Transparent background** (alpha PNG). If your tool exports a flat background, the prep step
