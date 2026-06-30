@@ -32,7 +32,11 @@ export function RightRail() {
             }`}
           >
             {hasSprite(god) ? (
-              <img src={spriteUrl(god)} alt={stats.name} className="h-7 w-7 shrink-0 object-contain" />
+              <img
+                src={spriteUrl(god)}
+                alt={stats.name}
+                className="h-12 w-12 shrink-0 object-contain [image-rendering:pixelated]"
+              />
             ) : (
               <span className="text-2xl leading-none">{stats.icon}</span>
             )}

@@ -51,6 +51,9 @@ const BOUNDS = { w: GAME_WIDTH, h: GAME_HEIGHT }
 const MAX_CONCURRENT_BODIES = 60
 // On-screen height (px) an HD god sprite is drawn at — bigger than the placeholder discs so the art reads.
 const TOWER_SPRITE_PX = 72
+// Keep a pixel tower in its cast animation this long after each shot, so a flickering target can't
+// strobe the cast back to idle (the bug: lightning fired but the body didn't animate).
+const ATTACK_HOLD_MS = 450
 
 /** A Hephaestus spike trap on the path — pops each ground enemy once, consuming a charge. */
 type Spike = { pos: Vec2; charges: number; damage: number; hitRadius: number; hitIds: string[] }
@@ -81,6 +84,8 @@ export class GameScene extends Phaser.Scene {
   // HD sprite gods: the animated tower Sprite + its frame keys, keyed by tower id. On fire the tower
   // lunges and swaps idle→action (when the action frame exists), then snaps back.
   private readonly towerArt = new Map<string, DirAnimSprite>()
+  private readonly towerLastFire = new Map<string, number>() // scene-time of each tower's last shot
+  private ghostSprite?: Phaser.GameObjects.Image // placement preview: the tower itself under the cursor
   // Mobile gods (Hermes) get a static "home base" badge at their orbit center — the click target.
   private readonly homeBaseGfx = new Map<string, Phaser.GameObjects.Container>()
   private projectiles: Projectile[] = []
@@ -120,7 +125,9 @@ export class GameScene extends Phaser.Scene {
     this.towers = []
     this.towerSprites.clear()
     this.towerArt.clear()
+    this.towerLastFire.clear()
     this.enemyArt.clear()
+    this.ghostSprite = undefined // recreated lazily; the old one is destroyed with the scene
     this.homeBaseGfx.clear()
     this.projectiles = []
     this.projSprites.clear()
@@ -1033,14 +1040,36 @@ export class GameScene extends Phaser.Scene {
     const g = this.ghost
     g.clear()
     const placingGod = useGameStore.getState().placingGod
-    if (!placingGod) return
+    if (!placingGod) {
+      this.ghostSprite?.setVisible(false)
+      return
+    }
     const stats = TOWER_STATS[placingGod]
     const ok = this.canPlaceGod(placingGod, this.pointer) && this.run.canAfford(stats.cost)
     const tint = ok ? 0x6be36b : 0xff5566
-    g.fillStyle(tint, 0.45)
-    g.fillCircle(this.pointer.x, this.pointer.y, stats.footprint)
+    // the range ring + a faint footprint marker, coloured by validity
     g.lineStyle(1.5, tint, 0.85)
     g.strokeCircle(this.pointer.x, this.pointer.y, stats.range)
+    g.fillStyle(tint, 0.18)
+    g.fillCircle(this.pointer.x, this.pointer.y, stats.footprint)
+    // preview the actual tower under the cursor (the tower WITH its ring, not a bare circle)
+    const key = this.textures.exists(`${placingGod}_south`)
+      ? `${placingGod}_south`
+      : hasSprite(placingGod)
+        ? placingGod
+        : null
+    if (!key) {
+      this.ghostSprite?.setVisible(false)
+      return
+    }
+    if (!this.ghostSprite) this.ghostSprite = this.add.image(0, 0, key).setDepth(11)
+    this.ghostSprite
+      .setTexture(key)
+      .setPosition(this.pointer.x, this.pointer.y)
+      .setVisible(true)
+      .setAlpha(0.75)
+      .setTint(ok ? 0xffffff : 0xff8888) // natural when placeable; reddened when blocked
+    this.ghostSprite.setScale(TOWER_SPRITE_PX / Math.max(this.ghostSprite.width, this.ghostSprite.height))
   }
 
   /** Click: place the god being placed, otherwise select/deselect a placed tower. */
@@ -1141,6 +1170,7 @@ export class GameScene extends Phaser.Scene {
     this.towerSprites.get(id)?.destroy()
     this.towerSprites.delete(id)
     this.towerArt.delete(id)
+    this.towerLastFire.delete(id)
     this.homeBaseGfx.get(id)?.destroy() // remove a mobile god's home base with it
     this.homeBaseGfx.delete(id)
     this.charmedByTower.delete(id) // drop an Aphrodite's charm set
@@ -1178,6 +1208,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A quick lunge toward the target on each shot. Facing + the cast animation are driven per-frame. */
   private towerAttackTell(tower: Tower, target: Enemy): void {
+    this.towerLastFire.set(tower.id, this.time.now) // marks an actual shot → holds the cast animation
     const art = this.towerArt.get(tower.id)
     if (!art || !art.sprite.active) return
     const tx = this.path.getPointAt(target.pathT).x
@@ -1201,12 +1232,11 @@ export class GameScene extends Phaser.Scene {
               tower.targeting,
             )
           : null
-      if (target) {
-        art.setFacing(dirToTarget(tower.pos, this.path.getPointAt(target.pathT)))
-        art.play('attack')
-      } else {
-        art.play('idle')
-      }
+      if (target) art.setFacing(dirToTarget(tower.pos, this.path.getPointAt(target.pathT)))
+      // Cast plays for a short hold after each actual shot — not tied to per-frame target presence,
+      // so a target flickering in/out of range can't strobe the animation back to idle mid-cast.
+      const firedRecently = this.time.now - (this.towerLastFire.get(tower.id) ?? -1e9) < ATTACK_HOLD_MS
+      art.play(firedRecently ? 'attack' : 'idle')
       art.update(dtMs)
     }
   }
