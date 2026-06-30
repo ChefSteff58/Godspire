@@ -1,5 +1,13 @@
 # Overnight goal — finish the Godspire pixel roster (autonomous /loop)
 
+> ✅✅✅ **DONE — 2026-06-30 ~01:25.** All 4 conditions met: full 18/18 roster is pixel art (14 new this run);
+> `docs/bg-ui-plan.md` written; dead code cleaned (`art-guide.md` removed; build+lint+147 tests green);
+> all 10 commits pushed to `origin/main` (Vercel auto-deploys). Loop stopped cleanly. **AM review TODO for
+> the user:** visual pass on the whole roster in-game (the headless preview boot-lagged all night, so every
+> batch was gated on objective on-disk + build/lint/test checks against the already-proven render paths,
+> not a live step-check) — eyeball Hermes's mobile flier, Demeter's harvest-on-payout, and the Hydra
+> best-effort especially; tune display sizes per `bg-ui-plan.md` Stage C.
+
 **GOAL:** Give every remaining creature pixel art (8-direction + animation) via the PixelLab MCP, the
 exact proven way; then write the bg/UI animation plan; then clean up dead code; then commit + push.
 
