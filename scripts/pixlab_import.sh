@@ -5,8 +5,8 @@
 #   animation: <key>_<anim>_<dir>_<N>.png (anim folder mapped: *fire/cast/throw/punch* → attack, *walk/run* → walk)
 # The renderer (src/game/render/DirAnimSprite.ts) + the manifest glob auto-pick these up — no code per creature.
 set -e
-KEY="$1"; ID="$2"
-[ -z "$KEY" ] || [ -z "$ID" ] && { echo "usage: pixlab_import.sh <key> <charid>"; exit 2; }
+KEY="$1"; ID="$2"; ANIM_OVERRIDE="$3" # optional 3rd arg forces the anim name (e.g. attack/walk), bypassing the folder heuristic
+[ -z "$KEY" ] || [ -z "$ID" ] && { echo "usage: pixlab_import.sh <key> <charid> [anim-name]"; exit 2; }
 SPR="$(cd "$(dirname "$0")/.." && pwd)/src/game/assets/sprites"
 TMP=$(mktemp -d)
 curl -sf "https://api.pixellab.ai/mcp/characters/$ID/download" -o "$TMP/c.zip"
@@ -20,12 +20,16 @@ for f in "$ROOT"/rotations/*.png; do
 done
 for adir in "$ROOT"/animations/*/; do
   [ -d "$adir" ] || continue
-  lc=$(basename "$adir" | tr 'A-Z' 'a-z')
-  case "$lc" in
-    *walk*|*run*) anim=walk;;
-    *fire*|*cast*|*throw*|*punch*|*attack*|*kick*|*harvest*|*pick*) anim=attack;;
-    *) anim="$lc";;
-  esac
+  if [ -n "$ANIM_OVERRIDE" ]; then
+    anim="$ANIM_OVERRIDE"
+  else
+    lc=$(basename "$adir" | tr 'A-Z' 'a-z')
+    case "$lc" in
+      *walk*|*run*) anim=walk;;
+      *fire*|*cast*|*throw*|*punch*|*attack*|*kick*|*harvest*|*pick*|*animat*) anim=attack;;
+      *) anim="$lc";;
+    esac
+  fi
   for fr in "$adir"*/; do
     [ -d "$fr" ] || continue
     dir=$(basename "$fr")

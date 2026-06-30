@@ -1188,6 +1188,12 @@ export class GameScene extends Phaser.Scene {
       const income = demeterIncome(t, this.run.wave)
       if (income <= 0) continue
       this.run.grantGold(income)
+      // play Demeter's harvest animation once on payout ("making money"), then settle back to idle
+      const art = this.towerArt.get(t.id)
+      if (art) {
+        art.play('attack')
+        this.time.delayedCall(700, () => art.play('idle'))
+      }
       const txt = this.add
         .text(t.pos.x, t.pos.y - 20, `+${income}`, { fontFamily: 'Georgia, serif', fontSize: '15px', color: '#ffe066', fontStyle: 'bold' })
         .setOrigin(0.5)
@@ -1279,14 +1285,21 @@ export class GameScene extends Phaser.Scene {
       return
     }
     if (stats.mobile) {
-      // Mobile god: a fixed HOME BASE badge at the center (identity + click target), and a small
-      // marker that actually orbits/strikes. Clicking the base manages a god that won't sit still.
+      // Mobile god: a fixed HOME BASE badge at the center (identity + click target), and the unit that
+      // actually orbits/strikes. Clicking the base manages a god that won't sit still.
       const base = this.makeBadge(god).setPosition(tower.center.x, tower.center.y).setDepth(5)
       this.homeBaseGfx.set(tower.id, base)
-      const flier = this.add
-        .container(pos.x, pos.y, [this.add.circle(0, 0, 7, stats.color, 1).setStrokeStyle(2, 0xffffff)])
-        .setDepth(6)
-      this.towerSprites.set(tower.id, flier)
+      if (DirAnimSprite.hasDirectional(this, god)) {
+        // pixel mobile god: the flier is his animated sprite — faces + casts while it orbits (a darting scout)
+        const art = new DirAnimSprite(this, god, pos.x, pos.y, 52, 6)
+        this.towerSprites.set(tower.id, art.sprite)
+        this.towerArt.set(tower.id, art)
+      } else {
+        const flier = this.add
+          .container(pos.x, pos.y, [this.add.circle(0, 0, 7, stats.color, 1).setStrokeStyle(2, 0xffffff)])
+          .setDepth(6)
+        this.towerSprites.set(tower.id, flier)
+      }
       return
     }
     const container = this.makeBadge(god).setPosition(pos.x, pos.y).setDepth(6)
