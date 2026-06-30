@@ -1221,22 +1221,26 @@ export class GameScene extends Phaser.Scene {
     for (const tower of this.towers) {
       const art = this.towerArt.get(tower.id)
       if (!art) continue
+      // Demeter is a farm (no attack) — she idles + plays her harvest animation on payout (payDemeterIncome).
+      if (tower.god === 'demeter') {
+        art.update(dtMs)
+        continue
+      }
       const eff = towerEffectiveStats(tower)
       const aura = this.auraAt(tower.pos)
-      const target =
-        eff.fireRate > 0 && eff.damage > 0
-          ? selectTarget(
-              { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
-              this.enemies,
-              this.enemyPos,
-              tower.targeting,
-            )
-          : null
-      if (target) art.setFacing(dirToTarget(tower.pos, this.path.getPointAt(target.pathT)))
-      // Cast plays for a short hold after each actual shot — not tied to per-frame target presence,
-      // so a target flickering in/out of range can't strobe the animation back to idle mid-cast.
-      const firedRecently = this.time.now - (this.towerLastFire.get(tower.id) ?? -1e9) < ATTACK_HOLD_MS
-      art.play(firedRecently ? 'attack' : 'idle')
+      const target = selectTarget(
+        { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
+        this.enemies,
+        this.enemyPos,
+        tower.targeting,
+      )
+      if (target) {
+        art.setFacing(dirToTarget(tower.pos, this.path.getPointAt(target.pathT)))
+        this.towerLastFire.set(tower.id, this.time.now) // a foe is in range → "engaged" (covers non-firing gods too)
+      }
+      // Hold the cast briefly after the last engaged frame so a flickering target can't strobe it to idle.
+      const engaged = this.time.now - (this.towerLastFire.get(tower.id) ?? -1e9) < ATTACK_HOLD_MS
+      art.play(engaged ? 'attack' : 'idle')
       art.update(dtMs)
     }
   }

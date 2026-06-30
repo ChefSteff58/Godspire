@@ -37,11 +37,11 @@ If the 5-hour usage cap is hit, STOP cleanly — git holds all state; the user r
 ## Roster checklist (done so far: zeus, poseidon, skeleton, nemean)
 
 ### Gods — towers (v3 humanoid; anim = attack)
-- [ ] **apollo** — "Apollo Greek god of sun and archery, youthful muscular man, golden laurel crown, white-and-gold toga with a blue sash, holding a golden longbow, faint sun-glow, confident stance, standing on the ground, no pedestal no base". attack: `throw-object` (or v3 custom "drawing a bow and firing an arrow").
+- [x] **apollo** — "Apollo Greek god of sun and archery, youthful muscular man, golden laurel crown, white-and-gold toga with a blue sash, holding a golden longbow, faint sun-glow, confident stance, standing on the ground, no pedestal no base". attack: `throw-object` (or v3 custom "drawing a bow and firing an arrow").
 - [ ] **demeter** — SPECIAL (see below). "Demeter Greek goddess of the harvest, mature woman, crown of golden wheat, green-and-gold robe, holding a sheaf of wheat and a sickle, warm, standing on the ground, no pedestal no base". anim = a HARVEST/coin motion (name it `attack` so it imports to `demeter_attack_*`; played on payout, not on fire).
 - [ ] **hermes** — SPECIAL (mobile; see below). "Hermes Greek messenger god, lean athletic young man, winged sandals, winged helmet, short tunic, holding a caduceus, dynamic mid-stride, standing on the ground, no pedestal no base". attack: `throw-object`.
-- [ ] **hephaestus** — "Hephaestus Greek god of the forge, burly bearded blacksmith, leather apron, holding a glowing forge hammer and tongs, forge-orange glow, soot-smudged, standing on the ground, no pedestal no base". attack: v3 custom "swinging a heavy forge hammer down" (or `cross-punch`).
-- [ ] **aphrodite** — "Aphrodite Greek goddess of love and beauty, graceful elegant woman, flowing pink-and-white gown, golden jewelry, long flowing hair, soft pink glow, standing on the ground, no pedestal no base". attack: v3 custom "blowing a kiss, casting a charm".
+- [x] **hephaestus** — "Hephaestus Greek god of the forge, burly bearded blacksmith, leather apron, holding a glowing forge hammer and tongs, forge-orange glow, soot-smudged, standing on the ground, no pedestal no base". attack: v3 custom "swinging a heavy forge hammer down" (or `cross-punch`).
+- [x] **aphrodite** — "Aphrodite Greek goddess of love and beauty, graceful elegant woman, flowing pink-and-white gown, golden jewelry, long flowing hair, soft pink glow, standing on the ground, no pedestal no base". attack: v3 custom "blowing a kiss, casting a charm".
 - [ ] **athena** — "Athena Greek goddess of wisdom and war, regal woman in bronze armor and a crested helmet, holding a spear and round aegis shield, a small owl on one shoulder, standing on the ground, no pedestal no base". attack: v3 custom "thrusting a spear forward".
 
 ### Enemies (v3 humanoid unless noted; anim = walk)
@@ -89,3 +89,4 @@ If the 5-hour usage cap is hit, STOP cleanly — git holds all state; the user r
 
 ## Progress log (append-only — newest last)
 - 2026-06-29 — quartet done (zeus, poseidon, skeleton, nemean); pipeline + integration proven. Roster run begins.
+- 2026-06-29 — batch 1 gods ✅: apollo, hephaestus, aphrodite (aphrodite west-attack failed → re-queued, re-import next iter; graceful fallback meanwhile). Refactored `updateTowerAnims` to drive `attack` off a foe-in-range (anti-strobe hold kept) so it covers deployable (Hephaestus) + charm (Aphrodite) gods; Demeter excluded (farm → harvest anim on payout). Verified: build+lint+147 tests green, no console errors. NOTE for batch 2: Athena may be a pure-aura/support tower — if she deals no damage, exclude her from the attack-trigger like Demeter (give her an idle/aura pose).
