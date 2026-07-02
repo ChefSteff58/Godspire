@@ -48,12 +48,15 @@ export const BOSS_ROSTER: readonly BossArchetype[] = [
     color: 0xd9a441,
     stroke: 0xfff1c0,
     radius: 26,
-    hpMul: 20,
+    // 20 → 32 after the 2026-07-01 playtest ("still getting shredded") — his damage cap alone wasn't
+    // holding against a wave-20 multi-tower board. Cap tightened 60 → 45 for the same reason: the
+    // anti-burst identity has to bite. Full boss re-tune deferred until after the art pass.
+    hpMul: 32,
     speedMul: 0.8,
     bounty: 120,
     leakWeight: 16,
     telegraph: 'The Nemean Lion prowls — its hide turns aside any single blow. Wear it down!',
-    mechanic: { damageCap: 60, armorBonus: 4 },
+    mechanic: { damageCap: 45, armorBonus: 4 },
   },
   {
     id: 'minotaur',

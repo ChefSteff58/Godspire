@@ -63,6 +63,20 @@ const ATTACK_HOLD_MS = 450
 // The sim's base walk speed (px/s) — enemy walk-cycle cadence is scaled by speed/BASE so charmed foes
 // visibly crawl and satyrs visibly sprint instead of every walk cycling at one fixed fps.
 const BASE_ENEMY_SPEED = 60
+// Ground shadows are PARKED until the real terrain lands (M8 Stage 4) — on the current flat map they
+// read as "floating" per the 2026-07-01 playtest. The plumbing stays; flip this with the tileset.
+const ENABLE_SHADOWS = false
+// Per-kind art sizes — a deliberate SILHOUETTE LADDER. The old max(radius*3, 46) floor flattened
+// everything to ~46px, which is why the roster read as "too similar": size is the fastest identifier.
+const ENEMY_ART_PX: Record<string, number> = {
+  shade: 36, // swarm chaff — visibly small and skittery
+  skeleton: 48, // the baseline yardstick
+  harpy: 52, // wide wings need room
+  satyr: 50,
+  gorgon: 54,
+  hydra: 62, // a brood matriarch
+  talos: 68, // the armored wall — visibly the biggest non-boss
+}
 // Kill feedback throttles: float a bounty only for meaty kills, and only while the field is readable.
 const BOUNTY_FLOAT_MIN = 8
 const BOUNTY_FLOAT_MAX_BODIES = 40
@@ -678,8 +692,9 @@ export class GameScene extends Phaser.Scene {
     const isBoss = enemy.kind === 'boss'
     const depth = isBoss ? 6 : enemy.flying ? 5 : 4 // bosses ride above everything
     const texKey = isBoss && enemy.bossId ? enemy.bossId : enemy.kind
-    // Pixel art reads best drawn larger than the hitbox disc; bosses get real presence.
-    const artPx = isBoss ? 116 : Math.max(enemyRadius(enemy) * 3, 46)
+    // Pixel art reads best drawn larger than the hitbox disc; the per-kind ladder keeps silhouettes
+    // distinct (shade small → talos huge), and bosses get real presence.
+    const artPx = isBoss ? 116 : (ENEMY_ART_PX[enemy.kind] ?? Math.max(enemyRadius(enemy) * 3, 46))
     const sizePx = DirAnimSprite.hasDirectional(this, texKey) ? artPx : enemyRadius(enemy) * 2
     let sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Image | Phaser.GameObjects.Sprite
     if (DirAnimSprite.hasDirectional(this, texKey)) {
@@ -698,13 +713,15 @@ export class GameScene extends Phaser.Scene {
     }
     if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
-    // soft ellipse shadow grounds the sprite; fliers get a smaller, fainter, further-offset one
-    const shDy = enemy.flying ? sizePx * 0.45 : sizePx * 0.32
-    const shadow = this.add
-      .ellipse(pos.x, pos.y + shDy, sizePx * (enemy.flying ? 0.4 : 0.55), sizePx * 0.18, 0x000000, enemy.flying ? 0.18 : 0.32)
-      .setDepth(3.5)
-    shadow.setData('dy', shDy)
-    this.enemyShadows.set(enemy.id, shadow)
+    if (ENABLE_SHADOWS) {
+      // soft ellipse shadow grounds the sprite; fliers get a smaller, fainter, further-offset one
+      const shDy = enemy.flying ? sizePx * 0.45 : sizePx * 0.32
+      const shadow = this.add
+        .ellipse(pos.x, pos.y + shDy, sizePx * (enemy.flying ? 0.4 : 0.55), sizePx * 0.18, 0x000000, enemy.flying ? 0.18 : 0.32)
+        .setDepth(3.5)
+      shadow.setData('dy', shDy)
+      this.enemyShadows.set(enemy.id, shadow)
+    }
     // juice: pop into existence (squash-stretch) instead of blinking in — relative to the baseline scale
     // so a scaled sprite keeps its intended size (a placeholder disc's baseline is 1). The baseline is
     // stashed on the sprite so overlapping hit-punch tweens can anchor to it instead of ratcheting.
@@ -925,11 +942,15 @@ export class GameScene extends Phaser.Scene {
       this.spikes.set(tower.id, spike)
     }
     spike.damage = dmg // keep current (boons/upgrades may have changed it)
+    const gained = spike.charges < eff.maxCharges
     spike.charges = Math.min(spike.charges + 1, eff.maxCharges)
     this.drawSpike(tower.id, spike)
-    // the forge's "shot" is the charge itself — swing the hammer on each one
-    this.towerLastFire.set(tower.id, this.time.now)
-    this.towerArt.get(tower.id)?.playOnce('attack')
+    if (gained) {
+      // the forge's "shot" is a NEW charge — swing the hammer only when one is actually made
+      // (swinging on every production tick at a full trap read as a nonstop spasm)
+      this.towerLastFire.set(tower.id, this.time.now)
+      this.towerArt.get(tower.id)?.playOnce('attack')
+    }
   }
 
   /** Each frame: a charged trap pops every ground enemy that walks over it (once each). */
@@ -1239,23 +1260,25 @@ export class GameScene extends Phaser.Scene {
         const range = eff.range
         const slow = TOWER_STATS[tower.god].slowAura
         const buff = TOWER_STATS[tower.god].auraBuff
-        // a slow "breath" on the selected ring so it reads live, not like a printed circle
-        const breathe = selected ? Math.sin(this.time.now / 300) * 2 : 0
+        // simple solid range circles — dashes/breathing read as noise (2026-07-01 playtest)
         if (slow) {
           // Aphrodite's charm field — themed fill so the area reads, but only while selected
           g.fillStyle(0x6fd0e8, 0.1)
           g.fillCircle(tower.pos.x, tower.pos.y, range)
-          this.dashedCircle(g, tower.pos, range + breathe, 0x6fd0e8, selected ? 0.85 : 0.45)
+          g.lineStyle(1.5, 0x6fd0e8, selected ? 0.85 : 0.45)
+          g.strokeCircle(tower.pos.x, tower.pos.y, range)
         } else if (buff) {
           g.fillStyle(0xd9c879, 0.08)
           g.fillCircle(tower.pos.x, tower.pos.y, range)
-          this.dashedCircle(g, tower.pos, range + breathe, 0xd9c879, selected ? 0.85 : 0.45)
+          g.lineStyle(1.5, 0xd9c879, selected ? 0.85 : 0.45)
+          g.strokeCircle(tower.pos.x, tower.pos.y, range)
         } else {
           if (selected) {
             g.fillStyle(0xf5d061, 0.04) // a whisper of interior fill so coverage reads without occluding
             g.fillCircle(tower.pos.x, tower.pos.y, range)
           }
-          this.dashedCircle(g, tower.pos, range + breathe, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
+          g.lineStyle(1.5, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
+          g.strokeCircle(tower.pos.x, tower.pos.y, range)
         }
         // mobile gods: also trace the orbit path so its sweep is legible
         const m = TOWER_STATS[tower.god].mobile
@@ -1296,20 +1319,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderBossBars(g)
-  }
-
-  /** A dashed circle (Graphics has no native dash) with a slowly marching phase — ~24 arc segments. */
-  private dashedCircle(g: Phaser.GameObjects.Graphics, c: Vec2, r: number, color: number, alpha: number): void {
-    const SEGS = 24
-    const phase = this.time.now / 4000 // gentle marching-ants drift
-    g.lineStyle(1.5, color, alpha)
-    for (let i = 0; i < SEGS; i += 2) {
-      const a0 = ((i + phase) / SEGS) * Math.PI * 2
-      const a1 = ((i + 1.35 + phase) / SEGS) * Math.PI * 2
-      g.beginPath()
-      g.arc(c.x, c.y, r, a0, a1, false)
-      g.strokePath()
-    }
   }
 
   /** A prominent floating health bar above each live boss, with a white "damage ghost" chip segment. */
@@ -1654,6 +1663,15 @@ export class GameScene extends Phaser.Scene {
         continue
       }
       const stats = TOWER_STATS[tower.god]
+      // Hephaestus works his ANVIL: he faces his trap (a fixed point) and swings only when a charge is
+      // forged (produceSpike's playOnce). Tracking passing enemies reset his anim frame every turn —
+      // the "spazzing" from the 2026-07-01 playtest.
+      if (stats.deployable) {
+        const spike = this.spikes.get(tower.id)
+        if (spike) art.setFacing(dirToTarget(tower.pos, spike.pos))
+        art.update(dtMs)
+        continue
+      }
       // FIRING gods play their cast via towerAttackTell's playOnce — frame 0 lands ON the shot instead
       // of a permanent in-range loop with no relation to when bolts appear. SUPPORT gods (Aphrodite's
       // charm, Athena's aura) have no shot, so "a foe in my field" keeps their working loop running.
@@ -1688,6 +1706,29 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * A mobile god's HOME BASE marker — a shrine, NOT a mini copy of the god (a tiny second Hermes on
+   * the ground read as ridiculous). Uses the dedicated `<god>_base` sprite (a PixelLab herm shrine for
+   * Hermes) when it exists, else draws a simple marble dais in the god's color.
+   */
+  private makeHomeBase(god: GodKind): Phaser.GameObjects.Container {
+    const baseKey = `${god}_base`
+    if (this.textures.exists(baseKey)) {
+      return this.add.container(0, 0, [this.addSpriteScaled(baseKey, 0, 0, 40)])
+    }
+    // fallback dais: stacked stone ellipses + a gold trim ring + the god's color as the inlay
+    const g = this.add.graphics()
+    g.fillStyle(0x4a4a55, 1)
+    g.fillEllipse(0, 4, 34, 14)
+    g.fillStyle(0x9aa0ac, 1)
+    g.fillEllipse(0, 0, 34, 14)
+    g.lineStyle(2, 0xbfa03a, 0.9)
+    g.strokeEllipse(0, 0, 26, 10)
+    g.fillStyle(TOWER_STATS[god].color, 0.9)
+    g.fillEllipse(0, 0, 10, 4)
+    return this.add.container(0, 0, [g])
+  }
+
   /** The standard god badge — a dropped-in sprite if present, else a colored disc with the god's initial. */
   private makeBadge(god: GodKind, radius = 16): Phaser.GameObjects.Container {
     const stats = TOWER_STATS[god]
@@ -1712,8 +1753,9 @@ export class GameScene extends Phaser.Scene {
     this.towers.push(tower)
     this.run.onTowerBuilt()
     const stats = TOWER_STATS[god]
-    // Pixel gods: an 8-direction sprite that faces its target and casts when firing, with a looped idle
-    // bob. Falls back to the disc badge until a god's directional art (`<god>_south` …) is dropped in.
+    // Pixel gods: an 8-direction sprite that faces its target and casts when firing. No idle bob —
+    // gods stand PLANTED on the ground (the bob read as "floating" on the flat map). Falls back to
+    // the disc badge until a god's directional art (`<god>_south` …) is dropped in.
     if (!stats.mobile && DirAnimSprite.hasDirectional(this, god)) {
       const art = new DirAnimSprite(this, god, pos.x, pos.y, TOWER_SPRITE_PX, 6)
       art.sprite.setData('baseScale', art.sprite.scaleX) // the tell's lunge tweens anchor to this
@@ -1721,13 +1763,12 @@ export class GameScene extends Phaser.Scene {
       this.towerArt.set(tower.id, art)
       this.addTowerShadow(tower.id, pos.x, pos.y + TOWER_SPRITE_PX * 0.36, TOWER_SPRITE_PX)
       this.placeThunk(tower.id, pos)
-      this.tweens.add({ targets: art.sprite, y: pos.y - 3, delay: 160, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
       return
     }
     if (stats.mobile) {
-      // Mobile god: a fixed HOME BASE badge at the center (identity + click target), and the unit that
+      // Mobile god: a fixed HOME BASE at the center (identity + click target), and the unit that
       // actually orbits/strikes. Clicking the base manages a god that won't sit still.
-      const base = this.makeBadge(god).setPosition(tower.center.x, tower.center.y).setDepth(5)
+      const base = this.makeHomeBase(god).setPosition(tower.center.x, tower.center.y).setDepth(5)
       this.homeBaseGfx.set(tower.id, base)
       if (DirAnimSprite.hasDirectional(this, god)) {
         // pixel mobile god: the flier is his animated sprite — faces + casts while it orbits (a darting scout)
@@ -1752,6 +1793,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private addTowerShadow(towerId: string, x: number, y: number, sizePx: number): void {
+    if (!ENABLE_SHADOWS) return
     this.towerShadows.set(towerId, this.add.ellipse(x, y, sizePx * 0.55, sizePx * 0.18, 0x000000, 0.3).setDepth(3.5))
   }
 

@@ -37,11 +37,19 @@ export class PreloadScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
     this.tweens.add({ targets: splash, alpha: 0.4, duration: 600, yoyo: true, repeat: -1 })
-    const unsub = useSessionStore.subscribe((s) => {
-      if (s.status === 'booting') return
+    let started = false
+    const begin = (): void => {
+      if (started) return
+      started = true
       unsub()
       this.scene.start('Game')
+    }
+    const unsub = useSessionStore.subscribe((s) => {
+      if (s.status !== 'booting') begin()
     })
+    // HARD CAP: a slow/hanging cloud round-trip must never hold the game hostage — after 6s start
+    // anyway (worst case this run plays on base modifiers, which beats an infinite splash).
+    this.time.delayedCall(6000, begin)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsub) // never leak the subscription
   }
 }
