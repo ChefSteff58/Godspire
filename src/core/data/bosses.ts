@@ -124,8 +124,9 @@ export function bossScaledStats(
   baseSpeed: number,
 ): BossSpawnStats {
   const occ = Math.max(0, occurrence)
-  // Gentler than first-pass (was 0.6) — the wave HP curve already compounds, so a steep occurrence
-  // multiplier double-compounded into late-boss walls. 0.4 keeps recurrences a real step up, not a brick.
+  // M6 Stage 4 softened this to 0.4 after a beatability sim, but the M8 Stage 3 pixel-review pass
+  // found bosses far too easy against a gold-bought board and restored 0.6 alongside the
+  // hpMul 20/18/20 bump. Verified vs late-boss DPS at waves 60/80.
   const hpScale = 1 + 0.6 * occ
   const capScale = 1 + 0.25 * occ
   const bountyScale = 1 + 0.3 * occ

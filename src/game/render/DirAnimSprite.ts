@@ -21,6 +21,9 @@ export class DirAnimSprite {
   private anim = 'idle'
   private frame = 0
   private timerMs = 0
+  // One-shot mode (playOnce): the anim runs a single cycle, then falls back automatically.
+  private oneShot = false
+  private oneShotThen = 'idle'
   private readonly counts = new Map<string, number>() // `${anim}_${dir}` → frame count (probed once)
 
   constructor(scene: Phaser.Scene, base: string, x: number, y: number, displayPx: number, depth = 6) {
@@ -46,12 +49,27 @@ export class DirAnimSprite {
   }
 
   play(anim: string): void {
-    if (anim !== this.anim) {
+    if (anim !== this.anim || this.oneShot) {
       this.anim = anim
       this.frame = 0
       this.timerMs = 0
+      this.oneShot = false
       this.apply()
     }
+  }
+
+  /**
+   * Play `anim` from frame 0 for exactly ONE cycle, then fall back to `thenAnim` — even if `anim` is
+   * already current (a restart). This is how a cast lands its first frame exactly on the shot: the
+   * fire moment calls playOnce('attack') and the sprite returns to idle by itself when the swing ends.
+   */
+  playOnce(anim: string, thenAnim = 'idle'): void {
+    this.anim = anim
+    this.frame = 0
+    this.timerMs = 0
+    this.oneShot = true
+    this.oneShotThen = thenAnim
+    this.apply()
   }
 
   setPosition(x: number, y: number): void {
@@ -62,14 +80,24 @@ export class DirAnimSprite {
     this.sprite.destroy()
   }
 
-  /** Advance the current animation; no-op for static rotations / single-frame poses. */
-  update(dtMs: number): void {
+  /**
+   * Advance the current animation; no-op for static rotations / single-frame poses.
+   * `rate` scales the cadence — enemies pass their speed ratio so charmed foes visibly crawl and
+   * fast kinds visibly sprint instead of every walk cycling at the same fixed fps.
+   */
+  update(dtMs: number, rate = 1): void {
     const n = this.frameCount(this.anim, this.dir)
-    if (n <= 1) return
-    this.timerMs += dtMs
+    if (n <= 1 || rate <= 0) return
+    this.timerMs += dtMs * rate
     while (this.timerMs >= FRAME_MS) {
       this.timerMs -= FRAME_MS
-      this.frame = (this.frame + 1) % n
+      const next = this.frame + 1
+      if (this.oneShot && next >= n) {
+        // the single cycle just finished — settle into the fallback anim
+        this.play(this.oneShotThen)
+        return
+      }
+      this.frame = next % n
     }
     this.apply()
   }
@@ -86,6 +114,7 @@ export class DirAnimSprite {
   }
 
   private apply(): void {
+    if (!this.sprite.active) return // destroyed (e.g. sold mid-animation) — a stale timer must not touch it
     const n = this.frameCount(this.anim, this.dir)
     let key: string
     if (n > 0) key = frameKey(this.base, this.anim, this.dir, this.frame % n)

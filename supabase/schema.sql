@@ -16,13 +16,20 @@ create table if not exists public.profiles (
 
 -- 2) PLAYER_PROGRESS — the save (gameplay only; one row per user). Derived values
 --    (level, available points) are NOT stored — they're computed from favor + unlocked_nodes.
+--    updated_at defaults to 'epoch' (NOT now()): the client's merge is last-writer-wins by
+--    updated_at, so a pristine trigger-created row must LOSE against any real local save.
+--    saveProgress always supplies updated_at explicitly, so the default only affects the
+--    signup-trigger path.
+--    MIGRATION for EXISTING databases (this file is run-once — apply these by hand):
+--      alter table public.player_progress alter column updated_at set default 'epoch';
+--      -- then re-run the handle_new_user function definition below.
 create table if not exists public.player_progress (
   user_id        uuid primary key references auth.users(id) on delete cascade,
   favor          bigint not null default 0 check (favor >= 0),
   unlocked_nodes jsonb  not null default '[]'::jsonb,
   settings       jsonb  not null default '{}'::jsonb,
   stats          jsonb  not null default '{}'::jsonb,
-  updated_at     timestamptz not null default now()
+  updated_at     timestamptz not null default 'epoch'
 );
 
 -- 3) SCORES — leaderboard (wired into gameplay at M7). user_id ON DELETE SET NULL so the
@@ -69,8 +76,10 @@ begin
   insert into public.profiles (id, is_anonymous)
   values (new.id, coalesce(new.is_anonymous, true))
   on conflict (id) do nothing;
-  insert into public.player_progress (user_id)
-  values (new.id)
+  -- Stamp 'epoch' explicitly (belt + braces with the column default) so a fresh row always
+  -- loses the client's updated_at merge against any real save.
+  insert into public.player_progress (user_id, updated_at)
+  values (new.id, 'epoch')
   on conflict (user_id) do nothing;
   return new;
 end; $$;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { selectTarget } from '../src/core/systems/targeting'
 import { createEnemy, damageEnemy, onDeath, applySlow, advanceEnemy, SPLIT_DEPTH_CAP, type Enemy } from '../src/core/entities/enemy'
-import { enemyCounts, waveSpec, enemyHpMul, enemyCount, weightAt, isEliteWave, COUNT_CEILING } from '../src/core/systems/waveManager'
+import { enemyCounts, waveSpec, wavePreview, enemyHpMul, enemyCount, weightAt, isEliteWave, COUNT_CEILING } from '../src/core/systems/waveManager'
 import { TOWER_STATS } from '../src/core/data/towers'
 
 const posOf = (e: Enemy) => ({ x: e.pathT * 100, y: 0 })
@@ -142,6 +142,36 @@ describe('slow status (Aphrodite)', () => {
     applySlow(e, 0.6, 500)
     applySlow(e, 0.3, 500)
     expect(e.slowMul).toBe(0.3)
+  })
+
+  it('a weaker slow refreshing does NOT extend a stronger slow (which expires, then the weak one applies)', () => {
+    const e = createEnemy('skeleton')
+    applySlow(e, 0.3, 300) // one brief touch of a deep slow
+    applySlow(e, 0.6, 1000) // a weaker aura's refresh — must not hold the 0.3 alive
+    expect(e.slowMul).toBe(0.3)
+    expect(e.slowTimerMs).toBe(300) // NOT ratcheted to 1000
+    advanceEnemy(e, 0.4, 1000) // 400ms > 300ms → the strong slow lifts
+    expect(e.slowMul).toBe(1)
+    applySlow(e, 0.6, 250) // the weaker aura re-applies within one refresh tick
+    expect(e.slowMul).toBe(0.6)
+  })
+})
+
+describe('wavePreview', () => {
+  it('flags the debut kind on a teaching wave (6 → harpy)', () => {
+    expect(wavePreview(6)).toEqual({ debutKind: 'harpy', bossId: null, elite: false })
+  })
+
+  it('flags the boss on a boss wave (20 → nemean, which is also an elite 10th wave)', () => {
+    expect(wavePreview(20)).toEqual({ debutKind: null, bossId: 'nemean', elite: true })
+  })
+
+  it('flags an elite legion on non-boss 10th waves', () => {
+    expect(wavePreview(30)).toEqual({ debutKind: null, bossId: null, elite: true })
+  })
+
+  it('a plain wave has no callouts', () => {
+    expect(wavePreview(7)).toEqual({ debutKind: null, bossId: null, elite: false })
   })
 })
 

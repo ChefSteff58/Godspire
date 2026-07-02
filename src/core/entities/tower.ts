@@ -15,6 +15,8 @@ export interface Tower {
   /** Tiers bought on each upgrade path (0–3). */
   pathA: number
   pathB: number
+  /** Total gold sunk into this tower (placement + upgrades) — sellValue refunds a cut of THIS. */
+  invested: number
   /** Mobile gods orbit this fixed center; `pos` is recomputed each frame from `orbitPhase`. */
   center: Vec2
   orbitPhase: number
@@ -35,6 +37,7 @@ export function createTower(god: GodKind, pos: Vec2): Tower {
     targeting: s.defaultTargeting,
     pathA: 0,
     pathB: 0,
+    invested: s.cost,
     center: { x: pos.x, y: pos.y },
     orbitPhase: 0,
   }

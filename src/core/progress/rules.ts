@@ -2,7 +2,8 @@ import type { PlayerProgress, RunResult, Modifiers, SkillNode } from './types'
 import { PROGRESS_SCHEMA_VERSION } from './types'
 import { PANTHEON_NODES } from './skillTree'
 
-const EPOCH = '1970-01-01T00:00:00.000Z'
+/** The merge-losing timestamp — a save stamped this loses to ANY real save (see emptyProgress). */
+export const EPOCH = '1970-01-01T00:00:00.000Z'
 
 // Favor reward constants (first-pass, tunable).
 const FAVOR_PER_WAVE = 10

@@ -161,8 +161,10 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
 
 export const GOD_ORDER: readonly GodKind[] = ['zeus', 'apollo', 'demeter', 'hermes', 'hephaestus', 'poseidon', 'aphrodite', 'athena']
 
-/** Fraction of a tower's cost refunded when sold (BTD6-style). */
+/** Fraction of a tower's invested gold refunded when sold (BTD6-style). */
 export const SELL_REFUND_RATE = 0.7
-export function sellValue(god: GodKind): number {
-  return Math.floor(TOWER_STATS[god].cost * SELL_REFUND_RATE)
+/** Refund for selling a tower — a cut of TOTAL invested gold (placement + upgrades), not base cost.
+ *  Structural param (not `Tower`) to keep data/ free of an entities/ import cycle. */
+export function sellValue(tower: { invested: number }): number {
+  return Math.floor(tower.invested * SELL_REFUND_RATE)
 }

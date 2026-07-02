@@ -131,22 +131,24 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           </button>
         )}
 
-        <div className="rounded-lg border border-dashed border-slate-700 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Dev</p>
-          <button
-            onClick={() =>
-              void applyRun({
-                waveReached: 5 + Math.floor(Math.random() * 15),
-                victory: Math.random() < 0.3,
-                kills: 10 + Math.floor(Math.random() * 40),
-              })
-            }
-            className="w-full rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-400"
-          >
-            Simulate run (+Favor)
-          </button>
-          <p className="mt-2 text-center text-xs text-slate-500">{syncLabel}</p>
-        </div>
+        {import.meta.env.DEV && (
+          <div className="rounded-lg border border-dashed border-slate-700 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Dev</p>
+            <button
+              onClick={() =>
+                void applyRun({
+                  waveReached: 5 + Math.floor(Math.random() * 15),
+                  victory: Math.random() < 0.3,
+                  kills: 10 + Math.floor(Math.random() * 40),
+                })
+              }
+              className="w-full rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-400"
+            >
+              Simulate run (+Favor)
+            </button>
+          </div>
+        )}
+        <p className="mt-2 text-center text-xs text-slate-500">{syncLabel}</p>
       </div>
     </div>
   )

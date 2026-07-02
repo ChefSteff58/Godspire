@@ -8,7 +8,7 @@
 import type { Modifiers } from '../../core/progress/types'
 import type { GodKind } from '../../core/data/towers'
 import { createLedger, spend, canAfford, earn, waveIncome, type Ledger } from '../../core/economy/ledger'
-import { waveSpec, type WaveSpec } from '../../core/systems/waveManager'
+import { waveSpec, wavePreview, type WaveSpec } from '../../core/systems/waveManager'
 import { foldRunModifiers, type BoonEffect } from '../../core/run/boons'
 import { generateDraft, scheduleNextDraft, type DraftOption } from '../../core/run/draft'
 import type { SpawnDesc } from '../../core/entities/enemy'
@@ -32,6 +32,9 @@ type Rng = () => number
 
 /** Grace before an auto-started wave begins (counted on the scaled clock, never wall-clock). */
 const BUILD_GRACE_MS = 1500
+/** Longer grace before a wave that debuts a kind / brings a boss / masses an elite legion — the
+ * pre-wave telegraph needs to be ACTIONABLE (time to buy the counter), not just decorative. */
+const BUILD_GRACE_BIG_MS = 4000
 
 export class RunController {
   private ledger: Ledger = createLedger(0)
@@ -246,18 +249,23 @@ export class RunController {
    * INVARIANT: any death-spawned enemy (future Hydra split, M4) MUST be pushed to the scene's
    * enemy array BEFORE this is called each frame, or `liveEnemyCount === 0` could false-trigger
    * between a parent's death and its children's spawn.
+   * Returns the wave income paid on a clear (the scene floats it as a payday), else null.
    */
-  settle(liveEnemyCount: number): boolean {
-    if (this.phase !== 'clearing' || liveEnemyCount > 0) return false
-    this.earnGold(Math.round(waveIncome(this.wave, this.ledger.gold) * this.modifiers.incomeMul)) // Pantheon income
+  settle(liveEnemyCount: number): number | null {
+    if (this.phase !== 'clearing' || liveEnemyCount > 0) return null
+    const income = Math.round(waveIncome(this.wave, this.ledger.gold) * this.modifiers.incomeMul) // Pantheon income
+    this.earnGold(income)
     this.phase = 'building'
-    this.buildGraceMs = BUILD_GRACE_MS // restart the auto-start grace for the next wave
+    // Restart the auto-start grace — longer when the NEXT wave debuts a kind / brings a boss / is
+    // elite, so the pre-wave telegraph leaves real time to buy the counter before it starts.
+    const next = wavePreview(this.wave + 1)
+    this.buildGraceMs = next.debutKind || next.bossId || next.elite ? BUILD_GRACE_BIG_MS : BUILD_GRACE_MS
     this.spec = null
     if (this.wave >= this.nextDraftWave) {
       this.draft = generateDraft(this.wave, this.rng, 3 + (this.meta.draftBonusOptions ?? 0)) // Pantheon draft luck
       this.nextDraftWave = scheduleNextDraft(this.wave, this.rng)
     }
-    return true // a wave just cleared this frame (the scene pays Demeter income)
+    return income // a wave just cleared this frame (the scene pays Demeter income + floats the payday)
   }
 
   // ── fire-time stat reads (NEVER baked at placement, so re-folds reach existing towers) ──

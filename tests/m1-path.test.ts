@@ -41,6 +41,65 @@ describe('PathSystem', () => {
   it('throws on fewer than 2 waypoints', () => {
     expect(() => new PathSystem([{ x: 0, y: 0 }])).toThrow()
   })
+
+  it('spot-checks getPointAt on a known 3-segment path at t = 0, mid-segment values, and 1', () => {
+    // Segments: (0,0)→(100,0)→(100,100)→(200,100), each 100 long → total 300.
+    const p = new PathSystem([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 200, y: 100 },
+    ])
+    expect(p.length).toBe(300)
+    expect(p.getPointAt(0)).toEqual({ x: 0, y: 0 })
+    const cases: [number, { x: number; y: number }][] = [
+      [0.25, { x: 75, y: 0 }], // 75px in — mid first segment
+      [1 / 3, { x: 100, y: 0 }], // exactly the first corner
+      [0.5, { x: 100, y: 50 }], // mid second segment
+      [0.75, { x: 125, y: 100 }], // a quarter into the third segment
+      [5 / 6, { x: 150, y: 100 }], // mid third segment
+    ]
+    for (const [t, want] of cases) {
+      const got = p.getPointAt(t)
+      expect(got.x).toBeCloseTo(want.x, 9)
+      expect(got.y).toBeCloseTo(want.y, 9)
+    }
+    expect(p.getPointAt(1)).toEqual({ x: 200, y: 100 })
+  })
+
+  it('binary-searched lookup matches a reference linear scan across the real map path', () => {
+    // Oracle: the original pre-binary-search linear scan, rebuilt here over the same vertices.
+    const cum = [0]
+    let total = 0
+    for (let i = 1; i < OLYMPUS_PATH.length; i++) {
+      total += Math.hypot(
+        OLYMPUS_PATH[i].x - OLYMPUS_PATH[i - 1].x,
+        OLYMPUS_PATH[i].y - OLYMPUS_PATH[i - 1].y,
+      )
+      cum.push(total)
+    }
+    const linear = (t: number) => {
+      const target = Math.max(0, Math.min(1, t)) * total
+      for (let i = 1; i < cum.length; i++) {
+        if (target <= cum[i]) {
+          const segStart = cum[i - 1]
+          const segLen = cum[i] - segStart || 1
+          const f = (target - segStart) / segLen
+          const a = OLYMPUS_PATH[i - 1]
+          const b = OLYMPUS_PATH[i]
+          return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }
+        }
+      }
+      const last = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
+      return { x: last.x, y: last.y }
+    }
+    for (const t of [0, 0.01, 0.1, 0.25, 1 / 3, 0.5, 0.618, 0.75, 0.9, 0.999, 1]) {
+      const got = path.getPointAt(t)
+      const want = linear(t)
+      expect(got.x).toBeCloseTo(want.x, 9)
+      expect(got.y).toBeCloseTo(want.y, 9)
+    }
+  })
 })
 
 describe('advanceEnemy', () => {

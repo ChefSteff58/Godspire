@@ -190,6 +190,24 @@ function bossGroup(wave: number): SpawnGroup | null {
   }
 }
 
+/** What headlines wave `n` — a debuting kind, a boss, an elite surge (the HUD preview). */
+export interface WavePreview {
+  /** The kind making its FIRST appearance at this wave (per the KIND intro table), if any. */
+  debutKind: EnemyKind | null
+  bossId: BossId | null
+  elite: boolean
+}
+
+/** Pure preview of wave `n`'s callouts — lets the HUD telegraph what's coming before it spawns. */
+export function wavePreview(n: number): WavePreview {
+  const wave = Math.max(1, Math.floor(n))
+  return {
+    debutKind: ORDER.find((k) => KIND[k].intro === wave) ?? null,
+    bossId: bossForWave(wave)?.id ?? null,
+    elite: isEliteWave(wave),
+  }
+}
+
 /** The full spawn script for wave `n` — one group per present kind, plus a boss LAST on boss waves. */
 export function waveSpec(n: number): WaveSpec {
   const wave = Math.max(1, Math.floor(n))

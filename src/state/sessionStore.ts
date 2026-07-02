@@ -18,10 +18,12 @@ import {
   clearLocalProgress,
   readLocalName,
   writeLocalName,
+  clearLocalName,
 } from '../lib/persistence/localCache'
 
 type Status = 'booting' | 'ready' | 'offline'
 type SyncState = 'idle' | 'saving' | 'error'
+type SubmitState = 'idle' | 'posting' | 'posted' | 'already-posted' | 'failed'
 
 const DEFAULT_NAME = 'Mortal'
 const now = () => new Date().toISOString()
@@ -37,6 +39,8 @@ interface SessionStore {
   progress: PlayerProgress
   status: Status
   syncState: SyncState
+  /** Outcome of the most recent submitScore call — drives the run-over "Submitted!" line honestly. */
+  lastSubmit: SubmitState
   booted: boolean
 
   boot: () => Promise<void>
@@ -51,15 +55,26 @@ interface SessionStore {
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => {
-  /** Best-effort cloud save; never throws into the caller. */
+  /**
+   * Best-effort cloud save; never throws into the caller. Read-modify-write: merge with the
+   * current cloud row first, so a stale-content write with a fresher timestamp (a second tab /
+   * another device) can't clobber newer cloud state.
+   */
   const cloudSave = async (userId: string, p: PlayerProgress) => {
     set({ syncState: 'saving' })
     try {
-      await saveProgress(userId, p)
+      const cloud = await loadProgress(userId)
+      await saveProgress(userId, mergeProgress(p, cloud))
       set({ syncState: 'idle' })
     } catch {
       set({ syncState: 'error' })
     }
+  }
+
+  /** Post-boot cloud writes are allowed only after a SUCCESSFUL cloud reconcile (see boot). */
+  const canCloudWrite = (): string | null => {
+    const { userId, status } = get()
+    return userId && isSupabaseConfigured && status === 'ready' ? userId : null
   }
 
   return {
@@ -69,6 +84,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     progress: readLocalProgress() ?? emptyProgress(now()),
     status: 'booting',
     syncState: 'idle',
+    lastSubmit: 'idle',
     booted: false,
 
     boot: async () => {
@@ -115,11 +131,15 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     },
 
     applyRun: async (run) => {
-      const { progress } = applyRunRewards(get().progress, run, now())
+      // Rebase on the freshest SHARED state first — another tab may have written localStorage
+      // since our in-memory snapshot, and stamping a new updatedAt on a stale base would clobber
+      // its work (e.g. a fresh unlock) in both localStorage and the cloud.
+      const base = mergeProgress(readLocalProgress(), get().progress)
+      const { progress } = applyRunRewards(base, run, now())
       set({ progress })
       writeLocalProgress(progress)
-      const { userId } = get()
-      if (userId && isSupabaseConfigured) await cloudSave(userId, progress)
+      const userId = canCloudWrite()
+      if (userId) await cloudSave(userId, progress)
     },
 
     /**
@@ -133,24 +153,31 @@ export const useSessionStore = create<SessionStore>((set, get) => {
       if (!isSupabaseConfigured || !userId || isGuest) return
       const best = progress.stats.bestWave
       if (best < 1) return
+      set({ lastSubmit: 'posting' })
       const boardBest = await fetchMyBest(userId, 'endless')
-      if (best > boardBest) await submitScoreToBoard(userId, displayName, best, 'endless')
+      if (best <= boardBest) {
+        set({ lastSubmit: 'already-posted' })
+        return
+      }
+      const { ok } = await submitScoreToBoard(userId, displayName, best, 'endless')
+      set({ lastSubmit: ok ? 'posted' : 'failed' })
     },
 
     getModifiers: () => deriveModifiers(get().progress.unlockedNodes),
 
     unlockNode: async (nodeId) => {
-      const progress = get().progress
-      if (!canUnlock(nodeId, progress)) return // guards: exists, unowned, prereqs met, affordable
+      // Rebase on shared state (see applyRun), then re-check the unlock against the rebased base.
+      const base = mergeProgress(readLocalProgress(), get().progress)
+      if (!canUnlock(nodeId, base)) return // guards: exists, unowned, prereqs met, affordable
       const updated: PlayerProgress = {
-        ...progress,
-        unlockedNodes: [...progress.unlockedNodes, nodeId],
+        ...base,
+        unlockedNodes: [...base.unlockedNodes, nodeId],
         updatedAt: now(),
       }
       set({ progress: updated })
       writeLocalProgress(updated)
-      const { userId } = get()
-      if (userId && isSupabaseConfigured) await cloudSave(userId, updated)
+      const userId = canCloudWrite()
+      if (userId) await cloudSave(userId, updated)
     },
 
     setDisplayName: async (name) => {
@@ -173,6 +200,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     signOut: async () => {
       await signOut()
       clearLocalProgress()
+      clearLocalName() // otherwise the next boot resurrects the old identity from localStorage
       set({
         userId: null,
         isGuest: true,

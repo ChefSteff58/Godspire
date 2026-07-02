@@ -1,8 +1,8 @@
 import { supabase } from '../supabase/client'
 import type { PlayerProgress } from '../../core/progress/types'
-import { migrateProgress } from '../../core/progress/rules'
+import { migrateProgress, EPOCH } from '../../core/progress/rules'
 
-interface ProgressRow {
+export interface ProgressRow {
   favor: number
   unlocked_nodes: unknown
   settings: unknown
@@ -10,14 +10,29 @@ interface ProgressRow {
   updated_at: string
 }
 
-function rowToProgress(row: ProgressRow): PlayerProgress {
+function isEmptyObject(v: unknown): boolean {
+  return !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0
+}
+
+/** Exported for tests (pure row → save mapping). */
+export function rowToProgress(row: ProgressRow): PlayerProgress {
+  // A PRISTINE trigger-created row (every column at its schema default) must LOSE merges even if
+  // an older schema stamped it now() at signup — otherwise a fresh anon row wipes real local
+  // progress. A real settings-only save has settings = {muted:…}, so requiring ALL four defaults
+  // never misclassifies one. New schemas stamp these rows 'epoch' at insert; this covers old rows.
+  const pristine =
+    row.favor === 0 &&
+    Array.isArray(row.unlocked_nodes) &&
+    row.unlocked_nodes.length === 0 &&
+    isEmptyObject(row.stats) &&
+    isEmptyObject(row.settings)
   // migrateProgress coerces/validates everything, so a hand-edited or partial row can't crash us.
   return migrateProgress({
     favor: row.favor,
     unlockedNodes: row.unlocked_nodes,
     settings: row.settings,
     stats: row.stats,
-    updatedAt: row.updated_at,
+    updatedAt: pristine ? EPOCH : row.updated_at,
   })
 }
 
@@ -28,7 +43,11 @@ export async function loadProgress(userId: string): Promise<PlayerProgress | nul
     .select('favor, unlocked_nodes, settings, stats, updated_at')
     .eq('user_id', userId)
     .maybeSingle()
-  if (error || !data) return null
+  // A failed QUERY must not read as "no cloud row" — that would let boot's reconcile upsert
+  // wipe the real save. Throw (boot's try/catch goes offline without reconciling); null is
+  // reserved for a genuinely absent row.
+  if (error) throw error
+  if (!data) return null
   return rowToProgress(data as ProgressRow)
 }
 

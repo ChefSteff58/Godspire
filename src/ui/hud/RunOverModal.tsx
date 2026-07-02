@@ -10,9 +10,22 @@ export function RunOverModal() {
   const openPantheon = useGameStore((s) => s.openPantheon)
   const openLeaderboard = useGameStore((s) => s.openLeaderboard)
   const isGuest = useSessionStore((s) => s.isGuest)
+  const lastSubmit = useSessionStore((s) => s.lastSubmit)
   if (phase !== 'over' || !summary) return null
 
-  const newBest = summary.wave >= summary.bestWave && summary.wave > 0
+  // Strictly BEAT the pre-run best — a tie is celebrated separately (nothing new was submitted).
+  const newBest = summary.wave > summary.prevBestWave && summary.wave > 0
+  const tiedBest = summary.wave === summary.prevBestWave && summary.wave > 0
+
+  // The leaderboard line reflects what submitScore actually DID (no more claiming success blindly).
+  const submitLine =
+    lastSubmit === 'posting'
+      ? 'Posting to the global leaderboard…'
+      : lastSubmit === 'posted'
+        ? '🏆 Submitted to the global leaderboard!'
+        : lastSubmit === 'failed'
+          ? "Couldn't post your score — it'll retry when you open Ranks."
+          : null // idle / already-posted → nothing to announce
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-6 bg-slate-950/85 backdrop-blur-sm">
@@ -26,10 +39,13 @@ export function RunOverModal() {
         <Stat label="Best wave" value={`${summary.bestWave}`} />
       </div>
       {newBest && <p className="text-sm font-bold text-amber-300">🏆 New best wave!</p>}
+      {tiedBest && <p className="text-sm font-bold text-amber-300">Tied your best wave!</p>}
       {newBest && isSupabaseConfigured && (
-        <p className="text-xs text-slate-300">
-          {isGuest ? '🔗 Link an account (top-left) to post this to the leaderboard.' : '🏆 Submitted to the global leaderboard!'}
-        </p>
+        isGuest ? (
+          <p className="text-xs text-slate-300">🔗 Link an account (top-left) to post this to the leaderboard.</p>
+        ) : (
+          submitLine && <p className="text-xs text-slate-300">{submitLine}</p>
+        )
       )}
       <div className="flex flex-wrap justify-center gap-x-7 gap-y-3 font-mono text-center">
         <Stat label="Kills" value={`${summary.kills}`} small />

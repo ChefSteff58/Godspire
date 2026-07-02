@@ -186,8 +186,17 @@ export function applySlow(enemy: Enemy, mul: number, durationMs: number): void {
   const resist = enemy.slowResist ?? 0 // 0 = no resistance (full slow), 1 = immune
   // no-resist fast path keeps normal enemies EXACT (the blend below would add float drift)
   const eff = resist === 0 ? mul : 1 - (1 - mul) * (1 - resist)
-  enemy.slowMul = Math.min(enemy.slowMul, eff)
-  enemy.slowTimerMs = Math.max(enemy.slowTimerMs, durationMs)
+  if (eff < enemy.slowMul) {
+    // stronger slow takes over on its OWN duration (not an extension of a weaker one's)
+    enemy.slowMul = eff
+    enemy.slowTimerMs = durationMs
+  } else if (eff === enemy.slowMul) {
+    // equal strength refreshes the timer
+    enemy.slowTimerMs = Math.max(enemy.slowTimerMs, durationMs)
+  }
+  // A WEAKER slow never refreshes a stronger slow's timer — otherwise a weak aura's per-frame
+  // re-apply would hold one brief deep slow forever. When the strong slow expires, the weak
+  // aura re-applies within one refresh tick, giving true strongest-ACTIVE-wins semantics.
 }
 
 /**

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { selectTarget } from '../src/core/systems/targeting'
 import { createEnemy, damageEnemy, type Enemy } from '../src/core/entities/enemy'
 import { createTower } from '../src/core/entities/tower'
+import { TOWER_STATS, SELL_REFUND_RATE, sellValue } from '../src/core/data/towers'
 
 // Resolve enemy positions along a horizontal line: x = pathT * 100, y = 0.
 const posOf = (e: Enemy) => ({ x: e.pathT * 100, y: 0 })
@@ -60,5 +61,20 @@ describe('createTower', () => {
     expect(t.damage).toBeGreaterThan(0)
     expect(t.cooldown).toBe(0)
     expect(t.targeting).toBe('first')
+  })
+
+  it('seeds invested with the placement cost', () => {
+    expect(createTower('zeus', { x: 0, y: 0 }).invested).toBe(TOWER_STATS.zeus.cost)
+    expect(createTower('apollo', { x: 0, y: 0 }).invested).toBe(TOWER_STATS.apollo.cost)
+  })
+})
+
+describe('sellValue', () => {
+  it('refunds a floored cut of TOTAL invested gold (placement + upgrades)', () => {
+    const t = createTower('apollo', { x: 0, y: 0 }) // cost 250
+    expect(sellValue(t)).toBe(Math.floor(TOWER_STATS.apollo.cost * SELL_REFUND_RATE))
+    t.invested += 180 // bought an upgrade — the refund grows with it
+    expect(sellValue(t)).toBe(Math.floor((TOWER_STATS.apollo.cost + 180) * SELL_REFUND_RATE))
+    expect(sellValue({ invested: 101 })).toBe(70) // floor(101 × 0.7) = floor(70.7)
   })
 })

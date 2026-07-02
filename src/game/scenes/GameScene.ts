@@ -27,7 +27,8 @@ import {
   type Projectile,
 } from '../../core/entities/projectile'
 import { selectTarget, type TargetingMode } from '../../core/systems/targeting'
-import { TOWER_STATS, sellValue, type GodKind } from '../../core/data/towers'
+import { wavePreview } from '../../core/systems/waveManager'
+import { TOWER_STATS, GOD_ORDER, sellValue, type GodKind } from '../../core/data/towers'
 import {
   UPGRADES,
   towerEffectiveStats,
@@ -49,14 +50,36 @@ const BOUNDS = { w: GAME_WIDTH, h: GAME_HEIGHT }
 // Frame-budget guard: never let more than this many bodies live at once (targeting/collision loops
 // are O(towers × enemies) / O(projectiles × enemies)). Over-budget wave spawns DEFER, they don't drop.
 const MAX_CONCURRENT_BODIES = 60
+// Fixed sim substep: at 3× a single 150ms step let fast arrows tunnel straight through hitboxes, so
+// the sim always advances in ≤16ms slices (1 step at 1×, up to ~9 at 3× — capped so a hitched tab
+// can't spiral). Render/mirror still happen once per real frame. Matches devStep's 16ms convention.
+const SIM_STEP_MS = 16
+const MAX_STEPS_PER_FRAME = 12
 // On-screen height (px) an HD god sprite is drawn at — bigger than the placeholder discs so the art reads.
 const TOWER_SPRITE_PX = 72
 // Keep a pixel tower in its cast animation this long after each shot, so a flickering target can't
 // strobe the cast back to idle (the bug: lightning fired but the body didn't animate).
 const ATTACK_HOLD_MS = 450
+// The sim's base walk speed (px/s) — enemy walk-cycle cadence is scaled by speed/BASE so charmed foes
+// visibly crawl and satyrs visibly sprint instead of every walk cycling at one fixed fps.
+const BASE_ENEMY_SPEED = 60
+// Kill feedback throttles: float a bounty only for meaty kills, and only while the field is readable.
+const BOUNTY_FLOAT_MIN = 8
+const BOUNTY_FLOAT_MAX_BODIES = 40
 
 /** A Hephaestus spike trap on the path — pops each ground enemy once, consuming a charge. */
-type Spike = { pos: Vec2; charges: number; damage: number; hitRadius: number; hitIds: string[] }
+type Spike = { pos: Vec2; charges: number; damage: number; hitRadius: number; hitIds: Set<string> }
+
+/** Pre-wave hint per debuting enemy kind — shown BEFORE its teaching wave so the counter is buyable. */
+const DEBUT_HINTS: Record<string, string> = {
+  shade: 'Shades swarm from the rift — cheap, quick, and many!',
+  skeleton: 'Skeletons march — the rank and file of Tartarus.',
+  harpy: 'Harpies take wing — only anti-air (Apollo / Hermes) reaches them!',
+  talos: 'Talos automatons lumber in — armor shrugs off chip damage; bring BIG hits.',
+  satyr: 'Satyrs sprint — slow them (Aphrodite) or they slip right past!',
+  gorgon: "Gorgons stalk unseen — Athena's owl reveals them.",
+  hydra: 'Hydras split when slain — piercing shots rake the whole brood!',
+}
 
 /**
  * GameScene owns the game loop. M2.5: flat top-down map with dead zones, fast-forward (timeScale),
@@ -100,11 +123,28 @@ export class GameScene extends Phaser.Scene {
   private pointer: Vec2 = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 }
   private elapsedAccumMs = 0
   private elapsedSec = 0
+  private simAccumMs = 0 // fixed-substep accumulator (see SIM_STEP_MS)
   private run = new RunController()
   private runEnded = false
   private draftWasOpen = false
   private selectedTowerId: string | null = null
-  private harpyTold = false
+  // Soft ellipse shadows ground every creature; fliers get a smaller, fainter one so altitude reads.
+  private readonly enemyShadows = new Map<string, Phaser.GameObjects.Ellipse>()
+  private readonly towerShadows = new Map<string, Phaser.GameObjects.Ellipse>()
+  // Per-enemy world-position memo keyed by pathT — targeting/collision/overlay all read positions many
+  // times per step; recompute only when pathT actually changed (stays correct through mid-step knockback).
+  private readonly posCache = new Map<string, { t: number; pos: Vec2 }>()
+  // Per-tower folded stats, invalidated by key when an upgrade changes a path tier (boons apply at
+  // fire time via run.effectiveDamage/effectiveFireRate, so they never enter this fold).
+  private readonly effCache = new Map<string, { key: string; eff: ReturnType<typeof towerEffectiveStats> }>()
+  // The fire loop's target picks this step, reused by updateTowerAnims (no double target acquisition).
+  private readonly stepTargets = new Map<string, Enemy | null>()
+  // Athena auras folded once per step (pos + r² + buff), instead of per auraAt() call.
+  private stepAuras: { pos: Vec2; r2: number; damageMul: number; fireRateMul: number; detect: boolean }[] = []
+  // Enemies currently charm-tinted (rebuilt each step) — hitEnemy's flash restore consults this.
+  private readonly charmedIds = new Set<string>()
+  private ambientCount = 0 // live ambient ember/mote cap
+  private lastBossFrac = new Map<string, number>() // boss bar damage-ghost (lerped last-frame fill)
 
   constructor() {
     super('Game')
@@ -134,8 +174,18 @@ export class GameScene extends Phaser.Scene {
     this.spikes.clear()
     this.spikeGfx.clear() // old graphics are destroyed by scene.restart
     this.charmedByTower.clear()
+    this.enemyShadows.clear()
+    this.towerShadows.clear()
+    this.posCache.clear()
+    this.effCache.clear()
+    this.stepTargets.clear()
+    this.stepAuras = []
+    this.charmedIds.clear()
+    this.lastBossFrac.clear()
+    this.ambientCount = 0
     this.elapsedAccumMs = 0
     this.elapsedSec = 0
+    this.simAccumMs = 0
 
     // Start a fresh run: the skill-tree meta (gold/lives/towerDmg) feeds run-start here.
     this.run = new RunController()
@@ -143,7 +193,6 @@ export class GameScene extends Phaser.Scene {
     this.runEnded = false
     this.draftWasOpen = false
     this.selectedTowerId = null
-    this.harpyTold = false
     useGameStore.getState().setElapsed(0)
     useGameStore.getState().setRunSummary(null)
     useGameStore.getState().setSelectedTower(null)
@@ -159,6 +208,18 @@ export class GameScene extends Phaser.Scene {
       useGameStore.getState().cancelPlacing()
       this.deselectTower()
     })
+    // Hotkeys 1–8 enter placement for that god (BTD6 muscle memory); ESC still exits.
+    this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+      const n = parseInt(e.key, 10)
+      if (n >= 1 && n <= GOD_ORDER.length) useGameStore.getState().beginPlacing(GOD_ORDER[n - 1])
+    })
+
+    // Ambient life: embers drift up from the Tartarus rift, gold motes at the Olympus gate.
+    this.time.addEvent({ delay: 450, loop: true, callback: () => this.spawnAmbient('ember') })
+    this.time.addEvent({ delay: 1300, loop: true, callback: () => this.spawnAmbient('mote') })
+
+    // Tell the player what wave 1 brings before they press start (debut/boss/elite telegraphs).
+    this.showWavePreview(1)
 
     if (import.meta.env.DEV) {
       ;(window as unknown as Record<string, unknown>).godspireScene = this
@@ -182,7 +243,26 @@ export class GameScene extends Phaser.Scene {
     return this.towers
   }
 
-  private enemyPos = (e: Enemy): Vec2 => this.path.getPointAt(e.pathT)
+  // Memoized per enemy on pathT: recomputes only when the enemy actually moved (or was knocked back),
+  // so the O(enemies × towers/projectiles/spikes) consumers stop re-scanning the polyline per call.
+  private enemyPos = (e: Enemy): Vec2 => {
+    const c = this.posCache.get(e.id)
+    if (c && c.t === e.pathT) return c.pos
+    const pos = this.path.getPointAt(e.pathT)
+    this.posCache.set(e.id, { t: e.pathT, pos })
+    return pos
+  }
+
+  /** Folded upgrade stats per tower, cached until an upgrade changes a path tier (see effCache). */
+  private towerEff(tower: Tower): ReturnType<typeof towerEffectiveStats> {
+    const key = `${tower.pathA}:${tower.pathB}`
+    const hit = this.effCache.get(tower.id)
+    if (hit && hit.key === key) return hit.eff
+    const eff = towerEffectiveStats(tower)
+    this.effCache.set(tower.id, { key, eff })
+    return eff
+  }
+
   private towerFootprints() {
     // A mobile god's dead zone is its FIXED home base, not its orbiting position — so other towers
     // can be built freely under its sweep (only the small base footprint is blocked).
@@ -193,6 +273,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── static map (flat, top-down) ──
+  /** Deterministic pseudo-random in [0,1) — the map's scatter must not change between frames/boots. */
+  private static seeded(n: number): number {
+    const v = Math.sin(n * 9871.123) * 43758.5453
+    return v - Math.floor(v)
+  }
+
   private drawBackground(): void {
     const g = this.add.graphics().setDepth(0)
     g.fillStyle(0x14121a, 1)
@@ -202,14 +288,38 @@ export class GameScene extends Phaser.Scene {
     g.fillCircle(0, GAME_HEIGHT, 240)
     g.fillStyle(0x3a2f10, 0.2)
     g.fillCircle(GAME_WIDTH, 0, 240)
+    // corner vignette — focuses the eye center-field and hides the hard canvas edge (static, no frame cost)
+    const v = this.add.graphics().setDepth(0.6)
+    v.fillStyle(0x000000, 0.18)
+    v.fillEllipse(0, 0, 520, 340)
+    v.fillEllipse(GAME_WIDTH, 0, 520, 340)
+    v.fillEllipse(0, GAME_HEIGHT, 520, 340)
+    v.fillEllipse(GAME_WIDTH, GAME_HEIGHT, 520, 340)
   }
 
   private drawPath(): void {
     const g = this.add.graphics().setDepth(1)
+    // Layered road: buffer band → dark base → mid surface → a worn center stripe (depth from strokes alone)
     g.lineStyle(46, 0x0d0b12, 1) // dead-zone buffer band (tight to the road)
     this.strokePolyline(g)
-    g.lineStyle(40, 0x2a2533, 1) // walkable road
+    g.lineStyle(40, 0x241f2c, 1) // dark road base
     this.strokePolyline(g)
+    g.lineStyle(30, 0x2a2533, 1) // mid surface
+    this.strokePolyline(g)
+    g.lineStyle(8, 0x342d40, 0.5) // center wear stripe (feet polish the middle)
+    this.strokePolyline(g)
+    // deterministic pebbles + cracks scattered along the walkway
+    for (let i = 0; i <= 50; i++) {
+      const t = i / 50
+      const p = this.path.getPointAt(t)
+      const r1 = GameScene.seeded(i * 3 + 1)
+      const r2 = GameScene.seeded(i * 3 + 2)
+      const r3 = GameScene.seeded(i * 3 + 3)
+      if (r3 < 0.65) {
+        g.fillStyle(r3 < 0.3 ? 0x1c1823 : 0x3a3346, 0.8)
+        g.fillCircle(p.x + (r1 - 0.5) * 28, p.y + (r2 - 0.5) * 28, 1 + r3 * 2)
+      }
+    }
   }
 
   private strokePolyline(g: Phaser.GameObjects.Graphics): void {
@@ -230,6 +340,16 @@ export class GameScene extends Phaser.Scene {
     for (const [x, y, w, h, c] of zones) {
       g.fillStyle(c, 0.6)
       g.fillRoundedRect(x, y, w, h, 24)
+      // a 1px top-edge highlight + deterministic speck texture so the plots read as ground, not flat panels
+      g.lineStyle(1, 0xffffff, 0.05)
+      g.lineBetween(x + 18, y + 1, x + w - 18, y + 1)
+      for (let i = 0; i < 40; i++) {
+        const rx = GameScene.seeded(x + i * 7 + 1)
+        const ry = GameScene.seeded(y + i * 7 + 2)
+        const light = GameScene.seeded(x + y + i) > 0.5
+        g.fillStyle(light ? 0xffffff : 0x000000, 0.05)
+        g.fillRect(x + 6 + rx * (w - 12), y + 6 + ry * (h - 12), 2, 2)
+      }
     }
   }
 
@@ -315,97 +435,133 @@ export class GameScene extends Phaser.Scene {
     if (this.run.phase === 'over' && !this.runEnded) this.endRun()
     this.syncDraftPause()
 
-    const scale = useGameStore.getState().timeScale
+    // Effective sim scale, enforced EVERY frame: any pause overlay (Pantheon / Ranks / the Fate
+    // Draft) forces 0 no matter what other writers (SpeedControls' resume button, a closing sibling
+    // overlay) set timeScale to — combat can never run on behind an opaque panel. timeScale itself
+    // stays purely the player's speed preference.
+    const st = useGameStore.getState()
+    const scale = st.pantheonOpen || st.leaderboardOpen || this.run.draft ? 0 : st.timeScale
     const dt = Math.min(delta, MAX_DELTA_MS) * scale
 
-    if (dt > 0 && this.run.phase !== 'over') {
-      const dtSec = dt / 1000
-
-      this.elapsedAccumMs += dt
-      if (this.elapsedAccumMs >= 1000) {
-        this.elapsedAccumMs -= 1000
-        this.elapsedSec += 1
-        useGameStore.getState().setElapsed(this.elapsedSec)
-      }
-
-      // spawn this wave's enemies on the run's schedule — but never exceed the concurrency cap;
-      // over-budget spawns wait in pendingSpawns and emit as bodies die (the wave stays intact).
-      for (const desc of this.run.tick(dtSec)) this.pendingSpawns.push(desc)
-      while (this.pendingSpawns.length > 0 && this.enemies.length < MAX_CONCURRENT_BODIES) {
-        this.spawnEnemy(this.pendingSpawns.shift()!)
-      }
-
-      // Aphrodite chills foes in her field BEFORE they move this frame
-      this.updateSlowAuras()
-
-      // advance enemies; sync sprites; face their heading + cycle the walk; leak → lose lives + juice
-      const dtMs = dtSec * 1000
-      for (let i = this.enemies.length - 1; i >= 0; i--) {
-        const enemy = this.enemies[i]
-        const leaked = advanceEnemy(enemy, dtSec, this.path.length)
-        if (leaked) {
-          this.onEnemyLeak(enemy)
-          continue
-        }
-        const pos = this.path.getPointAt(enemy.pathT)
-        this.enemySprites.get(enemy.id)?.setPosition(pos.x, pos.y)
-        const eart = this.enemyArt.get(enemy.id)
-        if (eart) {
-          eart.setFacing(dir8(this.path.getAngleAt(enemy.pathT))) // face the way it's walking
-          eart.update(dtMs)
-        }
-      }
-
-      // mobile gods (Hermes) orbit their placed center — move them before they acquire/fire
-      this.updateMobileTowers(dtSec)
-
-      // towers acquire + fire (effective stats from UPGRADES × run modifiers, read at fire-time)
-      for (const tower of this.towers) {
-        const eff = towerEffectiveStats(tower)
-        if (eff.fireRate <= 0 || eff.damage <= 0) continue // farms (Demeter) don't fire
-        tower.cooldown -= dtSec
-        if (tower.cooldown > 0) continue
-        const aura = this.auraAt(tower.pos) // Athena buffs nearby gods + reveals stealth foes
-        const fireRate = this.run.effectiveFireRate(tower.god, eff.fireRate * aura.fireRateMul)
-        const dep = TOWER_STATS[tower.god].deployable
-        if (dep) {
-          // Hephaestus produces a trap charge instead of shooting an enemy directly.
-          tower.cooldown = 1 / fireRate
-          this.produceSpike(tower, { damage: eff.damage * aura.damageMul, maxCharges: eff.maxCharges }, dep)
-          continue
-        }
-        const target = selectTarget(
-          { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
-          this.enemies,
-          this.enemyPos,
-          tower.targeting,
-        )
-        if (!target) continue
-        tower.cooldown = 1 / fireRate
-        const dmg = this.run.effectiveDamage(tower.god, eff.damage * aura.damageMul)
-        const stats = TOWER_STATS[tower.god]
-        if (stats.splash) this.fireSplash(this.path.getPointAt(target.pathT), dmg, eff.splashRadius, eff.knockback)
-        else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
-        else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
-        this.towerAttackTell(tower, target) // pixel gods: a quick lunge toward the target on each shot
-      }
-      this.updateTowerAnims(dtMs) // face nearest target + play attack/idle + advance frames
-
-      this.updateProjectiles(dtSec)
-      this.updateSpikes()
-
-      // clear-gate: a wave ends only when fully emitted AND no enemy remains alive. Pending (capped)
-      // spawns count as "still alive" so a deferred body can't let the wave clear out from under it.
-      // When it clears, Demeter farms pay out their harvest.
-      if (this.run.settle(this.enemies.length + this.pendingSpawns.length)) {
-        this.payDemeterIncome()
-        this.cameras.main.flash(220, 70, 56, 10) // juice: a soft gold pulse celebrates a cleared wave
+    if (dt > 0 && !this.runOver()) {
+      // Fixed-substep accumulator: the sim only ever advances in ≤SIM_STEP_MS slices so fast
+      // projectiles can't tunnel through hitboxes at 3× (collision runs per substep). Clamped so a
+      // hitched tab can't queue an unbounded catch-up spiral.
+      this.simAccumMs = Math.min(this.simAccumMs + dt, SIM_STEP_MS * MAX_STEPS_PER_FRAME)
+      while (this.simAccumMs >= SIM_STEP_MS && !this.runOver()) {
+        this.simAccumMs -= SIM_STEP_MS
+        this.simStep(SIM_STEP_MS / 1000)
       }
     }
 
     useGameStore.getState().mirrorRun(this.run.snapshot())
     this.renderOverlay()
     this.renderGhost()
+  }
+
+  /** Opaque to TS narrowing on purpose — simStep mutates run.phase mid-loop (a run can end mid-frame). */
+  private runOver(): boolean {
+    return this.run.phase === 'over'
+  }
+
+  /** One fixed sim step. Everything that moves/aims/collides/settles lives here (the one clock). */
+  private simStep(dtSec: number): void {
+    const dt = dtSec * 1000
+
+    this.elapsedAccumMs += dt
+    if (this.elapsedAccumMs >= 1000) {
+      this.elapsedAccumMs -= 1000
+      this.elapsedSec += 1
+      useGameStore.getState().setElapsed(this.elapsedSec)
+    }
+
+    // spawn this wave's enemies on the run's schedule — but never exceed the concurrency cap;
+    // over-budget spawns wait in pendingSpawns and emit as bodies die (the wave stays intact).
+    for (const desc of this.run.tick(dtSec)) this.pendingSpawns.push(desc)
+    while (this.pendingSpawns.length > 0 && this.enemies.length < MAX_CONCURRENT_BODIES) {
+      this.spawnEnemy(this.pendingSpawns.shift()!)
+    }
+
+    // fold Athena's auras ONCE per step (auraAt used to re-scan towers per tower per frame)
+    this.foldStepAuras()
+    // Aphrodite chills foes in her field BEFORE they move this frame
+    this.updateSlowAuras()
+
+    // advance enemies; sync sprites; face their heading + cycle the walk; leak → lose lives + juice
+    const dtMs = dt
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i]
+      const leaked = advanceEnemy(enemy, dtSec, this.path.length)
+      if (leaked) {
+        this.onEnemyLeak(enemy)
+        continue
+      }
+      const pos = this.enemyPos(enemy)
+      this.enemySprites.get(enemy.id)?.setPosition(pos.x, pos.y)
+      const shadow = this.enemyShadows.get(enemy.id)
+      shadow?.setPosition(pos.x, pos.y + (shadow.getData('dy') as number))
+      this.syncChargeTell(enemy)
+      const eart = this.enemyArt.get(enemy.id)
+      if (eart) {
+        eart.setFacing(dir8(this.path.getAngleAt(enemy.pathT))) // face the way it's walking
+        // legs pump at the enemy's ACTUAL pace — charmed foes crawl, satyrs sprint, charges blur
+        eart.update(dtMs, (enemy.speed * enemy.slowMul) / BASE_ENEMY_SPEED)
+      }
+    }
+
+    // mobile gods (Hermes) orbit their placed center — move them before they acquire/fire
+    this.updateMobileTowers(dtSec)
+
+    // towers acquire + fire (effective stats from UPGRADES × run modifiers, read at fire-time)
+    this.stepTargets.clear()
+    for (const tower of this.towers) {
+      const eff = this.towerEff(tower)
+      if (eff.fireRate <= 0 || eff.damage <= 0) continue // farms (Demeter) don't fire
+      tower.cooldown -= dtSec
+      if (tower.cooldown > 0) continue
+      const aura = this.auraAt(tower.pos) // Athena buffs nearby gods + reveals stealth foes
+      const fireRate = this.run.effectiveFireRate(tower.god, eff.fireRate * aura.fireRateMul)
+      const dep = TOWER_STATS[tower.god].deployable
+      if (dep) {
+        // Hephaestus produces a trap charge instead of shooting an enemy directly.
+        tower.cooldown = 1 / fireRate
+        this.produceSpike(tower, { damage: eff.damage * aura.damageMul, maxCharges: eff.maxCharges }, dep)
+        continue
+      }
+      const target = selectTarget(
+        { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
+        this.enemies,
+        this.enemyPos,
+        tower.targeting,
+      )
+      this.stepTargets.set(tower.id, target) // updateTowerAnims reuses this pick (no double targeting)
+      if (!target) continue
+      tower.cooldown = 1 / fireRate
+      const dmg = this.run.effectiveDamage(tower.god, eff.damage * aura.damageMul)
+      const stats = TOWER_STATS[tower.god]
+      if (stats.splash) this.fireSplash(this.enemyPos(target), dmg, eff.splashRadius, eff.knockback, stats.color)
+      else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
+      else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
+      this.towerAttackTell(tower, target) // pixel gods: a quick lunge toward the target on each shot
+    }
+    this.updateTowerAnims(dtMs) // face nearest target + play attack/idle + advance frames
+
+    this.updateProjectiles(dtSec)
+    this.updateSpikes()
+
+    // clear-gate: a wave ends only when fully emitted AND no enemy remains alive. Pending (capped)
+    // spawns count as "still alive" so a deferred body can't let the wave clear out from under it.
+    // When it clears, Demeter farms pay out their harvest and the payday floats at the gate.
+    const income = this.run.settle(this.enemies.length + this.pendingSpawns.length)
+    if (income !== null) {
+      this.payDemeterIncome()
+      this.cameras.main.flash(220, 70, 56, 10) // juice: a soft gold pulse celebrates a cleared wave
+      const gate = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
+      this.floatText(gate.x - 44, gate.y - 44, `+${income} 🪙`, '#ffe066')
+      // spike traps forget everyone they've popped — ids are unique per spawn, a settle means all dead
+      for (const s of this.spikes.values()) s.hitIds.clear()
+      this.showWavePreview(this.run.wave + 1) // telegraph what's coming while the player can still act
+    }
   }
 
   /** Drain React→Phaser intents and forward them to the authoritative run. */
@@ -458,7 +614,8 @@ export class GameScene extends Phaser.Scene {
       worstWave: s.worstWave,
       worstWaveLives: s.worstWaveLives,
     }
-    const bestWave = Math.max(session.progress.stats.bestWave, this.run.wave)
+    const prevBestWave = session.progress.stats.bestWave // captured BEFORE applyRun bumps it — an honest "new best"
+    const bestWave = Math.max(prevBestWave, this.run.wave)
     void session.applyRun(result) // bumps stats.bestWave synchronously before submitScore reads it
     void session.submitScore() // account-gated + only posts if it beats your board entry; fire-and-forget
 
@@ -466,6 +623,7 @@ export class GameScene extends Phaser.Scene {
       wave: this.run.wave,
       favor: favorFromRun(result),
       bestWave,
+      prevBestWave,
       kills: this.run.kills,
       bossesKilled: s.bossesKilled,
       goldEarned: s.goldEarned,
@@ -515,7 +673,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.enemies.push(enemy)
-    if (enemy.kind === 'harpy') this.telegraphHarpy()
     if (enemy.kind === 'boss') this.telegraphBoss(enemy)
     const pos = this.path.getPointAt(enemy.pathT)
     const isBoss = enemy.kind === 'boss'
@@ -541,31 +698,61 @@ export class GameScene extends Phaser.Scene {
     }
     if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
+    // soft ellipse shadow grounds the sprite; fliers get a smaller, fainter, further-offset one
+    const shDy = enemy.flying ? sizePx * 0.45 : sizePx * 0.32
+    const shadow = this.add
+      .ellipse(pos.x, pos.y + shDy, sizePx * (enemy.flying ? 0.4 : 0.55), sizePx * 0.18, 0x000000, enemy.flying ? 0.18 : 0.32)
+      .setDepth(3.5)
+    shadow.setData('dy', shDy)
+    this.enemyShadows.set(enemy.id, shadow)
     // juice: pop into existence (squash-stretch) instead of blinking in — relative to the baseline scale
-    // so a scaled sprite keeps its intended size (a placeholder disc's baseline is 1).
+    // so a scaled sprite keeps its intended size (a placeholder disc's baseline is 1). The baseline is
+    // stashed on the sprite so overlapping hit-punch tweens can anchor to it instead of ratcheting.
     const base = (sprite.getData('baseScale') as number) ?? sprite.scale
+    sprite.setData('baseScale', base)
     sprite.setScale(base * 0.4)
     this.tweens.add({ targets: sprite, scale: base, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
   }
 
-  /** One-time hint the first time a Harpy appears — the only enemy with a hard counter requirement. */
-  private telegraphHarpy(): void {
-    if (this.harpyTold) return
-    this.harpyTold = true
+  /**
+   * Telegraph what the NEXT wave brings — BEFORE it starts, while the counter is still buyable
+   * (a debut kind's hint, a boss warning, or an elite-legion callout; boss > debut > elite priority).
+   * RunController grants a longer build grace on these waves so the warning is actionable.
+   */
+  private showWavePreview(nextWave: number): void {
+    const preview = wavePreview(nextWave)
+    let msg: string | null = null
+    let color = '#bfe3ff'
+    if (preview.bossId) {
+      const boss = bossById(preview.bossId)
+      msg = `⚠ NEXT WAVE: ${boss.name.toUpperCase()} ⚠\n${boss.telegraph}`
+      color = '#ffe6a0'
+    } else if (preview.debutKind && DEBUT_HINTS[preview.debutKind]) {
+      msg = `NEXT WAVE — ${DEBUT_HINTS[preview.debutKind]}`
+    } else if (preview.elite) {
+      msg = '⚔ ELITE LEGION — the heavy kinds mass!'
+      color = '#ffc9a0'
+      this.cameras.main.shake(140, 0.003)
+    }
+    if (!msg) return
     const t = this.add
-      .text(GAME_WIDTH / 2, 72, "Harpies fly — only Apollo's arrows reach them!", {
+      .text(GAME_WIDTH / 2, 72, msg, {
         fontFamily: 'Georgia, serif',
         fontSize: '15px',
-        color: '#bfe3ff',
+        color,
+        align: 'center',
         backgroundColor: '#000000aa',
         padding: { x: 10, y: 5 },
       })
       .setOrigin(0.5)
       .setDepth(20)
-    this.tweens.add({ targets: t, alpha: 0, delay: 3500, duration: 800, onComplete: () => t.destroy() })
+      .setStroke('#000000', 3)
+    t.setScale(0.7)
+    this.tweens.add({ targets: t, scale: 1, duration: 200, ease: 'Back.easeOut' })
+    this.tweens.add({ targets: t, alpha: 0, delay: 3600, duration: 800, onComplete: () => t.destroy() })
   }
 
-  /** A dramatic banner every time a boss arrives (unlike the once-per-run Harpy hint). */
+  /** A dramatic banner + spatial entrance every time a boss actually arrives on the field. */
   private telegraphBoss(enemy: Enemy): void {
     if (!enemy.bossId) return
     const boss = bossById(enemy.bossId)
@@ -573,6 +760,25 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(300, 0.008)
     this.cameras.main.zoomTo(1.08, 320, 'Sine.easeInOut')
     this.time.delayedCall(1100, () => this.cameras.main.zoomTo(1, 480, 'Sine.easeInOut'))
+    // WHERE the threat comes from: the whole lane flashes in the boss's color…
+    const lane = this.add.graphics().setDepth(2.5)
+    lane.lineStyle(6, boss.color, 0.35)
+    this.strokePolyline(lane)
+    this.tweens.add({ targets: lane, alpha: 0, duration: 900, onComplete: () => lane.destroy() })
+    // …a shockwave rips out of the rift…
+    const start = OLYMPUS_PATH[0]
+    for (const [color, delay] of [
+      [boss.color, 0],
+      [0xffffff, 120],
+    ] as const) {
+      const ring = this.add.circle(start.x, start.y, 30, 0x000000, 0).setStrokeStyle(3, color, 0.9).setDepth(8)
+      ring.setBlendMode(Phaser.BlendModes.ADD)
+      ring.setScale(0.2)
+      this.tweens.add({ targets: ring, scale: 3, alpha: 0, delay, duration: 700, onComplete: () => ring.destroy() })
+    }
+    // …and the field briefly dims behind the banner for a cinematic beat.
+    const dim = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0).setDepth(15)
+    this.tweens.add({ targets: dim, fillAlpha: 0.25, duration: 350, yoyo: true, hold: 500, onComplete: () => dim.destroy() })
     const t = this.add
       .text(GAME_WIDTH / 2, 80, `⚠ ${boss.name.toUpperCase()} ⚠\n${boss.telegraph}`, {
         fontFamily: 'Georgia, serif',
@@ -590,9 +796,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private removeEnemy(enemy: Enemy): void {
-    this.enemySprites.get(enemy.id)?.destroy()
+    const sprite = this.enemySprites.get(enemy.id)
+    if (sprite) this.tweens.killTweensOf(sprite) // in-flight punch/pop tweens must not touch a dead object
+    sprite?.destroy()
     this.enemySprites.delete(enemy.id)
     this.enemyArt.delete(enemy.id)
+    this.enemyShadows.get(enemy.id)?.destroy()
+    this.enemyShadows.delete(enemy.id)
+    this.posCache.delete(enemy.id)
+    this.charmedIds.delete(enemy.id)
+    for (const s of this.spikes.values()) s.hitIds.delete(enemy.id) // ids never recur — keep the sets tight
     const idx = this.enemies.indexOf(enemy)
     if (idx >= 0) this.enemies.splice(idx, 1)
   }
@@ -606,6 +819,18 @@ export class GameScene extends Phaser.Scene {
       tower.pos.x = tower.center.x + Math.cos(tower.orbitPhase) * m.orbitRadius
       tower.pos.y = tower.center.y + Math.sin(tower.orbitPhase) * m.orbitRadius
       this.towerSprites.get(tower.id)?.setPosition(tower.pos.x, tower.pos.y)
+      this.towerShadows.get(tower.id)?.setPosition(tower.pos.x, tower.pos.y + 18) // the flier's ground shadow trails it
+    }
+  }
+
+  /** Fold every Athena's aura (pos + r² + buff) once per sim step; auraAt then just checks distance. */
+  private foldStepAuras(): void {
+    this.stepAuras.length = 0
+    for (const a of this.towers) {
+      const buff = auraBuff(a)
+      if (!buff) continue
+      const r = this.towerEff(a).range
+      this.stepAuras.push({ pos: a.pos, r2: r * r, damageMul: buff.damageMul, fireRateMul: buff.fireRateMul, detect: buff.detect })
     }
   }
 
@@ -614,14 +839,11 @@ export class GameScene extends Phaser.Scene {
     let damageMul = 1
     let fireRateMul = 1
     let detect = false
-    for (const a of this.towers) {
-      const buff = auraBuff(a)
-      if (!buff) continue
-      const r = towerEffectiveStats(a).range
-      if ((a.pos.x - pos.x) ** 2 + (a.pos.y - pos.y) ** 2 > r * r) continue
-      damageMul *= buff.damageMul
-      fireRateMul *= buff.fireRateMul
-      detect = detect || buff.detect
+    for (const a of this.stepAuras) {
+      if ((a.pos.x - pos.x) ** 2 + (a.pos.y - pos.y) ** 2 > a.r2) continue
+      damageMul *= a.damageMul
+      fireRateMul *= a.fireRateMul
+      detect = detect || a.detect
     }
     return { damageMul, fireRateMul, detect }
   }
@@ -633,6 +855,9 @@ export class GameScene extends Phaser.Scene {
    * outside the set are genuinely unaffected.
    */
   private updateSlowAuras(): void {
+    // rebuild the scene-wide charm roster each step — the tint pass + hitEnemy's flash-restore read it
+    const wasCharmed = new Set(this.charmedIds)
+    this.charmedIds.clear()
     let byId: Map<string, Enemy> | null = null
     for (const tower of this.towers) {
       const aura = TOWER_STATS[tower.god].slowAura
@@ -641,11 +866,11 @@ export class GameScene extends Phaser.Scene {
         byId = new Map()
         for (const e of this.enemies) byId.set(e.id, e)
       }
-      const eff = towerEffectiveStats(tower)
+      const eff = this.towerEff(tower)
       const cap = Math.max(0, Math.floor(eff.slowTargets))
       const r2 = eff.range * eff.range
       const inRange = (e: Enemy): boolean => {
-        const ep = this.path.getPointAt(e.pathT)
+        const ep = this.enemyPos(e)
         return (tower.pos.x - ep.x) ** 2 + (tower.pos.y - ep.y) ** 2 <= r2
       }
       let charmed = this.charmedByTower.get(tower.id)
@@ -671,8 +896,22 @@ export class GameScene extends Phaser.Scene {
       // 3. hold the slow on exactly the charmed set (stable → smooth; everyone else stays free)
       for (const id of charmed) {
         const e = byId.get(id)
-        if (e) applySlow(e, eff.slowMul, aura.refreshMs)
+        if (e) {
+          applySlow(e, eff.slowMul, aura.refreshMs)
+          this.charmedIds.add(id)
+        }
       }
+    }
+    // charm is otherwise invisible — tint held foes pink, and clear the tint the moment charm lifts
+    for (const id of this.charmedIds) {
+      if (wasCharmed.has(id)) continue
+      const s = this.enemySprites.get(id)
+      if (s && !(s instanceof Phaser.GameObjects.Arc)) s.setTint(0xff9ec7)
+    }
+    for (const id of wasCharmed) {
+      if (this.charmedIds.has(id)) continue
+      const s = this.enemySprites.get(id)
+      if (s && !(s instanceof Phaser.GameObjects.Arc)) s.clearTint()
     }
   }
 
@@ -682,12 +921,15 @@ export class GameScene extends Phaser.Scene {
     let spike = this.spikes.get(tower.id)
     const dmg = this.run.effectiveDamage(tower.god, eff.damage)
     if (!spike) {
-      spike = { pos: this.nearestPathPoint(tower.pos), charges: 0, damage: dmg, hitRadius: dep.hitRadius, hitIds: [] }
+      spike = { pos: this.nearestPathPoint(tower.pos), charges: 0, damage: dmg, hitRadius: dep.hitRadius, hitIds: new Set() }
       this.spikes.set(tower.id, spike)
     }
     spike.damage = dmg // keep current (boons/upgrades may have changed it)
     spike.charges = Math.min(spike.charges + 1, eff.maxCharges)
     this.drawSpike(tower.id, spike)
+    // the forge's "shot" is the charge itself — swing the hammer on each one
+    this.towerLastFire.set(tower.id, this.time.now)
+    this.towerArt.get(tower.id)?.playOnce('attack')
   }
 
   /** Each frame: a charged trap pops every ground enemy that walks over it (once each). */
@@ -698,13 +940,13 @@ export class GameScene extends Phaser.Scene {
       for (let j = this.enemies.length - 1; j >= 0; j--) {
         if (spike.charges <= 0) break
         const e = this.enemies[j]
-        if (e.flying || spike.hitIds.includes(e.id)) continue // ground-only, once per enemy
-        const ep = this.path.getPointAt(e.pathT)
+        if (e.flying || spike.hitIds.has(e.id)) continue // ground-only, once per enemy
+        const ep = this.enemyPos(e)
         const r = spike.hitRadius + damagedRadius(enemyRadius(e), e.hp / e.maxHp)
         if ((spike.pos.x - ep.x) ** 2 + (spike.pos.y - ep.y) ** 2 <= r * r) {
-          spike.hitIds.push(e.id)
+          spike.hitIds.add(e.id)
           spike.charges -= 1
-          this.hitEnemy(e, spike.damage)
+          this.hitEnemy(e, spike.damage, 0xd6a15a) // forge-ember sparks
         }
       }
       this.drawSpike(ownerId, spike)
@@ -750,15 +992,15 @@ export class GameScene extends Phaser.Scene {
 
   // ── firing ──
   private fireHitscan(tower: Tower, target: Enemy, damage: number): void {
-    const to = this.path.getPointAt(target.pathT)
+    const to = this.enemyPos(target)
     if (tower.god === 'hermes') this.drawDart(tower.pos, to)
     else this.drawLightning(tower.pos, to)
-    this.hitEnemy(target, damage)
+    this.hitEnemy(target, damage, TOWER_STATS[tower.god].color) // element-hued impact sparks
   }
 
   private fireProjectile(tower: Tower, target: Enemy, damage: number, pierce: number, projectileSpeed: number): void {
     const stats = TOWER_STATS[tower.god]
-    const tp = this.path.getPointAt(target.pathT)
+    const tp = this.enemyPos(target)
     const proj = createProjectile(
       tower.pos,
       { x: tp.x - tower.pos.x, y: tp.y - tower.pos.y },
@@ -772,22 +1014,32 @@ export class GameScene extends Phaser.Scene {
     const projKey = `proj_${tower.god}`
     const sprite: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image = hasSprite(projKey)
       ? this.addSpriteScaled(projKey, proj.pos.x, proj.pos.y, 16).setRotation(angle).setDepth(7)
-      : this.add.rectangle(proj.pos.x, proj.pos.y, 16, 4, stats.color, 1).setRotation(angle).setDepth(7)
+      : this.add
+          .rectangle(proj.pos.x, proj.pos.y, 16, 4, stats.color, 1)
+          .setRotation(angle)
+          .setDepth(7)
+          .setBlendMode(Phaser.BlendModes.ADD) // the fallback bolt glows in its element color
     sprite.setData('trailColor', stats.color) // the fading trail reads this (an Image has no fillColor)
     this.projSprites.set(proj.id, sprite)
   }
 
   private updateProjectiles(dtSec: number): void {
+    // juice budget: trails thin out as the field crowds, so 3× swarm fights stay readable
+    const load = 30 / Math.max(30, this.enemies.length + this.projectiles.length)
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i]
       advanceProjectile(p, dtSec)
       const ps = this.projSprites.get(p.id)
       ps?.setPosition(p.pos.x, p.pos.y)
-      // juice: a short fading trail so fast shots read as motion (in the projectile's color)
-      if (ps && Math.random() < 0.55) {
+      // juice: a glowing speed-stretched streak so fast shots read as motion (in the projectile's color)
+      if (ps && Math.random() < 0.8 * load) {
         const trailColor = (ps.getData('trailColor') as number) ?? 0xffffff
-        const t = this.add.circle(p.pos.x, p.pos.y, 3, trailColor, 0.5).setDepth(6)
-        this.tweens.add({ targets: t, alpha: 0, scale: 0.2, duration: 170, onComplete: () => t.destroy() })
+        const t = this.add
+          .ellipse(p.pos.x, p.pos.y, 11, 3, trailColor, 0.55)
+          .setRotation(Math.atan2(p.vy, p.vx))
+          .setDepth(6)
+          .setBlendMode(Phaser.BlendModes.ADD)
+        this.tweens.add({ targets: t, alpha: 0, scaleX: 0.3, duration: 140, onComplete: () => t.destroy() })
       }
       // collide with enemies — iterate BACKWARD over the live array (no per-frame slice alloc): a hit
       // can only remove the current index or push split-children past the start point, both safe here.
@@ -796,12 +1048,12 @@ export class GameScene extends Phaser.Scene {
         const e = this.enemies[j]
         if (p.hitIds.includes(e.id)) continue
         if (e.flying && !p.canHitAir) continue // ground-only arrows pass under fliers
-        const ep = this.path.getPointAt(e.pathT)
+        const ep = this.enemyPos(e)
         const hitR = damagedRadius(enemyRadius(e), e.hp / e.maxHp) + 5
         if ((p.pos.x - ep.x) ** 2 + (p.pos.y - ep.y) ** 2 <= hitR * hitR) {
           p.hitIds.push(e.id)
           p.pierceLeft -= 1
-          this.hitEnemy(e, p.damage)
+          this.hitEnemy(e, p.damage, (ps?.getData('trailColor') as number) ?? 0xffffff)
         }
       }
       if (projectileDone(p, BOUNDS)) this.removeProjectile(i)
@@ -816,17 +1068,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── damage + feedback ──
-  private hitEnemy(enemy: Enemy, dmg: number): void {
+  private hitEnemy(enemy: Enemy, dmg: number, sparkColor = 0xffffff): void {
     // Pantheon Titan-Slayer adds damage vs bosses (before the boss's own damage cap clamps it).
     const amount = enemy.kind === 'boss' ? dmg * this.run.bossDamageMul : dmg
     const dead = damageEnemy(enemy, amount)
-    const pos = this.path.getPointAt(enemy.pathT)
+    const pos = this.enemyPos(enemy)
     if (dead) {
       this.killEnemy(enemy, pos)
       return
     }
     const sprite = this.enemySprites.get(enemy.id)
-    if (sprite) {
+    // juice budget: under heavy fire, throttle the per-sprite flash (no solid-white strobing) and
+    // thin the sparks so the swarm stays readable exactly when it matters most.
+    const now = this.time.now
+    const canFlash = sprite ? now - ((sprite.getData('lastFlashMs') as number) ?? -1e9) >= 90 : false
+    if (sprite && canFlash) {
+      sprite.setData('lastFlashMs', now)
       const frac = enemy.hp / enemy.maxHp
       if (sprite instanceof Phaser.GameObjects.Arc) {
         // placeholder disc: convey HP via radius shrink + heat-ramp fill, with a brief white flash
@@ -839,13 +1096,25 @@ export class GameScene extends Phaser.Scene {
         // real sprite: a brief white hit-flash (HP reads from the ring; recoloring art would muddy it)
         sprite.setTintFill(0xffffff)
         this.time.delayedCall(70, () => {
-          if (sprite.active) sprite.clearTint()
+          if (!sprite.active) return
+          // restore the charm tint instead of stripping it — the flash must not "cure" Aphrodite's hold
+          if (this.charmedIds.has(enemy.id)) sprite.setTint(0xff9ec7)
+          else sprite.clearTint()
         })
       }
-      // size-relative punch so a scaled sprite isn't resized to texture-native (a disc's scale is 1)
-      this.tweens.add({ targets: sprite, scaleX: '*=1.15', scaleY: '*=1.15', duration: 55, yoyo: true })
+      // punch anchored to the STORED baseline (explicit from/to): overlapping hits at 3× used to
+      // capture each other's inflated scale and permanently balloon the sprite — from: base pins it.
+      const base = (sprite.getData('baseScale') as number) ?? sprite.scale
+      this.tweens.add({
+        targets: sprite,
+        scaleX: { from: base, to: base * 1.15 },
+        scaleY: { from: base, to: base * 1.15 },
+        duration: 55,
+        yoyo: true,
+      })
     }
-    this.burst(pos.x, pos.y, 4, 0xffffff, 14, 2, 150)
+    const load = 30 / Math.max(30, this.enemies.length + this.projectiles.length)
+    this.burst(pos.x, pos.y, Math.max(1, Math.round(4 * load)), sparkColor, 14, 2, 150)
   }
 
   private killEnemy(enemy: Enemy, at: Vec2): void {
@@ -858,6 +1127,31 @@ export class GameScene extends Phaser.Scene {
     if (isBoss) this.cameras.main.shake(320, 0.013) // a felled boss rocks the screen
     const poof = this.add.circle(at.x, at.y, isBoss ? 20 : 12, color, 0.7).setDepth(7)
     this.tweens.add({ targets: poof, scale: isBoss ? 4 : 2.4, alpha: 0, duration: isBoss ? 360 : 200, onComplete: () => poof.destroy() })
+    // A death BEAT instead of a blink-out: detach the sprite (the sim forgets the enemy immediately —
+    // clear-gate/targeting untouched) and squash-fade the corpse, so the pixel body gets its moment.
+    const sprite = this.enemySprites.get(enemy.id)
+    if (sprite && sprite.active) {
+      this.enemySprites.delete(enemy.id) // detach BEFORE removeEnemy so it isn't destroyed with the enemy
+      this.enemyArt.delete(enemy.id) // …and no anim update touches the dying sprite
+      this.tweens.killTweensOf(sprite)
+      if (!(sprite instanceof Phaser.GameObjects.Arc)) sprite.setTint(damagedColor(color, 0.4))
+      const base = (sprite.getData('baseScale') as number) ?? sprite.scale
+      this.tweens.add({
+        targets: sprite,
+        scaleX: base * 1.3,
+        scaleY: base * 0.1,
+        y: sprite.y + 6,
+        alpha: 0,
+        angle: isBoss ? 90 : 0,
+        duration: isBoss ? 420 : 180,
+        ease: 'Sine.easeIn',
+        onComplete: () => sprite.destroy(),
+      })
+    }
+    // meaty kills pay VISIBLY — but only while the field is readable (skip the float under swarm load)
+    if (enemy.bounty >= BOUNTY_FLOAT_MIN && this.enemies.length <= BOUNTY_FLOAT_MAX_BODIES) {
+      this.floatText(at.x, at.y - 14, `+${enemy.bounty}`, '#ffe066')
+    }
     this.removeEnemy(enemy)
     this.run.onKill(enemy.bounty, enemy.kind === 'boss')
   }
@@ -881,7 +1175,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawLightning(from: Vec2, to: Vec2): void {
-    const g = this.add.graphics().setDepth(8)
+    const g = this.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD) // hitscan tracers glow
     g.lineStyle(3, 0xbfe3ff, 1)
     g.beginPath()
     g.moveTo(from.x, from.y)
@@ -899,14 +1193,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Poseidon's tidal slam — damage all GROUND foes in a radius + shove survivors back down the path. */
-  private fireSplash(center: Vec2, damage: number, radius: number, knockback: number): void {
+  private fireSplash(center: Vec2, damage: number, radius: number, knockback: number, sparkColor = 0x3a8fb5): void {
     this.drawSplash(center, radius)
     for (let j = this.enemies.length - 1; j >= 0; j--) {
       const e = this.enemies[j]
       if (e.flying) continue // a tidal wave hits the ground, not fliers
-      const ep = this.path.getPointAt(e.pathT)
+      const ep = this.enemyPos(e)
       if ((ep.x - center.x) ** 2 + (ep.y - center.y) ** 2 > radius * radius) continue
-      this.hitEnemy(e, damage)
+      this.hitEnemy(e, damage, sparkColor)
       if (knockback > 0 && e.hp > 0 && !e.knockbackImmune) e.pathT = Math.max(0, e.pathT - knockback) // shove survivors back
     }
   }
@@ -921,7 +1215,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Hermes' quick dart — a thin straight tracer, distinct from Zeus's jagged bolt. */
   private drawDart(from: Vec2, to: Vec2): void {
-    const g = this.add.graphics().setDepth(8)
+    const g = this.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD)
     g.lineStyle(2, 0xe8e0ff, 0.95)
     g.beginPath()
     g.moveTo(from.x, from.y)
@@ -940,25 +1234,28 @@ export class GameScene extends Phaser.Scene {
       // Range ring shows ONLY for the selected tower (or every tower in debug) — never always-on,
       // including the support auras (Aphrodite / Athena), which now behave like every other range ring.
       const selected = tower.id === this.selectedTowerId
-      const eff = towerEffectiveStats(tower)
-      const range = eff.range
       if (selected || showDebug) {
+        const eff = this.towerEff(tower) // folded ONLY when actually drawn (this loop runs every frame)
+        const range = eff.range
         const slow = TOWER_STATS[tower.god].slowAura
         const buff = TOWER_STATS[tower.god].auraBuff
+        // a slow "breath" on the selected ring so it reads live, not like a printed circle
+        const breathe = selected ? Math.sin(this.time.now / 300) * 2 : 0
         if (slow) {
           // Aphrodite's charm field — themed fill so the area reads, but only while selected
           g.fillStyle(0x6fd0e8, 0.1)
           g.fillCircle(tower.pos.x, tower.pos.y, range)
-          g.lineStyle(1.5, 0x6fd0e8, selected ? 0.85 : 0.45)
-          g.strokeCircle(tower.pos.x, tower.pos.y, range)
+          this.dashedCircle(g, tower.pos, range + breathe, 0x6fd0e8, selected ? 0.85 : 0.45)
         } else if (buff) {
           g.fillStyle(0xd9c879, 0.08)
           g.fillCircle(tower.pos.x, tower.pos.y, range)
-          g.lineStyle(1.5, 0xd9c879, selected ? 0.85 : 0.45)
-          g.strokeCircle(tower.pos.x, tower.pos.y, range)
+          this.dashedCircle(g, tower.pos, range + breathe, 0xd9c879, selected ? 0.85 : 0.45)
         } else {
-          g.lineStyle(1.5, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
-          g.strokeCircle(tower.pos.x, tower.pos.y, range)
+          if (selected) {
+            g.fillStyle(0xf5d061, 0.04) // a whisper of interior fill so coverage reads without occluding
+            g.fillCircle(tower.pos.x, tower.pos.y, range)
+          }
+          this.dashedCircle(g, tower.pos, range + breathe, selected ? 0xf5d061 : 0x6a7aa8, selected ? 0.85 : 0.5)
         }
         // mobile gods: also trace the orbit path so its sweep is legible
         const m = TOWER_STATS[tower.god].mobile
@@ -966,45 +1263,64 @@ export class GameScene extends Phaser.Scene {
           g.lineStyle(1, 0xc7b3ff, 0.45)
           g.strokeCircle(tower.center.x, tower.center.y, m.orbitRadius)
         }
-      }
-      if (showDebug) {
-        const target = selectTarget(
-          { pos: tower.pos, range, canHitAir: eff.canHitAir },
-          this.enemies,
-          this.enemyPos,
-          tower.targeting,
-        )
-        if (target) {
-          const tp = this.path.getPointAt(target.pathT)
-          g.lineStyle(1, 0xf5d061, 0.7)
-          g.lineBetween(tower.pos.x, tower.pos.y, tp.x, tp.y)
+        if (showDebug) {
+          const target = selectTarget(
+            { pos: tower.pos, range, canHitAir: eff.canHitAir },
+            this.enemies,
+            this.enemyPos,
+            tower.targeting,
+          )
+          if (target) {
+            const tp = this.enemyPos(target)
+            g.lineStyle(1, 0xf5d061, 0.7)
+            g.lineBetween(tower.pos.x, tower.pos.y, tp.x, tp.y)
+          }
         }
       }
     }
 
-    // radial HP ring on each damaged enemy (the "shown only while hurt" secondary signal)
+    // chunky underslung HP bar on each damaged enemy (pixel-crisp fillRects — the old anti-aliased
+    // radial arc fought the crisp sprite look). Sits by the feet, next to the ground shadow.
     for (const e of this.enemies) {
-      if (e.hp >= e.maxHp) continue
-      const p = this.path.getPointAt(e.pathT)
+      if (e.hp >= e.maxHp || e.kind === 'boss') continue
+      const p = this.enemyPos(e)
       const frac = Math.max(0, e.hp / e.maxHp)
-      const r = damagedRadius(enemyRadius(e), frac) + 4
-      g.lineStyle(2, 0x000000, 0.4)
-      g.strokeCircle(p.x, p.y, r)
-      g.lineStyle(2, frac > 0.5 ? 0x6be36b : frac > 0.25 ? 0xe8b04a : 0xd2402f, 0.95)
-      g.beginPath()
-      g.arc(p.x, p.y, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2, false)
-      g.strokePath()
+      const w = enemyRadius(e) * 2
+      const h = 3
+      const x = p.x - w / 2
+      const y = p.y + enemyRadius(e) + 7
+      g.fillStyle(0x000000, 0.7)
+      g.fillRect(x - 1, y - 1, w + 2, h + 2)
+      g.fillStyle(frac > 0.5 ? 0x6be36b : frac > 0.25 ? 0xe8b04a : 0xd2402f, 1)
+      g.fillRect(x, y, Math.max(1, Math.round(w * frac)), h)
     }
 
     this.renderBossBars(g)
   }
 
-  /** A prominent floating health bar above each live boss (additive to the per-enemy HP ring). */
+  /** A dashed circle (Graphics has no native dash) with a slowly marching phase — ~24 arc segments. */
+  private dashedCircle(g: Phaser.GameObjects.Graphics, c: Vec2, r: number, color: number, alpha: number): void {
+    const SEGS = 24
+    const phase = this.time.now / 4000 // gentle marching-ants drift
+    g.lineStyle(1.5, color, alpha)
+    for (let i = 0; i < SEGS; i += 2) {
+      const a0 = ((i + phase) / SEGS) * Math.PI * 2
+      const a1 = ((i + 1.35 + phase) / SEGS) * Math.PI * 2
+      g.beginPath()
+      g.arc(c.x, c.y, r, a0, a1, false)
+      g.strokePath()
+    }
+  }
+
+  /** A prominent floating health bar above each live boss, with a white "damage ghost" chip segment. */
   private renderBossBars(g: Phaser.GameObjects.Graphics): void {
     for (const e of this.enemies) {
       if (e.kind !== 'boss') continue
-      const p = this.path.getPointAt(e.pathT)
+      const p = this.enemyPos(e)
       const frac = Math.max(0, Math.min(1, e.hp / e.maxHp))
+      // the ghost lags the real fill and drains toward it — recent damage reads as a bright chip
+      const ghost = Math.max(frac, (this.lastBossFrac.get(e.id) ?? frac) - 0.008)
+      this.lastBossFrac.set(e.id, ghost)
       const w = enemyRadius(e) * 2 + 24
       const h = 7
       const x = p.x - w / 2
@@ -1013,8 +1329,15 @@ export class GameScene extends Phaser.Scene {
       g.fillRect(x - 1, y - 1, w + 2, h + 2)
       g.fillStyle(0x3a1014, 1)
       g.fillRect(x, y, w, h)
+      if (ghost > frac) {
+        g.fillStyle(0xffffff, 0.6)
+        g.fillRect(x, y, w * ghost, h)
+      }
       g.fillStyle(frac > 0.5 ? 0xf5d061 : frac > 0.25 ? 0xe8843a : 0xd2402f, 1)
       g.fillRect(x, y, w * frac, h)
+      // 25% notch ticks — reading boss HP at a glance, BTD6-style
+      g.fillStyle(0x000000, 0.55)
+      for (const q of [0.25, 0.5, 0.75]) g.fillRect(x + w * q, y, 1, h)
     }
   }
 
@@ -1079,13 +1402,32 @@ export class GameScene extends Phaser.Scene {
     const placingGod = store.placingGod
     if (placingGod) {
       const stats = TOWER_STATS[placingGod]
-      if (!this.canPlaceGod(placingGod, pos)) return // invalid spot: keep placing
-      if (!this.run.purchase(stats.cost)) return // too poor: keep placing
+      if (!this.canPlaceGod(placingGod, pos)) {
+        this.flashDenied(pos) // a silent no-op reads as an input bug — answer the click
+        return // invalid spot: keep placing
+      }
+      if (!this.run.purchase(stats.cost)) {
+        this.flashDenied(pos)
+        store.denyGold() // the TopBar gold chip shakes — "you can't afford this"
+        return // too poor: keep placing
+      }
       this.placeTower(placingGod, pos)
-      store.cancelPlacing()
+      // shift-click chains placements (BTD6 muscle memory) — keep placing while gold lasts
+      if (!(p.event as MouseEvent).shiftKey) store.cancelPlacing()
       return
     }
     this.selectTowerAt(pos)
+  }
+
+  /** A quick red "nope" ring at the cursor for denied placement/purchase clicks. */
+  private flashDenied(pos: Vec2): void {
+    const ring = this.add.circle(pos.x, pos.y, 14, 0x000000, 0).setStrokeStyle(2.5, 0xff5566, 0.9).setDepth(11)
+    this.tweens.add({ targets: ring, scale: 1.7, alpha: 0, duration: 180, onComplete: () => ring.destroy() })
+    if (this.ghostSprite?.visible) {
+      const gs = this.ghostSprite
+      const baseX = gs.x
+      this.tweens.add({ targets: gs, x: baseX - 3, duration: 40, yoyo: true, repeat: 2 }) // a small headshake
+    }
   }
 
   private selectTowerAt(pos: Vec2): void {
@@ -1132,7 +1474,7 @@ export class GameScene extends Phaser.Scene {
     useGameStore.getState().setSelectedTower({
       id: tower.id,
       god: tower.god,
-      sellValue: sellValue(tower.god),
+      sellValue: sellValue(tower),
       targeting: tower.targeting,
       // only gods that actually acquire a target expose a priority (not farms / auras / spike forges)
       targets: stats.damage > 0 && !stats.deployable,
@@ -1145,9 +1487,14 @@ export class GameScene extends Phaser.Scene {
     const tower = this.selectedTowerId ? this.towers.find((t) => t.id === this.selectedTowerId) : null
     if (!tower || !canUpgradePath(tower, path)) return
     const nt = nextTier(tower.god, path, path === 'A' ? tower.pathA : tower.pathB)
-    if (!nt || !this.run.purchase(nt.cost)) return
+    if (!nt) return
+    if (!this.run.purchase(nt.cost)) {
+      useGameStore.getState().denyGold() // answered, not silent — the gold chip shakes
+      return
+    }
     if (path === 'A') tower.pathA++
     else tower.pathB++
+    tower.invested += nt.cost // upgrade gold counts toward the sell refund (BTD6-style)
     this.refreshSelected()
   }
 
@@ -1159,18 +1506,24 @@ export class GameScene extends Phaser.Scene {
     this.refreshSelected()
   }
 
-  /** Sell the selected tower: refund part of its cost and remove it. */
+  /** Sell the selected tower: refund part of its TOTAL investment (base + upgrades) and remove it. */
   private sellSelectedTower(): void {
     const id = this.selectedTowerId
     if (!id) return
     const idx = this.towers.findIndex((t) => t.id === id)
     if (idx < 0) return
     const t = this.towers[idx]
-    this.run.grantGold(sellValue(t.god))
-    this.towerSprites.get(id)?.destroy()
+    this.run.grantGold(sellValue(t))
+    const sprite = this.towerSprites.get(id)
+    if (sprite) this.tweens.killTweensOf(sprite) // the infinite idle-bob (and any tell) must die with it
+    sprite?.destroy()
     this.towerSprites.delete(id)
     this.towerArt.delete(id)
     this.towerLastFire.delete(id)
+    this.towerShadows.get(id)?.destroy()
+    this.towerShadows.delete(id)
+    this.effCache.delete(id)
+    this.stepTargets.delete(id)
     this.homeBaseGfx.get(id)?.destroy() // remove a mobile god's home base with it
     this.homeBaseGfx.delete(id)
     this.charmedByTower.delete(id) // drop an Aphrodite's charm set
@@ -1188,17 +1541,67 @@ export class GameScene extends Phaser.Scene {
       const income = demeterIncome(t, this.run.wave)
       if (income <= 0) continue
       this.run.grantGold(income)
-      // play Demeter's harvest animation once on payout ("making money"), then settle back to idle
-      const art = this.towerArt.get(t.id)
-      if (art) {
-        art.play('attack')
-        this.time.delayedCall(700, () => art.play('idle'))
-      }
-      const txt = this.add
-        .text(t.pos.x, t.pos.y - 20, `+${income}`, { fontFamily: 'Georgia, serif', fontSize: '15px', color: '#ffe066', fontStyle: 'bold' })
-        .setOrigin(0.5)
-        .setDepth(9)
-      this.tweens.add({ targets: txt, y: t.pos.y - 48, alpha: 0, duration: 1000, onComplete: () => txt.destroy() })
+      // play Demeter's harvest animation once on payout ("making money") — playOnce returns to idle by
+      // itself when the cycle ends, so there's no stale timer to fire on a farm sold mid-harvest.
+      this.towerArt.get(t.id)?.playOnce('attack')
+      this.floatText(t.pos.x, t.pos.y - 20, `+${income}`, '#ffe066')
+    }
+  }
+
+  /** A floating outlined number/label with a pop-in — the one shared style for all payouts/bounties. */
+  private floatText(x: number, y: number, str: string, color: string): void {
+    const txt = this.add
+      .text(x, y, str, { fontFamily: '"Courier New", monospace', fontSize: '15px', color, fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setDepth(9)
+      .setStroke('#000000', 4)
+      .setShadow(0, 2, '#000000', 0, true, true)
+      .setResolution(2)
+    txt.setScale(0.5)
+    this.tweens.add({ targets: txt, scale: 1, duration: 90, ease: 'Back.easeOut' })
+    this.tweens.add({ targets: txt, y: y - 26, alpha: 0, delay: 90, duration: 700, onComplete: () => txt.destroy() })
+  }
+
+  /** Ambient life: an ember drifting up from the Tartarus rift, or a gold mote at the Olympus gate. */
+  private spawnAmbient(kind: 'ember' | 'mote'): void {
+    if (this.ambientCount >= 14) return // hard cap — atmosphere, not weather
+    this.ambientCount++
+    const src = kind === 'ember' ? OLYMPUS_PATH[0] : OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
+    const color = kind === 'ember' ? (Math.random() < 0.5 ? 0xd83a2a : 0xffb070) : 0xf5d061
+    const p = this.add
+      .circle(src.x + (Math.random() - 0.5) * 60, src.y - 6, 1 + Math.random(), color, 0.7)
+      .setDepth(2.5)
+      .setBlendMode(Phaser.BlendModes.ADD)
+    this.tweens.add({
+      targets: p,
+      y: p.y - (60 + Math.random() * 40),
+      x: p.x + (Math.random() - 0.5) * 28,
+      alpha: 0,
+      duration: 2500 + Math.random() * 1500,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        p.destroy()
+        this.ambientCount--
+      },
+    })
+  }
+
+  /** The Minotaur's charge used to read as teleport-jank — give the burst a visible tell. */
+  private syncChargeTell(enemy: Enemy): void {
+    if (!enemy.charge || !enemy.baseSpeed) return
+    const sprite = this.enemySprites.get(enemy.id)
+    if (!sprite || !sprite.active) return
+    const charging = enemy.speed > enemy.baseSpeed * 1.01
+    if ((sprite.getData('charging') as boolean | undefined) === charging) return
+    sprite.setData('charging', charging)
+    if (charging) {
+      this.cameras.main.shake(110, 0.003)
+      const pos = this.enemyPos(enemy)
+      this.burst(pos.x, pos.y + 8, 6, 0x8a7f6a, 20, 2, 260) // hooves kick up dust
+      if (!(sprite instanceof Phaser.GameObjects.Arc)) sprite.setTint(0xff8a5a)
+    } else if (!(sprite instanceof Phaser.GameObjects.Arc)) {
+      if (this.charmedIds.has(enemy.id)) sprite.setTint(0xff9ec7)
+      else sprite.clearTint()
     }
   }
 
@@ -1212,17 +1615,35 @@ export class GameScene extends Phaser.Scene {
     return img.setScale(s).setData('baseScale', s)
   }
 
-  /** A quick lunge toward the target on each shot. Facing + the cast animation are driven per-frame. */
+  /** The REAL fire moment: restart the cast so frame 0 lands exactly on the shot, plus a quick lunge. */
   private towerAttackTell(tower: Tower, target: Enemy): void {
-    this.towerLastFire.set(tower.id, this.time.now) // marks an actual shot → holds the cast animation
+    this.towerLastFire.set(tower.id, this.time.now) // marks an actual shot → holds combat facing
     const art = this.towerArt.get(tower.id)
     if (!art || !art.sprite.active) return
-    const tx = this.path.getPointAt(target.pathT).x
-    this.tweens.add({ targets: art.sprite, scaleX: '*=1.1', scaleY: '*=1.1', duration: 80, yoyo: true })
-    this.tweens.add({ targets: art.sprite, x: tower.pos.x + (tx < tower.pos.x ? -5 : 5), duration: 80, yoyo: true })
+    art.playOnce('attack') // the cast is now synced to shots, not to "a foe exists somewhere in range"
+    // lunge with EXPLICIT from/to anchored to the stored baseline: overlapping tells at high fire rates
+    // used to capture each other's inflated scale/offset and ratchet the sprite bigger / off-center.
+    const base = (art.sprite.getData('baseScale') as number) ?? art.sprite.scaleX
+    this.tweens.add({
+      targets: art.sprite,
+      scaleX: { from: base, to: base * 1.1 },
+      scaleY: { from: base, to: base * 1.1 },
+      duration: 80,
+      yoyo: true,
+    })
+    if (!TOWER_STATS[tower.god].mobile) {
+      // (mobile gods skip the x-lunge — updateMobileTowers owns their position every frame)
+      const tx = this.enemyPos(target).x
+      this.tweens.add({
+        targets: art.sprite,
+        x: { from: tower.pos.x, to: tower.pos.x + (tx < tower.pos.x ? -5 : 5) },
+        duration: 80,
+        yoyo: true,
+      })
+    }
   }
 
-  /** Per-frame: each pixel tower faces its nearest in-range target and plays its cast (else idles), advancing frames. */
+  /** Per-frame: face the current target (or travel direction) and advance animation frames. */
   private updateTowerAnims(dtMs: number): void {
     for (const tower of this.towers) {
       const art = this.towerArt.get(tower.id)
@@ -1232,21 +1653,37 @@ export class GameScene extends Phaser.Scene {
         art.update(dtMs)
         continue
       }
-      const eff = towerEffectiveStats(tower)
-      const aura = this.auraAt(tower.pos)
-      const target = selectTarget(
-        { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
-        this.enemies,
-        this.enemyPos,
-        tower.targeting,
-      )
-      if (target) {
-        art.setFacing(dirToTarget(tower.pos, this.path.getPointAt(target.pathT)))
-        this.towerLastFire.set(tower.id, this.time.now) // a foe is in range → "engaged" (covers non-firing gods too)
+      const stats = TOWER_STATS[tower.god]
+      // FIRING gods play their cast via towerAttackTell's playOnce — frame 0 lands ON the shot instead
+      // of a permanent in-range loop with no relation to when bolts appear. SUPPORT gods (Aphrodite's
+      // charm, Athena's aura) have no shot, so "a foe in my field" keeps their working loop running.
+      const support = stats.damage <= 0 && !stats.deployable
+      // Reuse the fire loop's target pick this step; only towers it skipped (on cooldown / support)
+      // re-acquire here — facing still needs a target every frame, but never a SECOND acquisition.
+      let target = this.stepTargets.get(tower.id)
+      if (target === undefined) {
+        const eff = this.towerEff(tower)
+        const aura = this.auraAt(tower.pos)
+        target = selectTarget(
+          { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
+          this.enemies,
+          this.enemyPos,
+          tower.targeting,
+        )
       }
-      // Hold the cast briefly after the last engaged frame so a flickering target can't strobe it to idle.
-      const engaged = this.time.now - (this.towerLastFire.get(tower.id) ?? -1e9) < ATTACK_HOLD_MS
-      art.play(engaged ? 'attack' : 'idle')
+      if (target) {
+        art.setFacing(dirToTarget(tower.pos, this.enemyPos(target)))
+        if (support) this.towerLastFire.set(tower.id, this.time.now) // support: a held foe IS engagement
+      } else if (stats.mobile) {
+        // no foe in range: a mobile god faces his direction of travel (the orbit tangent — velocity of
+        // (cosφ, sinφ)·r is φ+π/2) instead of moonwalking around the circle in his last combat facing
+        art.setFacing(dir8(tower.orbitPhase + Math.PI / 2))
+      }
+      if (support) {
+        // hold the working loop briefly after the last engaged frame so a flickering hold can't strobe it
+        const engaged = this.time.now - (this.towerLastFire.get(tower.id) ?? -1e9) < ATTACK_HOLD_MS
+        art.play(engaged ? 'attack' : 'idle')
+      }
       art.update(dtMs)
     }
   }
@@ -1279,9 +1716,12 @@ export class GameScene extends Phaser.Scene {
     // bob. Falls back to the disc badge until a god's directional art (`<god>_south` …) is dropped in.
     if (!stats.mobile && DirAnimSprite.hasDirectional(this, god)) {
       const art = new DirAnimSprite(this, god, pos.x, pos.y, TOWER_SPRITE_PX, 6)
+      art.sprite.setData('baseScale', art.sprite.scaleX) // the tell's lunge tweens anchor to this
       this.towerSprites.set(tower.id, art.sprite)
       this.towerArt.set(tower.id, art)
-      this.tweens.add({ targets: art.sprite, y: pos.y - 3, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+      this.addTowerShadow(tower.id, pos.x, pos.y + TOWER_SPRITE_PX * 0.36, TOWER_SPRITE_PX)
+      this.placeThunk(tower.id, pos)
+      this.tweens.add({ targets: art.sprite, y: pos.y - 3, delay: 160, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
       return
     }
     if (stats.mobile) {
@@ -1292,17 +1732,55 @@ export class GameScene extends Phaser.Scene {
       if (DirAnimSprite.hasDirectional(this, god)) {
         // pixel mobile god: the flier is his animated sprite — faces + casts while it orbits (a darting scout)
         const art = new DirAnimSprite(this, god, pos.x, pos.y, 52, 6)
+        art.sprite.setData('baseScale', art.sprite.scaleX)
         this.towerSprites.set(tower.id, art.sprite)
         this.towerArt.set(tower.id, art)
+        this.addTowerShadow(tower.id, pos.x, pos.y + 18, 40) // an airborne scout's small trailing shadow
       } else {
         const flier = this.add
           .container(pos.x, pos.y, [this.add.circle(0, 0, 7, stats.color, 1).setStrokeStyle(2, 0xffffff)])
           .setDepth(6)
         this.towerSprites.set(tower.id, flier)
       }
+      this.placeThunk(tower.id, tower.center)
       return
     }
     const container = this.makeBadge(god).setPosition(pos.x, pos.y).setDepth(6)
     this.towerSprites.set(tower.id, container)
+    this.addTowerShadow(tower.id, pos.x, pos.y + 14, 34)
+    this.placeThunk(tower.id, pos)
+  }
+
+  private addTowerShadow(towerId: string, x: number, y: number, sizePx: number): void {
+    this.towerShadows.set(towerId, this.add.ellipse(x, y, sizePx * 0.55, sizePx * 0.18, 0x000000, 0.3).setDepth(3.5))
+  }
+
+  /** Placement lands with WEIGHT: a settle-squash on the sprite, ground dust, an expanding ring, a tiny shake. */
+  private placeThunk(towerId: string, pos: Vec2): void {
+    const sprite = this.towerSprites.get(towerId)
+    if (sprite && 'setScale' in sprite) {
+      const base = ((sprite as Phaser.GameObjects.Sprite).getData?.('baseScale') as number) ?? sprite.scale ?? 1
+      sprite.setScale(base * 0.8, base * 1.25)
+      sprite.y = pos.y - 8
+      this.tweens.add({ targets: sprite, scaleX: base, scaleY: base, y: pos.y, duration: 140, ease: 'Back.easeOut' })
+    }
+    // ground dust hugging the floor (flattened spread) + an expanding settle ring
+    for (let i = 0; i < 7; i++) {
+      const a = Math.random() * Math.PI * 2
+      const d = 14 + Math.random() * 12
+      const s = this.add.circle(pos.x, pos.y + 10, 2, 0x8a7f6a, 0.8).setDepth(5)
+      this.tweens.add({
+        targets: s,
+        x: pos.x + Math.cos(a) * d,
+        y: pos.y + 10 + Math.sin(a) * d * 0.35,
+        alpha: 0,
+        duration: 240,
+        onComplete: () => s.destroy(),
+      })
+    }
+    const ring = this.add.circle(pos.x, pos.y + 8, 16, 0x000000, 0).setStrokeStyle(1.5, 0xd8cfa8, 0.7).setDepth(5)
+    ring.setScale(0.3)
+    this.tweens.add({ targets: ring, scale: 1.4, alpha: 0, duration: 260, onComplete: () => ring.destroy() })
+    this.cameras.main.shake(60, 0.002)
   }
 }

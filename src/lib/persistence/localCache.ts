@@ -59,3 +59,13 @@ export function writeLocalName(name: string): void {
     /* ignore */
   }
 }
+
+/** Remove the stored name (sign-out) — "no key" means "no chosen name", so readers fall back. */
+export function clearLocalName(): void {
+  if (!hasStorage()) return
+  try {
+    window.localStorage.removeItem(NAME_KEY)
+  } catch {
+    /* ignore */
+  }
+}

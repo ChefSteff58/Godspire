@@ -12,8 +12,10 @@ export function RightRail() {
   return (
     <aside className="flex w-44 shrink-0 flex-col gap-2 overflow-y-auto border-l border-white/10 bg-slate-900/90 p-2">
       <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Gods</h3>
-      <p className="px-1 text-[11px] leading-tight text-slate-500">Click a god, then click the map to place.</p>
-      {GOD_ORDER.map((god) => {
+      <p className="px-1 text-[11px] leading-tight text-slate-500">
+        Click a god (or press its number), then click the map. Shift-click places several.
+      </p>
+      {GOD_ORDER.map((god, i) => {
         const stats = TOWER_STATS[god]
         const active = placingGod === god
         const affordable = gold >= stats.cost
@@ -22,7 +24,7 @@ export function RightRail() {
             key={god}
             onClick={() => (active ? cancelPlacing() : beginPlacing(god))}
             disabled={!affordable && !active}
-            title={stats.blurb}
+            title={`${stats.blurb} — hotkey ${i + 1}`}
             className={`flex items-center gap-2 rounded-lg p-2 text-left transition ${
               active
                 ? 'bg-amber-400 text-slate-900'
@@ -42,6 +44,9 @@ export function RightRail() {
             )}
             <span className="flex min-w-0 flex-col">
               <span className="flex items-center gap-1 text-sm font-bold">
+                <span className={`mr-0.5 rounded px-1 text-[10px] font-mono ${active ? 'bg-slate-900/20 text-slate-800' : 'bg-black/40 text-slate-400'}`}>
+                  {i + 1}
+                </span>
                 {stats.name}
                 <span className={active ? 'text-slate-800' : 'text-amber-300'}>🪙{stats.cost}</span>
               </span>

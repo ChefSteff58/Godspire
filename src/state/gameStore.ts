@@ -10,6 +10,8 @@ export interface RunSummary {
   wave: number
   favor: number
   bestWave: number
+  /** Career best BEFORE this run — lets the modal distinguish a true new best from a tie. */
+  prevBestWave: number
   kills: number
   bossesKilled: number
   goldEarned: number
@@ -74,6 +76,8 @@ interface GameStore {
   leaderboardOpen: boolean
   /** Speed to restore when a full-screen menu overlay closes (stashed on open). */
   preMenuScale: number
+  /** Bumped whenever a purchase is denied for lack of gold — the TopBar gold chip shakes on change. */
+  goldDeniedTick: number
 
   // M3 run mirrors (written only by mirrorRun)
   gold: number
@@ -104,6 +108,8 @@ interface GameStore {
   closePantheon: () => void
   openLeaderboard: () => void
   closeLeaderboard: () => void
+  /** Signal a can't-afford click (scene → HUD feedback). */
+  denyGold: () => void
 
   mirrorRun: (s: RunSnapshot) => void
   setRunSummary: (s: RunSummary | null) => void
@@ -148,6 +154,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   pantheonOpen: false,
   leaderboardOpen: false,
   preMenuScale: 1,
+  goldDeniedTick: 0,
   intents: [],
   ...FRESH_RUN,
 
@@ -156,12 +163,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
   cancelPlacing: () => set({ placingGod: null }),
   toggleDebug: () => set((s) => ({ showDebug: !s.showDebug })),
   setSpeed: (timeScale) => set({ timeScale }),
+  denyGold: () => set((s) => ({ goldDeniedTick: s.goldDeniedTick + 1 })),
   toggleAutoStart: () => set((s) => ({ autoStart: !s.autoStart })),
   // Full-screen menu overlays pause the run (stash the prior speed, restore it on close).
-  openPantheon: () => set((s) => ({ pantheonOpen: true, preMenuScale: s.timeScale === 0 ? 1 : s.timeScale, timeScale: 0 })),
-  closePantheon: () => set((s) => ({ pantheonOpen: false, timeScale: s.preMenuScale })),
-  openLeaderboard: () => set((s) => ({ leaderboardOpen: true, preMenuScale: s.timeScale === 0 ? 1 : s.timeScale, timeScale: 0 })),
-  closeLeaderboard: () => set((s) => ({ leaderboardOpen: false, timeScale: s.preMenuScale })),
+  // Overlay-aware: with BOTH overlays stackable from the always-clickable TopBar, only the FIRST
+  // open stashes the player's speed and only the LAST close restores it — otherwise closing one
+  // overlay would unpause combat behind the other and lose the stashed 3×.
+  openPantheon: () =>
+    set((s) =>
+      s.pantheonOpen
+        ? s
+        : {
+            pantheonOpen: true,
+            preMenuScale: s.leaderboardOpen ? s.preMenuScale : s.timeScale === 0 ? 1 : s.timeScale,
+            timeScale: 0,
+          },
+    ),
+  closePantheon: () =>
+    set((s) => (s.leaderboardOpen ? { pantheonOpen: false } : { pantheonOpen: false, timeScale: s.preMenuScale })),
+  openLeaderboard: () =>
+    set((s) =>
+      s.leaderboardOpen
+        ? s
+        : {
+            leaderboardOpen: true,
+            preMenuScale: s.pantheonOpen ? s.preMenuScale : s.timeScale === 0 ? 1 : s.timeScale,
+            timeScale: 0,
+          },
+    ),
+  closeLeaderboard: () =>
+    set((s) => (s.pantheonOpen ? { leaderboardOpen: false } : { leaderboardOpen: false, timeScale: s.preMenuScale })),
 
   // one batched write per frame — never tear gold/lives across separate setters
   mirrorRun: (s) =>

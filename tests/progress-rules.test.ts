@@ -13,6 +13,7 @@ import {
   mergeProgress,
   migrateProgress,
 } from '../src/core/progress/rules'
+import { rowToProgress } from '../src/lib/persistence/progressRepo'
 import type { PlayerProgress } from '../src/core/progress/types'
 
 const NOW = '2026-06-24T12:00:00.000Z'
@@ -125,6 +126,42 @@ describe('mergeProgress', () => {
     const cloud = make({ stats: { runsPlayed: 3, bestWave: 18, totalKills: 80, bossesKilled: 2, totalGoldSpent: 12000, totalTowersBuilt: 25 }, updatedAt: NOW })
     const merged = mergeProgress(local, cloud)
     expect(merged.stats).toEqual({ runsPlayed: 5, bestWave: 18, totalKills: 100, bossesKilled: 4, totalGoldSpent: 12000, totalTowersBuilt: 30 })
+  })
+
+  it('a PRISTINE trigger-created cloud row loses the merge even with a newer timestamp', () => {
+    // A fresh anon signup's row (all schema defaults) used to arrive stamped now() — newer than
+    // any local save — and take unlockedNodes/settings WHOLE, wiping real progress. rowToProgress
+    // detects the exact default shape and forces it to the epoch so the local save wins.
+    const local = make({
+      favor: 300,
+      unlockedNodes: ['war_dmg_1', 'wisdom_life_1'],
+      settings: { muted: true },
+      updatedAt: EARLIER,
+    })
+    const pristineCloud = rowToProgress({
+      favor: 0,
+      unlocked_nodes: [],
+      settings: {},
+      stats: {},
+      updated_at: NOW, // newer than the local save — must still lose
+    })
+    const merged = mergeProgress(local, pristineCloud)
+    expect(merged.unlockedNodes).toEqual(['war_dmg_1', 'wisdom_life_1'])
+    expect(merged.settings).toEqual({ muted: true })
+    expect(merged.favor).toBe(300)
+    expect(merged.updatedAt).toBe(EARLIER)
+  })
+
+  it('a REAL settings-only cloud save is NOT misread as pristine', () => {
+    const cloud = rowToProgress({
+      favor: 0,
+      unlocked_nodes: [],
+      settings: { muted: true }, // one real field → not the trigger-default shape
+      stats: {},
+      updated_at: NOW,
+    })
+    const local = make({ settings: { muted: false }, updatedAt: EARLIER })
+    expect(mergeProgress(local, cloud).settings).toEqual({ muted: true }) // newer side wins as usual
   })
 })
 

@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
 import { AVAILABLE_SPRITES } from '../assets/manifest'
+import { useSessionStore } from '../../state/sessionStore'
+import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
 /**
  * Loads whatever art currently exists (per the manifest's glob), then hands off to GameScene. Because
@@ -19,6 +21,27 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.scene.start('Game')
+    // Wait for the session boot (cloud progress merge) before starting the run — GameScene.create
+    // reads getModifiers() ONCE at run start, so starting mid-boot would silently drop every Pantheon
+    // bonus on a fresh device. Offline / unconfigured resolves to 'offline' quickly, so this only
+    // ever waits on a real cloud round-trip.
+    if (useSessionStore.getState().status !== 'booting') {
+      this.scene.start('Game')
+      return
+    }
+    const splash = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Consulting the Fates…', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '18px',
+        color: '#d9c879',
+      })
+      .setOrigin(0.5)
+    this.tweens.add({ targets: splash, alpha: 0.4, duration: 600, yoyo: true, repeat: -1 })
+    const unsub = useSessionStore.subscribe((s) => {
+      if (s.status === 'booting') return
+      unsub()
+      this.scene.start('Game')
+    })
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsub) // never leak the subscription
   }
 }

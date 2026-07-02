@@ -85,32 +85,37 @@ export class PathSystem {
     this.length = total
   }
 
+  /**
+   * Segment end-index for a distance along the path: the FIRST i ≥ 1 with cumulative[i] ≥ target.
+   * Binary search — the cumulative array is sorted, and the rounded path has ~90 vertices, so this
+   * turns every hot getPointAt/getAngleAt lookup from a linear scan into ~7 steps.
+   */
+  private segmentIndex(target: number): number {
+    let lo = 1
+    let hi = this.cumulative.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (this.cumulative[mid] < target) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+
   /** World position at progress `t` in [0,1] (clamped). */
   getPointAt(t: number): Vec2 {
     const target = Math.max(0, Math.min(1, t)) * this.length
-    for (let i = 1; i < this.cumulative.length; i++) {
-      if (target <= this.cumulative[i]) {
-        const segStart = this.cumulative[i - 1]
-        const segLen = this.cumulative[i] - segStart || 1
-        return lerp(this.waypoints[i - 1], this.waypoints[i], (target - segStart) / segLen)
-      }
-    }
-    const last = this.waypoints[this.waypoints.length - 1]
-    return { x: last.x, y: last.y }
+    const i = this.segmentIndex(target)
+    const segStart = this.cumulative[i - 1]
+    const segLen = this.cumulative[i] - segStart || 1
+    return lerp(this.waypoints[i - 1], this.waypoints[i], (target - segStart) / segLen)
   }
 
   /** Facing angle (radians) — direction of travel at progress `t`. */
   getAngleAt(t: number): number {
     const target = Math.max(0, Math.min(1, t)) * this.length
-    for (let i = 1; i < this.cumulative.length; i++) {
-      if (target <= this.cumulative[i]) {
-        const a = this.waypoints[i - 1]
-        const b = this.waypoints[i]
-        return Math.atan2(b.y - a.y, b.x - a.x)
-      }
-    }
-    const a = this.waypoints[this.waypoints.length - 2]
-    const b = this.waypoints[this.waypoints.length - 1]
+    const i = this.segmentIndex(target)
+    const a = this.waypoints[i - 1]
+    const b = this.waypoints[i]
     return Math.atan2(b.y - a.y, b.x - a.x)
   }
 }
