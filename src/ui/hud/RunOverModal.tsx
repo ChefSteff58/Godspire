@@ -74,7 +74,7 @@ export function RunOverModal() {
         </button>
         <button
           onClick={playAgain}
-          className="rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
+          className="pixel-btn pixel-btn--gold rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
         >
           ⚔️ Play again
         </button>

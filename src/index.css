@@ -23,28 +23,30 @@ body {
  * rendered at 12px on screen — tuned per-panel at integration.
  */
 .pixel-panel {
-  border: 12px solid transparent;
-  border-image: url('./ui/assets/panels/panel_stone.png') 24 fill / 12px repeat;
+  border: 14px solid transparent;
+  border-image: url('./ui/assets/panels/panel_stone.png') 42 fill / 14px repeat;
   image-rendering: pixelated;
 }
 .pixel-card {
-  border: 10px solid transparent;
-  border-image: url('./ui/assets/panels/card.png') 20 fill / 10px repeat;
+  /* same stone frame, tighter band — sized for the rail cards / draft cards */
+  border: 9px solid transparent;
+  border-image: url('./ui/assets/panels/panel_stone.png') 42 fill / 9px repeat;
   image-rendering: pixelated;
 }
 .pixel-chip {
   border: 8px solid transparent;
-  border-image: url('./ui/assets/panels/chip.png') 16 fill / 8px repeat;
+  border-image: url('./ui/assets/panels/chip.png') 26 fill / 8px repeat;
   image-rendering: pixelated;
 }
 .pixel-btn {
   border: 8px solid transparent;
-  border-image: url('./ui/assets/panels/btn.png') 16 fill / 8px repeat;
+  border-image: url('./ui/assets/panels/btn.png') 24 fill / 8px repeat;
   image-rendering: pixelated;
   transition: filter 120ms;
 }
 .pixel-btn--gold {
-  border-image-source: url('./ui/assets/panels/btn_gold.png');
+  border-image: url('./ui/assets/panels/btn_gold.png') 24 fill / 8px repeat;
+  image-rendering: pixelated;
 }
 /* states via filters — one generated frame per shape, no per-state art */
 .pixel-btn:hover:not(:disabled) {

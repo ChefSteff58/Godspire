@@ -14,7 +14,7 @@ export function RightRail() {
   const gold = useGameStore((s) => s.gold)
 
   return (
-    <aside className="flex w-52 shrink-0 flex-col gap-1.5 overflow-hidden border-l border-white/10 bg-slate-900/90 p-2">
+    <aside className="flex w-56 shrink-0 flex-col gap-1.5 overflow-hidden border-l border-white/10 bg-slate-900/90 p-2">
       <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Gods</h3>
       {GOD_ORDER.map((god, i) => {
         const stats = TOWER_STATS[god]
@@ -26,7 +26,7 @@ export function RightRail() {
             onClick={() => (active ? cancelPlacing() : beginPlacing(god))}
             disabled={!affordable && !active}
             title={`${stats.blurb} — hotkey ${i + 1}; shift-click the map to place several`}
-            className={`flex items-center gap-2 rounded-lg px-1.5 py-1 text-left transition ${
+            className={`pixel-card flex items-center gap-2 rounded-lg px-1.5 py-1 text-left transition ${
               active
                 ? 'bg-amber-400 text-slate-900'
                 : affordable

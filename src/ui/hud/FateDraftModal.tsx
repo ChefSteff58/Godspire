@@ -55,7 +55,7 @@ export function FateDraftModal() {
             <button
               key={b.id}
               onClick={() => pickDraft(i)}
-              className={`flex w-48 flex-col items-center gap-2 rounded-xl border bg-slate-900 p-5 text-center transition hover:-translate-y-1 hover:bg-slate-800 ${r.ring}`}
+              className={`pixel-panel flex w-48 flex-col items-center gap-2 rounded-xl border bg-slate-900 p-5 text-center transition hover:-translate-y-1 hover:bg-slate-800 ${r.ring}`}
             >
               <span className={`text-[10px] font-bold uppercase tracking-wider ${r.text}`}>{r.label}</span>
               <span className="text-4xl leading-none">{b.icon}</span>

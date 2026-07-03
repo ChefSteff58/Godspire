@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../state/gameStore'
 import { AccountBadge } from '../account/AccountBadge'
 import { SpeedControls } from './SpeedControls'
+import { PixelIcon } from '../kit/PixelIcon'
 
 export function TopBar() {
   const gold = useGameStore((s) => s.gold)
@@ -54,26 +55,30 @@ export function TopBar() {
       <AccountBadge />
       <div className="flex items-center gap-2 font-mono text-sm">
         <span
-          className={`rounded px-3 py-1 transition-all duration-150 ${
+          className={`pixel-chip rounded px-3 py-1 transition-all duration-150 ${
             denied ? 'animate-pulse bg-red-500 text-white' : paid ? 'scale-110 bg-black/40 text-amber-200' : 'bg-black/40 text-amber-300'
           }`}
         >
-          🪙 {gold}
+          <PixelIcon name="icon_gold" fallback="🪙" /> {gold}
         </span>
         <span
-          className={`rounded px-3 py-1 transition-colors duration-150 ${
+          className={`pixel-chip rounded px-3 py-1 transition-colors duration-150 ${
             hurt ? 'bg-red-500 text-white' : 'bg-black/40 text-rose-300'
           }`}
         >
-          ❤️ {lives}
+          <PixelIcon name="icon_heart" fallback="❤️" /> {lives}
         </span>
         {shieldCharges > 0 && (
-          <span className="rounded bg-black/40 px-3 py-1 text-sky-300" title="Gate shield — absorbs leaks">
-            🛡️ {shieldCharges}
+          <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-sky-300" title="Gate shield — absorbs leaks">
+            <PixelIcon name="icon_shield" fallback="🛡️" /> {shieldCharges}
           </span>
         )}
-        <span className="rounded bg-black/40 px-3 py-1 text-slate-300">🌊 Wave {wave}</span>
-        <span className="rounded bg-black/40 px-3 py-1 text-slate-400">💀 {kills}</span>
+        <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-slate-300">
+          <PixelIcon name="icon_wave" fallback="🌊" /> Wave {wave}
+        </span>
+        <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-slate-400">
+          <PixelIcon name="icon_skull" fallback="💀" /> {kills}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <SpeedControls />

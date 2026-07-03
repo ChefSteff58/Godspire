@@ -24,7 +24,7 @@ export function WaveControls() {
       <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
         <button
           onClick={requestStartWave}
-          className="pointer-events-auto rounded-full bg-amber-400 px-6 py-2 text-sm font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
+          className="pixel-btn pixel-btn--gold pointer-events-auto rounded-full bg-amber-400 px-6 py-2 text-sm font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
         >
           {label}
         </button>
