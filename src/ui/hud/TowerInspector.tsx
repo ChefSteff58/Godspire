@@ -1,5 +1,7 @@
 import { useGameStore, type SelectedTowerPath } from '../../state/gameStore'
 import { TOWER_STATS } from '../../core/data/towers'
+import { hasSprite, spriteUrl } from '../../game/assets/manifest'
+import { godHex } from '../kit/godColor'
 import type { TargetingMode } from '../../core/systems/targeting'
 
 const TARGET_MODES: { mode: TargetingMode; label: string; title: string }[] = [
@@ -9,7 +11,8 @@ const TARGET_MODES: { mode: TargetingMode; label: string; title: string }[] = [
   { mode: 'strongest', label: 'Strong', title: 'Target the foe with the most health' },
 ]
 
-/** Appears when a placed tower is selected: target priority, its two upgrade paths + a Sell button. */
+/** Appears when a placed tower is selected: target priority, its two upgrade paths + a Sell button.
+ *  Arcade-Shrine restyle (M9-S5): element-colored identity, chunky bevels, big tier squares. */
 export function TowerInspector() {
   const sel = useGameStore((s) => s.selectedTower)
   const gold = useGameStore((s) => s.gold)
@@ -18,30 +21,46 @@ export function TowerInspector() {
   const setTargeting = useGameStore((s) => s.setTargeting)
   if (!sel) return null
   const stats = TOWER_STATS[sel.god]
+  const hex = godHex(sel.god)
 
   return (
-    <div className="pointer-events-auto absolute bottom-4 left-4 z-10 flex w-80 flex-col gap-2 rounded-lg border border-white/10 bg-slate-900/95 p-3 shadow-xl">
+    <div className="pixel-panel arcade-bevel pointer-events-auto absolute bottom-4 left-4 z-10 flex w-80 flex-col gap-2 rounded-lg bg-slate-900/95 p-3 shadow-xl">
       <div className="flex items-center gap-2">
-        <span className="text-3xl leading-none">{stats.icon}</span>
-        <span className="flex-1 text-sm font-bold text-slate-100">{stats.name}</span>
+        {/* 40px portrait on the god's element backplate */}
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded"
+          style={{ background: `${hex}2e` }}
+        >
+          {hasSprite(sel.god) ? (
+            <img src={spriteUrl(sel.god)} alt={stats.name} className="h-9 w-9 object-contain [image-rendering:pixelated]" />
+          ) : (
+            <span className="text-2xl leading-none">{stats.icon}</span>
+          )}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="font-pixel whitespace-nowrap text-sm font-bold text-slate-100">{stats.name}</span>
+          {/* element underline — the god's color carries through the panel */}
+          <span className="mt-0.5 h-[3px] w-16 rounded" style={{ background: hex }} />
+        </span>
         <button
           onClick={sellTower}
           title="Sell this tower"
-          className="rounded bg-rose-600 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-rose-500"
+          className="arcade-raise rounded bg-rose-600 px-2.5 py-1 text-xs font-bold text-white"
         >
           Sell 🪙{sel.sellValue}
         </button>
       </div>
       {sel.targets && (
         <div className="flex items-center gap-1">
-          <span className="mr-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Target</span>
+          <span className="font-pixel mr-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Target</span>
           {TARGET_MODES.map(({ mode, label, title }) => (
             <button
               key={mode}
               title={title}
               onClick={() => setTargeting(mode)}
-              className={`flex-1 rounded px-1.5 py-1 text-[11px] font-bold transition ${
-                sel.targeting === mode ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              style={sel.targeting === mode ? { background: hex, color: '#101423' } : undefined}
+              className={`arcade-raise flex-1 rounded px-1.5 py-1 text-[11px] font-bold ${
+                sel.targeting === mode ? '' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
               {label}
@@ -49,37 +68,51 @@ export function TowerInspector() {
           ))}
         </div>
       )}
-      <PathRow info={sel.pathA} gold={gold} onUpgrade={() => upgradeTower('A')} />
-      <PathRow info={sel.pathB} gold={gold} onUpgrade={() => upgradeTower('B')} />
+      <PathRow info={sel.pathA} gold={gold} hex={hex} onUpgrade={() => upgradeTower('A')} />
+      <PathRow info={sel.pathB} gold={gold} hex={hex} onUpgrade={() => upgradeTower('B')} />
     </div>
   )
 }
 
-function PathRow({ info, gold, onUpgrade }: { info: SelectedTowerPath; gold: number; onUpgrade: () => void }) {
-  const dots = [0, 1, 2].map((i) => (i < info.tier ? '●' : '○')).join(' ')
+function PathRow({ info, gold, hex, onUpgrade }: { info: SelectedTowerPath; gold: number; hex: string; onUpgrade: () => void }) {
   const affordable = info.nextCost !== null && gold >= info.nextCost
 
   return (
-    <div className="flex flex-col gap-1.5 rounded bg-black/30 p-2">
+    <div className="arcade-bevel flex flex-col gap-1.5 rounded bg-black/30 p-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-slate-200">{info.name}</span>
-        <span className="font-mono text-xs tracking-widest text-amber-300">{dots}</span>
+        <span className="font-pixel text-xs font-bold text-slate-200">{info.name}</span>
+        {/* chunky 8px tier squares — read at a glance, BTD6-style */}
+        <span className="flex items-center gap-1">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="h-2 w-2 rounded-[2px]"
+              style={{ background: i < info.tier ? hex : '#ffffff22', boxShadow: i < info.tier ? `0 0 4px ${hex}88` : undefined }}
+            />
+          ))}
+        </span>
       </div>
       {info.nextName === null ? (
-        <span className="text-xs font-semibold text-emerald-400">★ Path complete</span>
+        <span className="font-pixel text-xs font-bold text-emerald-400">★ Path complete</span>
       ) : info.locked ? (
-        <span className="text-xs text-slate-500">🔒 Commit to the other path to unlock</span>
+        <span className="text-xs text-slate-500/80 [text-shadow:0_1px_0_rgba(255,255,255,0.06)]">
+          🔒 Commit to the other path to unlock
+        </span>
       ) : (
         <button
           onClick={onUpgrade}
           disabled={!affordable}
-          className={`flex flex-col rounded px-2 py-1.5 text-left transition ${
-            affordable ? 'bg-amber-500/90 text-slate-900 hover:bg-amber-400' : 'cursor-not-allowed bg-slate-800 text-slate-500'
+          className={`arcade-raise flex flex-col rounded px-2 py-1.5 text-left ${
+            affordable
+              ? 'pixel-btn--gold arcade-bevel bg-amber-500/90 text-slate-900'
+              : 'cursor-not-allowed bg-slate-800 text-slate-500'
           }`}
         >
           <span className="flex items-center justify-between text-xs font-bold">
-            <span>{info.nextName}</span>
-            <span>🪙{info.nextCost}</span>
+            <span className="font-pixel">{info.nextName}</span>
+            <span className="font-pixel num-pop" key={info.nextCost}>
+              🪙{info.nextCost}
+            </span>
           </span>
           <span className="text-[11px] opacity-80">{info.nextDesc}</span>
         </button>

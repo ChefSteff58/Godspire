@@ -1,11 +1,12 @@
 import { useGameStore } from '../../state/gameStore'
 import { GOD_ORDER, TOWER_STATS } from '../../core/data/towers'
 import { hasSprite, spriteUrl } from '../../game/assets/manifest'
+import { godHex } from '../kit/godColor'
 
 /**
- * The tower shop, as a reserved right-side column. Click a god to enter placement mode.
- * Sized so ALL eight gods fit the 540px canvas column with no scrollbar (compact rows; the
- * blurb lives in the tooltip + the TowerInspector, not the card).
+ * The tower shop — Arcade-Shrine redesign (M9-S5): 8 chunky cards, 56px portraits on
+ * element-colored backplates, FULL god names that never truncate, bouncy hover. Fit math:
+ * header ~22 + 8×60 cards + 7×2 gaps + padding 16 = 532 ≤ 540px canvas column.
  */
 export function RightRail() {
   const placingGod = useGameStore((s) => s.placingGod)
@@ -14,43 +15,60 @@ export function RightRail() {
   const gold = useGameStore((s) => s.gold)
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col gap-1.5 overflow-hidden border-l border-white/10 bg-slate-900/90 p-2">
-      <h3 className="font-pixel px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Gods</h3>
+    <aside className="flex w-60 shrink-0 flex-col gap-0.5 overflow-hidden border-l border-white/10 bg-slate-900/90 p-2">
+      <h3 className="font-pixel px-1 pb-0.5 text-xs font-bold uppercase tracking-wide text-shrine-gold">
+        Gods
+      </h3>
       {GOD_ORDER.map((god, i) => {
         const stats = TOWER_STATS[god]
         const active = placingGod === god
         const affordable = gold >= stats.cost
+        const hex = godHex(god)
         return (
           <button
             key={god}
             onClick={() => (active ? cancelPlacing() : beginPlacing(god))}
             disabled={!affordable && !active}
             title={`${stats.blurb} — hotkey ${i + 1}; shift-click the map to place several`}
-            className={`pixel-card flex items-center gap-2 rounded-lg px-1.5 py-1 text-left transition ${
+            style={active ? { boxShadow: `0 0 10px 1px ${hex}66` } : undefined}
+            className={`arcade-bevel arcade-raise relative flex h-[60px] items-center gap-2 overflow-hidden rounded-md pr-2 text-left ${
               active
-                ? 'bg-amber-400 text-slate-900'
+                ? 'bg-amber-400/90 text-slate-900'
                 : affordable
-                  ? 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                  ? 'bg-slate-800 text-slate-100'
                   : 'cursor-not-allowed bg-slate-800/40 text-slate-500'
             }`}
           >
-            {hasSprite(god) ? (
-              <img
-                src={spriteUrl(god)}
-                alt={stats.name}
-                className="h-9 w-9 shrink-0 object-contain [image-rendering:pixelated]"
-              />
-            ) : (
-              <span className="text-xl leading-none">{stats.icon}</span>
-            )}
-            <span className="flex min-w-0 flex-1 items-center justify-between gap-1">
-              <span className="font-pixel truncate text-sm font-bold">{stats.name}</span>
-              <span className="flex items-center gap-1">
-                <span className={`text-[11px] font-semibold ${active ? 'text-slate-800' : 'text-amber-300'}`}>
-                  {stats.cost}
+            {/* element strip — the god's color reads before the name does */}
+            <span className="h-full w-[3px] shrink-0" style={{ background: hex }} />
+            {/* 56px portrait on an element-tinted backplate */}
+            <span
+              className={`flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded ${affordable || active ? '' : 'grayscale'}`}
+              style={{ background: `${hex}${active ? '55' : '2e'}` }}
+            >
+              {hasSprite(god) ? (
+                <img
+                  src={spriteUrl(god)}
+                  alt={stats.name}
+                  className="h-[50px] w-[50px] object-contain [image-rendering:pixelated]"
+                />
+              ) : (
+                <span className="text-2xl leading-none">{stats.icon}</span>
+              )}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+              {/* FULL name, own line, never truncated ("we absolutely cannot have abbreviated god names") */}
+              <span className="font-pixel whitespace-nowrap text-[13px] font-bold leading-none">{stats.name}</span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={`font-pixel text-[11px] font-bold leading-none ${
+                    active ? 'text-slate-800' : affordable ? 'text-amber-300' : 'text-rose-400'
+                  }`}
+                >
+                  🪙{stats.cost}
                 </span>
                 <span
-                  className={`rounded px-1 text-[10px] font-mono ${
+                  className={`rounded px-1 font-mono text-[10px] leading-tight ${
                     active ? 'bg-slate-900/20 text-slate-800' : 'bg-black/40 text-slate-500'
                   }`}
                 >
@@ -61,9 +79,6 @@ export function RightRail() {
           </button>
         )
       })}
-      <p className="mt-auto px-1 text-[10px] leading-tight text-slate-500">
-        Press a number or click a god, then click the map. Shift-click places several.
-      </p>
     </aside>
   )
 }
