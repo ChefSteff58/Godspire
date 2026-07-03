@@ -1,5 +1,7 @@
 import { useGameStore } from '../../state/gameStore'
 import { spriteUrl } from '../../game/assets/manifest'
+import { uiUrl } from '../assets/uiKit'
+import { TitleLightning } from './TitleLightning'
 
 /**
  * The front door. Pure React/CSS (no Phaser — the game mounts only after Play): a Tartarus-glow
@@ -52,8 +54,17 @@ export function TitleScreen() {
       ))}
 
       <div className="relative flex items-end gap-8">
-        {zeus && <img src={zeus} alt="" className="h-28 w-28 object-contain [image-rendering:pixelated]" />}
-        <div className="text-center">
+        {/* crackling sky behind the logo block — Zeus announces the game (M9-S7) */}
+        <TitleLightning className="pointer-events-none absolute -inset-x-24 -top-40 bottom-0 h-[calc(100%+10rem)] w-[calc(100%+12rem)]" />
+        {zeus && <img src={zeus} alt="" className="relative h-28 w-28 object-contain [image-rendering:pixelated]" />}
+        <div className="relative text-center">
+          {uiUrl('logo_emblem') && (
+            <img
+              src={uiUrl('logo_emblem')}
+              alt=""
+              className="mx-auto mb-2 h-16 w-16 object-contain [image-rendering:pixelated]"
+            />
+          )}
           <h1
             className="font-pixel text-6xl font-bold tracking-wide text-amber-300"
             style={{ textShadow: '3px 3px 0 #7a1020, 6px 6px 0 #14121a' }}
@@ -62,30 +73,29 @@ export function TitleScreen() {
           </h1>
           <p className="font-pixel mt-2 text-sm text-slate-400">Hold the gates of Olympus</p>
         </div>
-        {minotaur && <img src={minotaur} alt="" className="h-28 w-28 object-contain [image-rendering:pixelated]" />}
+        {minotaur && <img src={minotaur} alt="" className="relative h-28 w-28 object-contain [image-rendering:pixelated]" />}
       </div>
 
-      <div className="relative mt-10 flex flex-col items-center gap-3">
+      {/* uniform stacked menu column — extensible for future entries (Settings, Codex, …) */}
+      <div className="relative mt-10 flex w-64 flex-col gap-2.5">
         <button
           onClick={startGame}
-          className="pixel-btn pixel-btn--gold font-pixel rounded bg-amber-400 px-10 py-3 text-lg font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
+          className="pixel-btn pixel-btn--gold arcade-raise font-pixel w-full rounded bg-amber-400 px-6 py-3 text-lg font-bold text-slate-900 shadow-lg shadow-amber-500/30"
         >
           ⚔️ Play
         </button>
-        <div className="flex gap-3">
-          <button
-            onClick={openPantheon}
-            className="pixel-card font-pixel rounded bg-slate-800 px-5 py-2 text-sm font-bold text-amber-200 transition hover:bg-slate-700"
-          >
-            🏛️ Pantheon
-          </button>
-          <button
-            onClick={openLeaderboard}
-            className="pixel-card font-pixel rounded bg-slate-800 px-5 py-2 text-sm font-bold text-amber-200 transition hover:bg-slate-700"
-          >
-            🏆 Ranks
-          </button>
-        </div>
+        <button
+          onClick={openPantheon}
+          className="pixel-btn arcade-raise font-pixel w-full rounded bg-slate-800 px-6 py-2.5 text-sm font-bold text-amber-200"
+        >
+          🏛️ Pantheon
+        </button>
+        <button
+          onClick={openLeaderboard}
+          className="pixel-btn arcade-raise font-pixel w-full rounded bg-slate-800 px-6 py-2.5 text-sm font-bold text-amber-200"
+        >
+          🏆 Ranks
+        </button>
       </div>
     </div>
   )
