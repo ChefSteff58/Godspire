@@ -1,19 +1,31 @@
 import { uiUrl } from '../assets/uiKit'
 
 /**
- * A pixel resource icon with an emoji fallback — the HUD's version of the sprite-with-fallback
- * rule. Sized relative to the surrounding text (1.1em) so it drops into chips and stat rows
- * without layout changes; crisp via image-rendering: pixelated.
+ * A pixel icon with an emoji fallback — the HUD's version of the sprite-with-fallback rule.
+ * Default size tracks the surrounding text (1.1em) so it drops into chips and stat rows without
+ * layout changes; pass `sizeClass` to REPLACE that sizing for big card icons (e.g. `h-14 w-14`).
+ * Crisp via image-rendering: pixelated.
  */
-export function PixelIcon({ name, fallback, className }: { name: string; fallback: string; className?: string }) {
+export function PixelIcon({
+  name,
+  fallback,
+  className,
+  sizeClass,
+}: {
+  name: string
+  fallback: string
+  className?: string
+  sizeClass?: string
+}) {
   const url = uiUrl(name)
-  if (!url) return <span className={className}>{fallback}</span>
+  const size = sizeClass ?? 'h-[1.1em] w-[1.1em] align-[-0.15em]'
+  if (!url) return <span className={`${sizeClass ? 'inline-flex items-center justify-center' : ''} ${sizeClass ?? ''} ${className ?? ''}`}>{fallback}</span>
   return (
     <img
       src={url}
       alt=""
       aria-hidden
-      className={`inline-block h-[1.1em] w-[1.1em] object-contain align-[-0.15em] [image-rendering:pixelated] ${className ?? ''}`}
+      className={`inline-block object-contain [image-rendering:pixelated] ${size} ${className ?? ''}`}
     />
   )
 }

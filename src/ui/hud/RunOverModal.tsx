@@ -29,16 +29,22 @@ export function RunOverModal() {
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-6 bg-slate-950/85 backdrop-blur-sm">
-      <div className="text-center">
-        <h2 className="font-pixel text-3xl font-bold text-rose-400">Olympus has fallen</h2>
-        <p className="text-sm text-slate-400">The monsters have stormed the gates… this time.</p>
+      <div className="flex flex-col items-center text-center">
+        <div className="banner-ribbon px-12 pb-6 pt-3">
+          <h2 className="font-pixel text-3xl font-bold">Olympus has fallen</h2>
+        </div>
+        <p className="mt-2 text-sm text-slate-400">The monsters have stormed the gates… this time.</p>
       </div>
       <div className="flex gap-8 font-pixel text-center">
-        <Stat label="Wave reached" value={`${summary.wave}`} highlight={newBest} />
-        <Stat label="Favor earned" value={`+${summary.favor}`} />
-        <Stat label="Best wave" value={`${summary.bestWave}`} />
+        <Stat label="Wave reached" value={`${summary.wave}`} highlight={newBest} pop />
+        <Stat label="Favor earned" value={`+${summary.favor}`} pop />
+        <Stat label="Best wave" value={`${summary.bestWave}`} pop />
       </div>
-      {newBest && <p className="text-sm font-bold text-amber-300">🏆 New best wave!</p>}
+      {newBest && (
+        <p className="num-pop font-pixel text-base font-bold text-amber-300 [text-shadow:0_0_10px_rgba(245,208,97,0.6)]">
+          🏆👑 NEW BEST WAVE 👑🏆
+        </p>
+      )}
       {tiedBest && <p className="text-sm font-bold text-amber-300">Tied your best wave!</p>}
       {newBest && isSupabaseConfigured && (
         isGuest ? (
@@ -62,19 +68,19 @@ export function RunOverModal() {
       <div className="flex items-center gap-3">
         <button
           onClick={openLeaderboard}
-          className="rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg transition hover:bg-slate-600"
+          className="arcade-raise arcade-bevel font-pixel rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg"
         >
           🏆 Ranks
         </button>
         <button
           onClick={openPantheon}
-          className="rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg transition hover:bg-slate-600"
+          className="arcade-raise arcade-bevel font-pixel rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg"
         >
           🏛️ Pantheon
         </button>
         <button
           onClick={playAgain}
-          className="pixel-btn pixel-btn--gold rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
+          className="pixel-btn pixel-btn--gold arcade-raise font-pixel rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30"
         >
           ⚔️ Play again
         </button>
@@ -83,10 +89,15 @@ export function RunOverModal() {
   )
 }
 
-function Stat({ label, value, highlight, small }: { label: string; value: string; highlight?: boolean; small?: boolean }) {
+function Stat({ label, value, highlight, small, pop }: { label: string; value: string; highlight?: boolean; small?: boolean; pop?: boolean }) {
   return (
     <div className="flex flex-col">
-      <span className={`${small ? 'text-xl' : 'text-3xl'} font-bold ${highlight ? 'text-amber-300' : 'text-slate-100'}`}>{value}</span>
+      <span
+        key={pop ? value : undefined}
+        className={`${pop ? 'num-pop' : ''} ${small ? 'text-xl' : 'text-3xl'} font-bold ${highlight ? 'text-amber-300' : 'text-slate-100'}`}
+      >
+        {value}
+      </span>
       <span className="text-xs uppercase tracking-wide text-slate-500">{label}</span>
     </div>
   )
