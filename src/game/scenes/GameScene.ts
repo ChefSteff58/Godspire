@@ -40,6 +40,7 @@ import {
 import { favorFromRun } from '../../core/progress/rules'
 import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
+import { arcPoints, boltPoints } from '../render/fx'
 import { hasSprite, hasTileset } from '../assets/manifest'
 import { DirAnimSprite } from '../render/DirAnimSprite'
 import { layoutWangTiles, WANG_TILE_FOR_MASK } from '../render/wang'
@@ -763,7 +764,7 @@ export class GameScene extends Phaser.Scene {
       tower.cooldown = 1 / fireRate
       const dmg = this.run.effectiveDamage(tower.god, eff.damage * aura.damageMul)
       const stats = TOWER_STATS[tower.god]
-      if (stats.splash) this.fireSplash(this.enemyPos(target), dmg, eff.splashRadius, eff.knockback, stats.color)
+      if (stats.splash) this.fireSplash(tower.pos, this.enemyPos(target), dmg, eff.splashRadius, eff.knockback, stats.color)
       else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
       else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
       this.towerAttackTell(tower, target) // pixel gods: a quick lunge toward the target on each shot
@@ -941,12 +942,11 @@ export class GameScene extends Phaser.Scene {
     }
     if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
-    if (this.groundTiled) {
-      // soft ellipse shadow grounds the sprite; fliers get a smaller, fainter, further-offset one
-      const shDy = enemy.flying ? sizePx * 0.45 : sizePx * 0.32
-      const shadow = this.add
-        .ellipse(pos.x, pos.y + shDy, sizePx * (enemy.flying ? 0.4 : 0.55), sizePx * 0.18, 0x000000, enemy.flying ? 0.18 : 0.32)
-        .setDepth(3.5)
+    if (this.groundTiled && enemy.flying) {
+      // FLIERS ONLY (M9-S3): a small offset shadow makes altitude read; grounded creatures stand
+      // directly on the terrain — their shadows made the whole roster look like it floated.
+      const shDy = sizePx * 0.45
+      const shadow = this.add.ellipse(pos.x, pos.y + shDy, sizePx * 0.4, sizePx * 0.18, 0x000000, 0.18).setDepth(3.5)
       shadow.setData('dy', shDy)
       this.enemyShadows.set(enemy.id, shadow)
     }
@@ -1424,26 +1424,62 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawLightning(from: Vec2, to: Vec2): void {
-    const g = this.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD) // hitscan tracers glow
-    g.lineStyle(3, 0xbfe3ff, 1)
-    g.beginPath()
-    g.moveTo(from.x, from.y)
-    const segs = 5
-    for (let i = 1; i < segs; i++) {
-      const t = i / segs
-      g.lineTo(
-        from.x + (to.x - from.x) * t + (Math.random() - 0.5) * 16,
-        from.y + (to.y - from.y) * t + (Math.random() - 0.5) * 16,
-      )
+    this.strokeBolt(from, to, 1)
+    // impact: a white pop + a widening shock ring at the strike point
+    const flash = this.add.circle(to.x, to.y, 6, 0xffffff, 0.95).setDepth(8).setBlendMode(Phaser.BlendModes.ADD)
+    this.tweens.add({ targets: flash, scale: 2.2, alpha: 0, duration: 130, onComplete: () => flash.destroy() })
+    const ring = this.add
+      .circle(to.x, to.y, 9, 0x000000, 0)
+      .setStrokeStyle(2, 0xbfe3ff, 0.8)
+      .setDepth(8)
+      .setBlendMode(Phaser.BlendModes.ADD) // share the depth-8 ADD blend group (no pipeline flush)
+    this.tweens.add({ targets: ring, scale: 1.9, alpha: 0, duration: 180, onComplete: () => ring.destroy() })
+    // 40ms echo: a second, thinner re-rolled strike — thunder rolls twice. Skipped under swarm load.
+    if (this.enemies.length + this.projectiles.length <= 30) {
+      this.time.delayedCall(40, () => {
+        if (this.scene.isActive()) this.strokeBolt(from, to, 0.55)
+      })
     }
-    g.lineTo(to.x, to.y)
-    g.strokePath()
-    this.tweens.add({ targets: g, alpha: 0, duration: 150, onComplete: () => g.destroy() })
+  }
+
+  /** One fractal bolt (main + forks) drawn in 3 passes on a single Graphics: glow → beam → core.
+   *  Under swarm load the bolt drops to depth 3 + 2 passes — the halo is invisible in the chaos
+   *  anyway, and Graphics polylines re-tessellate every frame (review perf finding). */
+  private strokeBolt(from: Vec2, to: Vec2, intensity: number): void {
+    const loaded = this.enemies.length + this.projectiles.length > 30
+    const bolt = boltPoints(from, to, loaded ? 3 : 4)
+    const g = this.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD)
+    const passes: [number, number, number][] = loaded
+      ? [
+          [4, 0xbfe3ff, 0.55 * intensity],
+          [2, 0xffffff, 1 * intensity],
+        ]
+      : [
+          [8, 0xbfe3ff, 0.15 * intensity],
+          [4, 0xbfe3ff, 0.55 * intensity],
+          [2, 0xffffff, 1 * intensity],
+        ]
+    for (const [width, color, alpha] of passes) {
+      g.lineStyle(width, color, alpha)
+      g.beginPath()
+      g.moveTo(bolt.main[0].x, bolt.main[0].y)
+      for (let i = 1; i < bolt.main.length; i++) g.lineTo(bolt.main[i].x, bolt.main[i].y)
+      g.strokePath()
+    }
+    // forks render thin — wisps that die out, not second strikes
+    g.lineStyle(1.5, 0xbfe3ff, 0.5 * intensity)
+    for (const fork of bolt.forks) {
+      g.beginPath()
+      g.moveTo(fork[0].x, fork[0].y)
+      for (let i = 1; i < fork.length; i++) g.lineTo(fork[i].x, fork[i].y)
+      g.strokePath()
+    }
+    this.tweens.add({ targets: g, alpha: 0, duration: 140, onComplete: () => g.destroy() })
   }
 
   /** Poseidon's tidal slam — damage all GROUND foes in a radius + shove survivors back down the path. */
-  private fireSplash(center: Vec2, damage: number, radius: number, knockback: number, sparkColor = 0x3a8fb5): void {
-    this.drawSplash(center, radius)
+  private fireSplash(origin: Vec2, center: Vec2, damage: number, radius: number, knockback: number, sparkColor = 0x3a8fb5): void {
+    this.drawSplash(origin, center, radius)
     for (let j = this.enemies.length - 1; j >= 0; j--) {
       const e = this.enemies[j]
       if (e.flying) continue // a tidal wave hits the ground, not fliers
@@ -1454,23 +1490,116 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private drawSplash(center: Vec2, radius: number): void {
-    const c = this.add
-      .circle(center.x, center.y, radius * 0.45, 0x3a8fb5, 0.4)
-      .setStrokeStyle(2, 0x9fe0ff, 0.6)
-      .setDepth(7)
-    this.tweens.add({ targets: c, scale: 2.3, alpha: 0, duration: 280, onComplete: () => c.destroy() })
+  /** A directional crescent wave: Poseidon SENDS the sea at the target instead of popping a circle. */
+  private drawSplash(origin: Vec2, center: Vec2, radius: number): void {
+    const ang = Math.atan2(center.y - origin.y, center.x - origin.x)
+    const dist = Math.max(24, Math.hypot(center.x - origin.x, center.y - origin.y))
+    const g = this.add.graphics().setDepth(7)
+    const proxy = { t: 0.55 }
+    this.tweens.add({
+      targets: proxy,
+      t: 1.05,
+      duration: 320,
+      ease: 'Sine.easeOut',
+      onUpdate: () => {
+        // the crest travels outward FROM the god, through the impact point. Envelope: a short
+        // pop-in ramp, then fade that reaches EXACTLY 0 at tween end (review: the old +0.25 floor
+        // made every wave blink out at ~20% opacity).
+        const r = dist * proxy.t + radius * Math.max(0, proxy.t - 0.9) * 2
+        const ramp = Math.min(1, (proxy.t - 0.55) / 0.08)
+        const fade = Math.max(0, (1.05 - proxy.t) / 0.5) * 1.15 * ramp
+        const half = 0.55 - (proxy.t - 0.55) * 0.25 // the wave tightens as it runs
+        g.clear()
+        // bounded arc tessellation (arcPoints) — Graphics.arc() re-expands ~101 points per arc
+        // per frame; 3 arcs × 20 segments keeps the crest under a tenth of that
+        const passes: [number, number, number, number, number][] = [
+          [7, 0x3a8fb5, 0.45 * fade, 1, 1],
+          [3, 0x9fe0ff, 0.7 * fade, 0.96, 0.9],
+          [1.5, 0xffffff, 0.85 * fade, 1, 0.75], // white crest
+        ]
+        for (const [width, color, alpha, rMul, halfMul] of passes) {
+          g.lineStyle(width, color, alpha)
+          const pts = arcPoints(origin.x, origin.y, r * rMul, ang - half * halfMul, ang + half * halfMul)
+          g.beginPath()
+          g.moveTo(pts[0].x, pts[0].y)
+          for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y)
+          g.strokePath()
+        }
+      },
+      onComplete: () => g.destroy(),
+    })
+    // sea foam bursts where the wave breaks
+    for (let i = 0; i < 8; i++) {
+      const fa = ang + (Math.random() - 0.5) * 0.9
+      const fr = radius * (0.3 + Math.random() * 0.7)
+      const foam = this.add
+        .circle(center.x, center.y, 1.5 + Math.random() * 1.5, 0xdff4ff, 0.85)
+        .setDepth(7)
+        .setBlendMode(Phaser.BlendModes.ADD)
+      this.tweens.add({
+        targets: foam,
+        x: center.x + Math.cos(fa) * fr,
+        y: center.y + Math.sin(fa) * fr,
+        alpha: 0,
+        duration: 260 + Math.random() * 120,
+        ease: 'Sine.easeOut',
+        onComplete: () => foam.destroy(),
+      })
+    }
+    // trailing ripple rings + the honest damage-radius read (thin, full circle)
+    for (const [delay, scale] of [[60, 0.55], [140, 0.8]] as const) {
+      this.time.delayedCall(delay, () => {
+        if (!this.scene.isActive()) return
+        const rip = this.add.circle(center.x, center.y, radius * scale, 0x000000, 0).setStrokeStyle(1.5, 0x9fe0ff, 0.5).setDepth(7)
+        this.tweens.add({ targets: rip, scale: 1.35, alpha: 0, duration: 300, onComplete: () => rip.destroy() })
+      })
+    }
+    const read = this.add.circle(center.x, center.y, radius, 0x000000, 0).setStrokeStyle(1, 0x9fe0ff, 0.45).setDepth(7)
+    this.tweens.add({ targets: read, alpha: 0, duration: 260, onComplete: () => read.destroy() })
   }
 
-  /** Hermes' quick dart — a thin straight tracer, distinct from Zeus's jagged bolt. */
+  /** Hermes' strike is pure SPEED: a stretched dart streak, ghost afterimages, and a muzzle flash. */
   private drawDart(from: Vec2, to: Vec2): void {
-    const g = this.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD)
-    g.lineStyle(2, 0xe8e0ff, 0.95)
-    g.beginPath()
-    g.moveTo(from.x, from.y)
-    g.lineTo(to.x, to.y)
-    g.strokePath()
-    this.tweens.add({ targets: g, alpha: 0, duration: 90, onComplete: () => g.destroy() })
+    // SNAPSHOT the strike line: `from` aliases the live tower.pos and Hermes ORBITS — the 40/80ms
+    // ghost callbacks must stamp the line as it was at fire time, not where he has flown since.
+    const fx = from.x
+    const fy = from.y
+    const tx = to.x
+    const ty = to.y
+    const ang = Math.atan2(ty - fy, tx - fx)
+    const len = Math.hypot(tx - fx, ty - fy)
+    // streak core: the dart sprite stretched along the flight line (falls back to a tapered blade).
+    // Point-blank strikes (orbit directly over the target) skip it — atan2(0,0) points the art east.
+    if (hasSprite('proj_hermes') && len >= 8) {
+      const s = this.addSpriteScaled('proj_hermes', (fx + tx) / 2, (fy + ty) / 2, 22)
+        .setRotation(ang)
+        .setDepth(8)
+        .setBlendMode(Phaser.BlendModes.ADD)
+      s.scaleX *= Math.min(4, (len * 0.6) / 22)
+      this.tweens.add({ targets: s, alpha: 0, scaleX: s.scaleX * 0.4, duration: 90, onComplete: () => s.destroy() })
+      // ghost afterimages trail the strike
+      for (const [delay, frac, alpha] of [[40, 0.55, 0.5], [80, 0.8, 0.3]] as const) {
+        this.time.delayedCall(delay, () => {
+          if (!this.scene.isActive()) return
+          const ghost = this.addSpriteScaled('proj_hermes', fx + (tx - fx) * frac, fy + (ty - fy) * frac, 20)
+            .setRotation(ang)
+            .setAlpha(alpha)
+            .setDepth(8)
+            .setBlendMode(Phaser.BlendModes.ADD)
+          this.tweens.add({ targets: ghost, alpha: 0, duration: 70, onComplete: () => ghost.destroy() })
+        })
+      }
+    } else if (len >= 8) {
+      const g = this.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD)
+      g.fillStyle(0xe8e0ff, 0.9)
+      const px = -Math.sin(ang)
+      const py = Math.cos(ang)
+      g.fillTriangle(fx + px * 2.5, fy + py * 2.5, fx - px * 2.5, fy - py * 2.5, tx, ty)
+      this.tweens.add({ targets: g, alpha: 0, duration: 90, onComplete: () => g.destroy() })
+    }
+    // muzzle flash at the launch point
+    const mz = this.add.circle(fx, fy, 4, 0xffffff, 0.9).setDepth(8).setBlendMode(Phaser.BlendModes.ADD)
+    this.tweens.add({ targets: mz, scale: 1.8, alpha: 0, duration: 70, onComplete: () => mz.destroy() })
   }
 
   // ── overlay: range rings, debug target lines, HP rings ──
@@ -1992,7 +2121,7 @@ export class GameScene extends Phaser.Scene {
       art.sprite.setData('baseScale', art.sprite.scaleX) // the tell's lunge tweens anchor to this
       this.towerSprites.set(tower.id, art.sprite)
       this.towerArt.set(tower.id, art)
-      this.addTowerShadow(tower.id, pos.x, pos.y + TOWER_SPRITE_PX * 0.36, TOWER_SPRITE_PX)
+      // no ground-god shadow (M9-S3: fliers only — planted gods stand ON the terrain)
       this.placeThunk(tower.id, pos)
       return
     }
@@ -2019,7 +2148,6 @@ export class GameScene extends Phaser.Scene {
     }
     const container = this.makeBadge(god).setPosition(pos.x, pos.y).setDepth(6)
     this.towerSprites.set(tower.id, container)
-    this.addTowerShadow(tower.id, pos.x, pos.y + 14, 34)
     this.placeThunk(tower.id, pos)
   }
 
