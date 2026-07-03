@@ -81,3 +81,23 @@ body {
   filter: grayscale(0.55);
   opacity: 0.6;
 }
+
+/* Title-screen embers — drift up and fade, staggered per-element via inline delay/duration. */
+@keyframes ember-rise {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-72vh) translateX(14px);
+    opacity: 0;
+  }
+}
+.ember {
+  animation-name: ember-rise;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}

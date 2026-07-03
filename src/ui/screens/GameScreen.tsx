@@ -6,14 +6,13 @@ import { WaveControls } from '../hud/WaveControls'
 import { TowerInspector } from '../hud/TowerInspector'
 import { FateDraftModal } from '../hud/FateDraftModal'
 import { RunOverModal } from '../hud/RunOverModal'
-import { PantheonTreePanel } from '../hud/PantheonTreePanel'
-import { LeaderboardOverlay } from '../hud/LeaderboardOverlay'
 import { DevPanel } from '../hud/DevPanel'
 
 /**
  * Real game UI: a full-width top bar, then a row of [ game canvas | right tower rail ].
  * The rail is a flex sibling, so it can never crop or cover the play field. The run-loop overlays
- * (wave button, Fate Draft, run-over) live over the canvas.
+ * (wave button, Fate Draft, run-over) live over the canvas. The Pantheon + Ranks overlays are
+ * mounted at the App ROOT (they also open from the title screen).
  */
 export function GameScreen() {
   return (
@@ -28,8 +27,6 @@ export function GameScreen() {
           <TowerInspector />
           <FateDraftModal />
           <RunOverModal />
-          <PantheonTreePanel />
-          <LeaderboardOverlay />
         </div>
         <RightRail />
       </div>

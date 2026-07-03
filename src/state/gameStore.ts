@@ -61,6 +61,9 @@ export type RunIntent =
  * pushed back INTO it. The RunController owns the authoritative numbers; these are a per-frame copy.
  */
 interface GameStore {
+  /** The front door: 'title' shows TitleScreen (no Phaser mounted); Play flips to 'playing'.
+   *  Play Again stays inside 'playing' (resetRun never touches this). */
+  gamePhase: 'title' | 'playing'
   // M2.5 bridge
   elapsed: number
   kills: number
@@ -100,6 +103,8 @@ interface GameStore {
   // intent queue
   intents: RunIntent[]
 
+  /** Leave the title screen and mount the game (a deterministic 1× start). */
+  startGame: () => void
   setElapsed: (seconds: number) => void
   beginPlacing: (god: GodKind) => void
   cancelPlacing: () => void
@@ -150,6 +155,7 @@ const FRESH_RUN = {
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
+  gamePhase: 'title',
   elapsed: 0,
   placingGod: null,
   showDebug: false,
@@ -162,6 +168,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   intents: [],
   ...FRESH_RUN,
 
+  startGame: () => set({ gamePhase: 'playing', timeScale: 1 }),
   setElapsed: (seconds) => set({ elapsed: seconds }),
   beginPlacing: (god) => set({ placingGod: god }),
   cancelPlacing: () => set({ placingGod: null }),
