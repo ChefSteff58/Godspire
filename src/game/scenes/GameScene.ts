@@ -47,6 +47,7 @@ import { DirAnimSprite } from '../render/DirAnimSprite'
 import { layoutWangTiles, WANG_TILE_FOR_MASK } from '../render/wang'
 import { stonePredicate, grassPredicate, isBuildableGround, terrainAt, TERRAIN_TILE_PX } from '../../core/map/terrain'
 import { waterAt } from '../../core/map/water'
+import { isLavaVertex, lavaVertexSet } from '../../core/map/lava'
 import { dir8, dirToTarget } from '../render/facing'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
@@ -74,6 +75,7 @@ const BASE_ENEMY_SPEED = 60
 const TILE_SET = 'ashen'
 const GRASS_SET = 'meadow'
 const WATER_SET = 'styx'
+const LAVA_SET = 'lava'
 const TILE_COLS = 30
 const TILE_ROWS = 17
 // Per-kind art sizes — a deliberate SILHOUETTE LADDER. The old max(radius*3, 46) floor flattened
@@ -353,7 +355,15 @@ export class GameScene extends Phaser.Scene {
     v.fillEllipse(GAME_WIDTH, 0, 520, 340)
     v.fillEllipse(0, GAME_HEIGHT, 520, 340)
     v.fillEllipse(GAME_WIDTH, GAME_HEIGHT, 520, 340)
-    this.setDressing.push(glow, v)
+    // M10-S3: heat rising from below the world's rim — the map no longer ends in flat void.
+    // Strong over Tartarus (left), fading toward Olympus (right).
+    const heat = this.add.graphics().setDepth(0.6)
+    heat.fillGradientStyle(0xd83a2a, 0xd83a2a, 0xd83a2a, 0xd83a2a, 0.16, 0.03, 0.22, 0.05)
+    heat.fillRect(0, GAME_HEIGHT - 46, GAME_WIDTH, 46)
+    this.setDressing.push(glow, v, heat)
+    // two extra ember mouths at the world's rim
+    this.time.addEvent({ delay: 1100, loop: true, callback: () => this.spawnAmbient('ember', { x: 120, y: 534 }) })
+    this.time.addEvent({ delay: 1600, loop: true, callback: () => this.spawnAmbient('ember', { x: 330, y: 534 }) })
   }
 
   /**
@@ -378,9 +388,21 @@ export class GameScene extends Phaser.Scene {
   private drawTiledGround(): boolean {
     if (!hasTileset(TILE_SET)) return false
     const isStone = stonePredicate()
+    const lavaReady = hasTileset(LAVA_SET)
+    const lavaInteriors: Phaser.GameObjects.Image[] = []
     for (const p of layoutWangTiles(TILE_COLS, TILE_ROWS, TERRAIN_TILE_PX, isStone)) {
+      // M10-S3: molten chasm — whole 8-connected blobs near Tartarus render from the lava set
+      // (same masks, same stone upper base, so cliff lips are pixel-identical; lava.ts guarantees
+      // a cell is never half-lava half-ash). Checking ONE chasm corner suffices.
+      const lava =
+        lavaReady &&
+        p.mask !== 15 &&
+        (isLavaVertex(p.x, p.y) ||
+          isLavaVertex(p.x + TERRAIN_TILE_PX, p.y) ||
+          isLavaVertex(p.x + TERRAIN_TILE_PX, p.y + TERRAIN_TILE_PX) ||
+          isLavaVertex(p.x, p.y + TERRAIN_TILE_PX))
       const img = this.add
-        .image(p.x, p.y, `tile_${TILE_SET}_${WANG_TILE_FOR_MASK[p.mask]}`)
+        .image(p.x, p.y, `tile_${lava ? LAVA_SET : TILE_SET}_${WANG_TILE_FOR_MASK[p.mask]}`)
         .setOrigin(0)
         .setDepth(0.2)
       // seeded flips on the SOLID tiles break repetition for free (edge tiles must not flip — their
@@ -389,7 +411,9 @@ export class GameScene extends Phaser.Scene {
         const r = GameScene.seeded(p.col * 31 + p.row)
         img.setFlipX(r < 0.5).setFlipY(r > 0.25 && r < 0.75)
       }
+      if (lava && p.mask === 0) lavaInteriors.push(img)
     }
+    if (lavaInteriors.length > 0) this.animateLava(lavaInteriors)
     if (hasTileset(GRASS_SET)) {
       const isGrass = grassPredicate()
       for (const p of layoutWangTiles(TILE_COLS, TILE_ROWS, TERRAIN_TILE_PX, isGrass)) {
@@ -575,11 +599,11 @@ export class GameScene extends Phaser.Scene {
     if (!this.groundTiled) return // dressing belongs to the real terrain, not the drawn fallback
     const have = (k: string) => this.textures.exists(k)
     const keys = {
-      grim: ['obj_decor_bones', 'obj_decor_shield'].filter(have),
-      stone: ['obj_decor_stump', 'obj_decor_rock1', 'obj_decor_rock2', 'obj_decor_shrine'].filter(have),
-      grass: ['obj_decor_tuft1', 'obj_decor_tuft2'].filter(have),
+      grim: ['obj_decor_bones', 'obj_decor_shield', 'obj_decor_torso'].filter(have),
+      stone: ['obj_decor_stump', 'obj_decor_rock1', 'obj_decor_rock2', 'obj_decor_shrine', 'obj_decor_amphorae'].filter(have),
+      grass: ['obj_decor_tuft1', 'obj_decor_tuft2', 'obj_decor_laurel'].filter(have),
     }
-    for (const d of scatterDecor(7, 16, isBuildableGround, terrainAt, OLYMPUS_PATH, OBSTACLES, keys)) {
+    for (const d of scatterDecor(7, 19, isBuildableGround, terrainAt, OLYMPUS_PATH, OBSTACLES, keys)) {
       this.setDressing.push(this.addSpriteScaled(d.key, d.x, d.y, d.sizePx).setDepth(0.8))
     }
   }
@@ -691,6 +715,57 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut',
       })
     }
+  }
+
+  /** The molten floor breathes: interior tiles shimmer between two frames, blobs glow, embers rise. */
+  private animateLava(interiors: Phaser.GameObjects.Image[]): void {
+    // frame shimmer — a single clock retextures the open-lava tiles on seeded alternating phases
+    if (this.textures.exists('tile_lava_0_f1')) {
+      let tick = 0
+      this.time.addEvent({
+        delay: 550,
+        loop: true,
+        callback: () => {
+          tick++
+          for (let i = 0; i < interiors.length; i++) {
+            const img = interiors[i]
+            if (!img.active) continue
+            const phase = GameScene.seeded(i * 17 + 3) < 0.5 ? 0 : 1
+            img.setTexture((tick + phase) % 2 === 0 ? 'tile_lava_0' : 'tile_lava_0_f1')
+          }
+        },
+      })
+    }
+    // one breathing additive glow at the molten centroid
+    let cx = 0
+    let cy = 0
+    let n = 0
+    for (const k of lavaVertexSet()) {
+      cx += (k % 64) * TERRAIN_TILE_PX
+      cy += Math.floor(k / 64) * TERRAIN_TILE_PX
+      n++
+    }
+    if (n > 0) {
+      const glow = this.add
+        .ellipse(cx / n, cy / n, 220, 150, 0xff5a2a, 0.12)
+        .setDepth(0.35)
+        .setBlendMode(Phaser.BlendModes.ADD)
+      this.setDressing.push(glow)
+      this.tweens.add({ targets: glow, alpha: 0.2, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    }
+    // embers rise off the melt (deterministic origins; cap bumped for the extra stream)
+    this.ambientCap = Math.max(this.ambientCap, 24)
+    const verts = [...lavaVertexSet()]
+    const origins = [0.2, 0.45, 0.7, 0.9].map((f) => {
+      const k = verts[Math.floor(f * (verts.length - 1))]
+      return { x: (k % 64) * TERRAIN_TILE_PX, y: Math.floor(k / 64) * TERRAIN_TILE_PX }
+    })
+    let oi = 0
+    this.time.addEvent({
+      delay: 700,
+      loop: true,
+      callback: () => this.spawnAmbient('ember', origins[oi++ % origins.length]),
+    })
   }
 
   /** Procedural soft radial-gradient blob for the lake mist (no art dependency). */

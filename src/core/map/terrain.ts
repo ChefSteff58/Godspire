@@ -81,7 +81,7 @@ export function grassPredicate(
     const g2 = seeded(seed * 5.3 + Math.floor(vx / 3) * 23.9 + Math.floor(vy / 3) * 13.1)
     const gnoise = g1 * 0.35 + g2 * 0.65
     const grassBias = Math.max(0, 1 - Math.hypot(x - gateCenter.x, y - gateCenter.y) / gateRadius) * 0.5
-    return gnoise + grassBias > 0.68 // grass-dominant by the gate, tufty midfield, none near the rift (0.72→0.68 at the S1 gate: "a little more")
+    return gnoise + grassBias > 0.64 // grass-dominant by the gate, tufty midfield, none near the rift (0.72→0.68→0.64: M10 "more grass on the Olympus side")
   }
 }
 
