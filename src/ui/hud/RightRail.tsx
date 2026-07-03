@@ -15,7 +15,7 @@ export function RightRail() {
 
   return (
     <aside className="flex w-56 shrink-0 flex-col gap-1.5 overflow-hidden border-l border-white/10 bg-slate-900/90 p-2">
-      <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Gods</h3>
+      <h3 className="font-pixel px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Gods</h3>
       {GOD_ORDER.map((god, i) => {
         const stats = TOWER_STATS[god]
         const active = placingGod === god
@@ -44,7 +44,7 @@ export function RightRail() {
               <span className="text-xl leading-none">{stats.icon}</span>
             )}
             <span className="flex min-w-0 flex-1 items-center justify-between gap-1">
-              <span className="truncate text-sm font-bold">{stats.name}</span>
+              <span className="font-pixel truncate text-sm font-bold">{stats.name}</span>
               <span className="flex items-center gap-1">
                 <span className={`text-[11px] font-semibold ${active ? 'text-slate-800' : 'text-amber-300'}`}>
                   {stats.cost}

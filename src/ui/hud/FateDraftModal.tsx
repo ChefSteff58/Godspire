@@ -30,7 +30,7 @@ export function FateDraftModal() {
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-slate-950/80 backdrop-blur-sm">
       <div className="text-center">
-        <h2 className="font-serif text-2xl font-bold text-amber-300">The Fates offer a boon</h2>
+        <h2 className="font-pixel text-2xl font-bold text-amber-300">The Fates offer a boon</h2>
         <p className="text-sm text-slate-400">Choose one — it lasts the rest of the run.</p>
       </div>
       {timerSec !== null && (
@@ -59,7 +59,7 @@ export function FateDraftModal() {
             >
               <span className={`text-[10px] font-bold uppercase tracking-wider ${r.text}`}>{r.label}</span>
               <span className="text-4xl leading-none">{b.icon}</span>
-              <span className="font-serif text-lg font-bold text-amber-200">{b.name}</span>
+              <span className="font-pixel text-base font-bold text-amber-200">{b.name}</span>
               <span className="text-sm text-slate-200">{b.desc}</span>
               <span className="text-xs italic text-slate-500">{b.flavor}</span>
             </button>

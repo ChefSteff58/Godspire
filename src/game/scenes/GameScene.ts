@@ -481,7 +481,7 @@ export class GameScene extends Phaser.Scene {
         g.fillEllipse(start.x, start.y, r * 1.9, r * 1.35)
       }
       this.add
-        .text(start.x + 34, start.y - 46, 'Tartarus', { fontFamily: 'Georgia, serif', fontSize: '12px', color: '#e08a98' })
+        .text(start.x + 34, start.y - 46, 'Tartarus', { fontFamily: 'Silkscreen, Georgia, serif', fontSize: '12px', color: '#e08a98' })
         .setOrigin(0.5)
         .setDepth(2)
     }
@@ -496,7 +496,7 @@ export class GameScene extends Phaser.Scene {
       g.fillRect(end.x - 30, end.y - 36, 11, 74)
       this.add
         .text(end.x - 44, end.y, 'OLYMPUS', {
-          fontFamily: 'Georgia, serif',
+          fontFamily: 'Silkscreen, Georgia, serif',
           fontSize: '11px',
           color: '#1a1407',
           fontStyle: 'bold',
@@ -836,7 +836,7 @@ export class GameScene extends Phaser.Scene {
     if (!msg) return
     const t = this.add
       .text(GAME_WIDTH / 2, 72, msg, {
-        fontFamily: 'Georgia, serif',
+        fontFamily: 'Silkscreen, Georgia, serif',
         fontSize: '15px',
         color,
         align: 'center',
@@ -880,7 +880,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: dim, fillAlpha: 0.25, duration: 350, yoyo: true, hold: 500, onComplete: () => dim.destroy() })
     const t = this.add
       .text(GAME_WIDTH / 2, 80, `⚠ ${boss.name.toUpperCase()} ⚠\n${boss.telegraph}`, {
-        fontFamily: 'Georgia, serif',
+        fontFamily: 'Silkscreen, Georgia, serif',
         fontSize: '17px',
         color: '#ffe6a0',
         align: 'center',
@@ -1642,7 +1642,7 @@ export class GameScene extends Phaser.Scene {
   /** A floating outlined number/label with a pop-in — the one shared style for all payouts/bounties. */
   private floatText(x: number, y: number, str: string, color: string): void {
     const txt = this.add
-      .text(x, y, str, { fontFamily: '"Courier New", monospace', fontSize: '15px', color, fontStyle: 'bold' })
+      .text(x, y, str, { fontFamily: 'Silkscreen, "Courier New", monospace', fontSize: '15px', color, fontStyle: 'bold' })
       .setOrigin(0.5)
       .setDepth(9)
       .setStroke('#000000', 4)
@@ -1821,7 +1821,7 @@ export class GameScene extends Phaser.Scene {
     const circle = this.add.circle(0, 0, radius, stats.color, 1).setStrokeStyle(2, 0xffffff)
     const label = this.add
       .text(0, 0, stats.name[0], {
-        fontFamily: 'Georgia, serif',
+        fontFamily: 'Silkscreen, Georgia, serif',
         fontSize: `${Math.round(radius * 1.1)}px`,
         fontStyle: 'bold',
         color: '#1a1407',

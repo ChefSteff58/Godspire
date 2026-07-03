@@ -30,10 +30,10 @@ export function RunOverModal() {
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-6 bg-slate-950/85 backdrop-blur-sm">
       <div className="text-center">
-        <h2 className="font-serif text-3xl font-bold text-rose-400">Olympus has fallen</h2>
+        <h2 className="font-pixel text-3xl font-bold text-rose-400">Olympus has fallen</h2>
         <p className="text-sm text-slate-400">The monsters have stormed the gates… this time.</p>
       </div>
-      <div className="flex gap-8 font-mono text-center">
+      <div className="flex gap-8 font-pixel text-center">
         <Stat label="Wave reached" value={`${summary.wave}`} highlight={newBest} />
         <Stat label="Favor earned" value={`+${summary.favor}`} />
         <Stat label="Best wave" value={`${summary.bestWave}`} />
@@ -47,7 +47,7 @@ export function RunOverModal() {
           submitLine && <p className="text-xs text-slate-300">{submitLine}</p>
         )
       )}
-      <div className="flex flex-wrap justify-center gap-x-7 gap-y-3 font-mono text-center">
+      <div className="flex flex-wrap justify-center gap-x-7 gap-y-3 font-pixel text-center">
         <Stat label="Kills" value={`${summary.kills}`} small />
         <Stat label="Bosses slain" value={`${summary.bossesKilled}`} small highlight={summary.bossesKilled > 0} />
         <Stat label="Gold earned" value={`🪙${summary.goldEarned}`} small />

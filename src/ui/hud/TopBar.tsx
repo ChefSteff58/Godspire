@@ -53,7 +53,7 @@ export function TopBar() {
   return (
     <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-slate-900/90 px-3 py-2">
       <AccountBadge />
-      <div className="flex items-center gap-2 font-mono text-sm">
+      <div className="flex items-center gap-2 font-pixel text-sm">
         <span
           className={`pixel-chip rounded px-3 py-1 transition-all duration-150 ${
             denied ? 'animate-pulse bg-red-500 text-white' : paid ? 'scale-110 bg-black/40 text-amber-200' : 'bg-black/40 text-amber-300'

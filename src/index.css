@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* Silkscreen — the HUD's pixel font (self-hosted, OFL; see src/ui/assets/fonts/OFL.txt).
+ * POLICY: headings, numbers, buttons, and labels get `font-pixel`; sentence-length copy (boon
+ * descriptions, node text, tooltips, player names) stays on the system stack — Silkscreen
+ * fatigues in paragraphs and its glyph coverage is Latin-ish. */
+@font-face {
+  font-family: 'Silkscreen';
+  src: url('./ui/assets/fonts/silkscreen-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Silkscreen';
+  src: url('./ui/assets/fonts/silkscreen-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@theme {
+  --font-pixel: 'Silkscreen', 'Courier New', monospace;
+}
+
 html,
 body,
 #root {
