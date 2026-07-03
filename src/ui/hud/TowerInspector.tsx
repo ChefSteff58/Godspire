@@ -24,7 +24,7 @@ export function TowerInspector() {
   const hex = godHex(sel.god)
 
   return (
-    <div className="pixel-panel arcade-bevel pointer-events-auto absolute bottom-4 left-4 z-10 flex w-80 flex-col gap-2 rounded-lg bg-slate-900/95 p-3 shadow-xl">
+    <div className="pixel-panel arcade-bevel pointer-events-auto absolute bottom-4 left-4 z-10 flex w-80 flex-col gap-2 rounded-lg bg-shrine-abyss/95 p-3 shadow-xl">
       <div className="flex items-center gap-2">
         {/* 40px portrait on the god's element backplate */}
         <span
@@ -45,14 +45,14 @@ export function TowerInspector() {
         <button
           onClick={sellTower}
           title="Sell this tower"
-          className="arcade-raise rounded bg-rose-600 px-2.5 py-1 text-xs font-bold text-white"
+          className="pixel-btn pixel-btn--red arcade-raise font-pixel rounded bg-blood px-2.5 py-1 text-xs font-bold text-white"
         >
           Sell 🪙{sel.sellValue}
         </button>
       </div>
       {sel.targets && (
         <div className="flex items-center gap-1">
-          <span className="font-pixel mr-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Target</span>
+          <span className="font-pixel mr-0.5 text-[11px] font-bold uppercase tracking-wide text-shrine-marble/60">Target</span>
           {TARGET_MODES.map(({ mode, label, title }) => (
             <button
               key={mode}
@@ -60,7 +60,7 @@ export function TowerInspector() {
               onClick={() => setTargeting(mode)}
               style={sel.targeting === mode ? { background: hex, color: '#101423' } : undefined}
               className={`arcade-raise flex-1 rounded px-1.5 py-1 text-[11px] font-bold ${
-                sel.targeting === mode ? '' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                sel.targeting === mode ? '' : 'bg-shrine-slab text-shrine-marble/75 hover:bg-shrine-stone'
               }`}
             >
               {label}
@@ -105,7 +105,7 @@ function PathRow({ info, gold, hex, onUpgrade }: { info: SelectedTowerPath; gold
           className={`arcade-raise flex flex-col rounded px-2 py-1.5 text-left ${
             affordable
               ? 'pixel-btn--gold arcade-bevel bg-amber-500/90 text-slate-900'
-              : 'cursor-not-allowed bg-slate-800 text-slate-500'
+              : 'cursor-not-allowed bg-shrine-slab text-shrine-marble/40'
           }`}
         >
           <span className="flex items-center justify-between text-xs font-bold">

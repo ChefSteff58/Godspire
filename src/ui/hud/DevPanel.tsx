@@ -15,14 +15,14 @@ function DevPanelInner() {
     <div className="pointer-events-auto absolute left-2 top-2 z-10 flex gap-1.5 rounded bg-black/60 p-1.5 text-xs">
       <button
         onClick={cheatGold}
-        className="rounded bg-slate-700 px-2 py-1 text-amber-300 transition hover:bg-slate-600"
+        className="rounded bg-shrine-slab px-2 py-1 text-amber-300 transition hover:bg-shrine-stone"
       >
         +1000🪙
       </button>
       <button
         onClick={cheatInvincible}
         className={`rounded px-2 py-1 transition ${
-          invincible ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+          invincible ? 'bg-emerald-500 text-slate-900' : 'bg-shrine-slab text-slate-300 hover:bg-shrine-stone'
         }`}
       >
         {invincible ? 'invincible ✓' : 'invincible'}

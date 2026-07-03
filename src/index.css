@@ -35,6 +35,10 @@
   --color-shrine-gold: #f5d061;
   --color-shrine-marble: #e7e3d8;
   --color-shrine-abyss: #14121a;
+  /* M10: the HUD's own greys — the road's violet-stone family, NOT default slate ("claude blue") */
+  --color-shrine-stone: #2e2742;
+  --color-shrine-slab: #221d33;
+  --color-blood: #a83240;
   --color-branch-war: #e06c5a;
   --color-branch-harvest: #6abe53;
   --color-branch-wisdom: #7fb3e0;
@@ -91,6 +95,11 @@ body {
 }
 .pixel-btn--gold {
   border-image: url('./ui/assets/panels/btn_gold.png') 24 fill / 8px repeat;
+  image-rendering: pixelated;
+}
+.pixel-btn--red {
+  /* carved blood-stone frame (Sell and other destructive actions); bg-blood is the Tailwind fallback */
+  border-image: url('./ui/assets/panels/btn_red.png') 24 fill / 8px repeat;
   image-rendering: pixelated;
 }
 /* states via filters — one generated frame per shape, no per-state art */

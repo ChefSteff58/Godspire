@@ -19,7 +19,7 @@ export function SpeedControls() {
         disabled={overlayPause}
         title={paused ? 'Resume' : 'Pause'}
         className={`px-2.5 py-1 text-sm transition ${
-          paused ? 'bg-amber-400 text-slate-900' : 'bg-black/40 text-slate-300 hover:bg-black/60'
+          paused ? 'bg-amber-400 text-slate-900' : 'bg-shrine-slab text-shrine-marble/75 hover:bg-shrine-stone'
         }`}
       >
         {paused ? '▶' : '⏸'}
@@ -29,7 +29,7 @@ export function SpeedControls() {
         disabled={overlayPause}
         title="Fast-forward (3×)"
         className={`px-2.5 py-1 text-sm transition ${
-          fast ? 'bg-amber-400 text-slate-900' : 'bg-black/40 text-slate-300 hover:bg-black/60'
+          fast ? 'bg-amber-400 text-slate-900' : 'bg-shrine-slab text-shrine-marble/75 hover:bg-shrine-stone'
         }`}
       >
         ⏩
@@ -39,7 +39,7 @@ export function SpeedControls() {
         disabled={overlayPause}
         title="Auto-start each wave"
         className={`px-2.5 py-1 text-xs font-bold transition ${
-          autoStart ? 'bg-amber-400 text-slate-900' : 'bg-black/40 text-slate-300 hover:bg-black/60'
+          autoStart ? 'bg-amber-400 text-slate-900' : 'bg-shrine-slab text-shrine-marble/75 hover:bg-shrine-stone'
         }`}
       >
         AUTO

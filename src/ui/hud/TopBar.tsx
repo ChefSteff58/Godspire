@@ -29,6 +29,18 @@ export function TopBar() {
     prevLives.current = lives
   }, [lives])
 
+  // One-shot explainer bubble the first time gate shields appear this session ("what is that 3?").
+  const shieldSeen = useRef(false)
+  const [shieldHint, setShieldHint] = useState(false)
+  useEffect(() => {
+    if (shieldCharges > 0 && !shieldSeen.current) {
+      shieldSeen.current = true
+      setShieldHint(true)
+      const t = setTimeout(() => setShieldHint(false), 4200)
+      return () => clearTimeout(t)
+    }
+  }, [shieldCharges])
+
   // Shake the gold chip red on a can't-afford click ("that's why nothing happened")…
   const [denied, setDenied] = useState(false)
   useEffect(() => {
@@ -51,7 +63,7 @@ export function TopBar() {
   }, [gold])
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-slate-900/90 px-3 py-2">
+    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-shrine-abyss/90 px-3 py-2">
       <AccountBadge />
       <div className="flex items-center gap-2 font-pixel text-sm">
         <span
@@ -69,14 +81,26 @@ export function TopBar() {
           <PixelIcon name="icon_heart" fallback="❤️" /> {lives}
         </span>
         {shieldCharges > 0 && (
-          <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-sky-300" title="Gate shield — absorbs leaks">
-            <PixelIcon name="icon_shield" fallback="🛡️" /> {shieldCharges}
+          <span
+            className="pixel-chip relative rounded bg-black/40 px-3 py-1 text-shrine-gold"
+            title="Gate shields — each absorbs one leak before lives are lost"
+          >
+            <PixelIcon name="icon_shield" fallback="🛡️" />{' '}
+            <span key={shieldCharges} className="num-pop">
+              {shieldCharges}
+            </span>
+            <span className="ml-1 text-[10px] uppercase tracking-wide opacity-70">gate</span>
+            {shieldHint && (
+              <span className="absolute left-1/2 top-full z-20 mt-1 w-44 -translate-x-1/2 rounded bg-black/90 px-2 py-1 text-center text-[10px] normal-case text-shrine-marble shadow-lg">
+                Gate shields — each absorbs one leak before Olympus loses lives
+              </span>
+            )}
           </span>
         )}
-        <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-slate-300">
+        <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-shrine-marble/80">
           <PixelIcon name="icon_wave" fallback="🌊" /> Wave {wave}
         </span>
-        <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-slate-400">
+        <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-shrine-marble/60">
           <PixelIcon name="icon_skull" fallback="💀" /> {kills}
         </span>
       </div>
@@ -85,21 +109,21 @@ export function TopBar() {
         <button
           onClick={openPantheon}
           title="Spend Favor on permanent upgrades"
-          className="rounded bg-black/40 px-3 py-1 text-sm text-amber-300 transition hover:bg-black/60"
+          className="pixel-btn arcade-raise font-pixel rounded bg-shrine-slab px-3 py-1 text-sm text-shrine-gold"
         >
           🏛️ Pantheon
         </button>
         <button
           onClick={openLeaderboard}
           title="Global leaderboard — highest wave survived"
-          className="rounded bg-black/40 px-3 py-1 text-sm text-amber-300 transition hover:bg-black/60"
+          className="pixel-btn arcade-raise font-pixel rounded bg-shrine-slab px-3 py-1 text-sm text-shrine-gold"
         >
           🏆 Ranks
         </button>
         <button
           onClick={toggleDebug}
           className={`rounded px-3 py-1 text-sm transition ${
-            showDebug ? 'bg-amber-400 text-slate-900' : 'bg-black/40 text-slate-300 hover:bg-black/60'
+            showDebug ? 'bg-amber-400 text-slate-900' : 'bg-shrine-slab text-shrine-marble/60 hover:bg-shrine-stone'
           }`}
         >
           debug

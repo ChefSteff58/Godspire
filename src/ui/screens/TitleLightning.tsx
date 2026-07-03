@@ -85,15 +85,22 @@ export function TitleLightning({ className }: { className?: string }) {
         const env = t < 0.12 ? 1 : t < 0.3 ? 0.35 : t < 0.45 ? 0.75 : Math.max(0, 1 - t) * 0.5
         drawBolt(s.bolt, env)
         if (age < 90) {
-          // impact flash at the strike tip + a faint full-canvas wash
+          // impact flash at the strike tip + a WIDE tip-centered ambient wash. Never a flat
+          // fillRect over the whole canvas — its alpha ends at the canvas EDGE and paints the
+          // rectangle onto the backdrop (the 'square lightning' bug). Radials reach zero inside
+          // their own circle, so nothing can outline the canvas.
           const tip = s.bolt.main[s.bolt.main.length - 1]
           const g = ctx.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, 46)
           g.addColorStop(0, `rgba(220,235,255,${0.5 * (1 - age / 90)})`)
           g.addColorStop(1, 'rgba(220,235,255,0)')
           ctx.fillStyle = g
           ctx.fillRect(tip.x - 46, tip.y - 46, 92, 92)
-          ctx.fillStyle = `rgba(160,190,255,${0.05 * (1 - age / 90)})`
-          ctx.fillRect(0, 0, w, h)
+          const washR = Math.min(w, h) * 0.5
+          const wash = ctx.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, washR)
+          wash.addColorStop(0, `rgba(160,190,255,${0.07 * (1 - age / 90)})`)
+          wash.addColorStop(1, 'rgba(160,190,255,0)')
+          ctx.fillStyle = wash
+          ctx.fillRect(tip.x - washR, tip.y - washR, washR * 2, washR * 2)
         }
       }
     }
@@ -101,5 +108,8 @@ export function TitleLightning({ className }: { className?: string }) {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  return <canvas ref={ref} className={className} aria-hidden />
+  // The radial mask feathers EVERY draw (bolts, forks, flashes) into the backdrop at all four
+  // edges — the canvas rectangle can never read, whatever gets drawn in the future.
+  const mask = 'radial-gradient(120% 120% at 50% 42%, black 55%, transparent 92%)'
+  return <canvas ref={ref} className={className} style={{ maskImage: mask, WebkitMaskImage: mask }} aria-hidden />
 }

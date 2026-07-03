@@ -22,7 +22,7 @@ export function AccountBadge() {
         <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-xs font-bold text-amber-300">
           Lv {level}
         </span>
-        {isGuest && <span className="text-xs text-slate-400">Guest</span>}
+        {isGuest && <span className="text-xs text-shrine-marble/50">Guest</span>}
       </button>
       {open && <AccountPanel onClose={() => setOpen(false)} />}
     </div>

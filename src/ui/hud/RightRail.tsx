@@ -15,7 +15,7 @@ export function RightRail() {
   const gold = useGameStore((s) => s.gold)
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col gap-0.5 overflow-hidden border-l border-white/10 bg-slate-900/90 p-2">
+    <aside className="flex w-60 shrink-0 flex-col gap-0.5 overflow-hidden border-l border-white/10 bg-shrine-abyss/90 p-2">
       <h3 className="font-pixel px-1 pb-0.5 text-xs font-bold uppercase tracking-wide text-shrine-gold">
         Gods
       </h3>
@@ -35,8 +35,8 @@ export function RightRail() {
               active
                 ? 'bg-amber-400/90 text-slate-900'
                 : affordable
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'cursor-not-allowed bg-slate-800/40 text-slate-500'
+                  ? 'bg-shrine-stone text-shrine-marble'
+                  : 'cursor-not-allowed bg-shrine-slab/50 text-shrine-marble/40'
             }`}
           >
             {/* element strip — the god's color reads before the name does */}
@@ -69,7 +69,7 @@ export function RightRail() {
                 </span>
                 <span
                   className={`rounded px-1 font-mono text-[10px] leading-tight ${
-                    active ? 'bg-slate-900/20 text-slate-800' : 'bg-black/40 text-slate-500'
+                    active ? 'bg-slate-900/20 text-slate-800' : 'bg-black/40 text-shrine-marble/50'
                   }`}
                 >
                   {i + 1}
