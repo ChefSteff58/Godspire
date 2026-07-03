@@ -41,10 +41,11 @@ import { favorFromRun } from '../../core/progress/rules'
 import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
 import { arcPoints, boltPoints } from '../render/fx'
+import { scatterDecor } from '../render/decor'
 import { hasSprite, hasTileset } from '../assets/manifest'
 import { DirAnimSprite } from '../render/DirAnimSprite'
 import { layoutWangTiles, WANG_TILE_FOR_MASK } from '../render/wang'
-import { stonePredicate, grassPredicate, TERRAIN_TILE_PX } from '../../core/map/terrain'
+import { stonePredicate, grassPredicate, isBuildableGround, terrainAt, TERRAIN_TILE_PX } from '../../core/map/terrain'
 import { dir8, dirToTarget } from '../render/facing'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
@@ -191,6 +192,7 @@ export class GameScene extends Phaser.Scene {
     this.drawTerrain()
     this.drawPath()
     this.drawObstacles()
+    this.drawDecor()
     this.drawMarkers()
     this.overlay = this.add.graphics().setDepth(3)
     this.ghost = this.add.graphics().setDepth(10)
@@ -529,6 +531,22 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(o.color, 0.9)
         g.fillPoints(s.points.map((p) => new Phaser.Geom.Point(p.x, p.y)), true)
       }
+    }
+  }
+
+  /** M9-S4: deterministic decor scatter — bones near Tartarus, tufts on grass, stumps and rocks
+   *  between. Pure math picks the spots (src/game/render/decor.ts); missing PNGs simply filter
+   *  out, so the pack lands art-by-art without ever breaking the map. */
+  private drawDecor(): void {
+    if (!this.groundTiled) return // dressing belongs to the real terrain, not the drawn fallback
+    const have = (k: string) => this.textures.exists(k)
+    const keys = {
+      grim: ['obj_decor_bones', 'obj_decor_shield'].filter(have),
+      stone: ['obj_decor_stump', 'obj_decor_rock1', 'obj_decor_rock2', 'obj_decor_shrine'].filter(have),
+      grass: ['obj_decor_tuft1', 'obj_decor_tuft2'].filter(have),
+    }
+    for (const d of scatterDecor(7, 16, isBuildableGround, terrainAt, OLYMPUS_PATH, OBSTACLES, keys)) {
+      this.setDressing.push(this.addSpriteScaled(d.key, d.x, d.y, d.sizePx).setDepth(0.8))
     }
   }
 
