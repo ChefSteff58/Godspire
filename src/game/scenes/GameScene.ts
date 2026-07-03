@@ -46,6 +46,7 @@ import { hasSprite, hasTileset } from '../assets/manifest'
 import { DirAnimSprite } from '../render/DirAnimSprite'
 import { layoutWangTiles, WANG_TILE_FOR_MASK } from '../render/wang'
 import { stonePredicate, grassPredicate, isBuildableGround, terrainAt, TERRAIN_TILE_PX } from '../../core/map/terrain'
+import { waterAt } from '../../core/map/water'
 import { dir8, dirToTarget } from '../render/facing'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
@@ -72,6 +73,7 @@ const BASE_ENEMY_SPEED = 60
 // src/core/map/terrain.ts — cliffs are GAMEPLAY now, so render + placement share one canonical truth.
 const TILE_SET = 'ashen'
 const GRASS_SET = 'meadow'
+const WATER_SET = 'styx'
 const TILE_COLS = 30
 const TILE_ROWS = 17
 // Per-kind art sizes — a deliberate SILHOUETTE LADDER. The old max(radius*3, 46) floor flattened
@@ -402,6 +404,36 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+    // M10-S2: the Lake of Styx as a WATER WANG LAYER — pixel-crisp shorelines chained off the same
+    // stone base as the cliffs, flush with everything by construction (lower = water, upper = stone;
+    // terrain.ts force-stones the shore ring so these tiles never meet chasm). All water tiles are
+    // stamped into ONE RenderTexture so a single Shine postFX animates the whole surface.
+    if (hasTileset(WATER_SET)) {
+      const placements = layoutWangTiles(TILE_COLS, TILE_ROWS, TERRAIN_TILE_PX, (x, y) => !waterAt(x, y)).filter(
+        (p) => p.mask !== 15, // fully-land cells show the stone/grass layers beneath
+      )
+      if (placements.length > 0) {
+        const minX = Math.min(...placements.map((p) => p.x))
+        const minY = Math.min(...placements.map((p) => p.y))
+        const maxX = Math.max(...placements.map((p) => p.x)) + TERRAIN_TILE_PX
+        const maxY = Math.max(...placements.map((p) => p.y)) + TERRAIN_TILE_PX
+        const rt = this.add.renderTexture(minX, minY, maxX - minX, maxY - minY).setOrigin(0).setDepth(0.3)
+        // stamp via a scratch image so open-water tiles get seeded flips (breaks the glint grid)
+        const scratch = this.add.image(0, 0, `tile_${WATER_SET}_0`).setOrigin(0).setVisible(false)
+        for (const p of placements) {
+          scratch.setTexture(`tile_${WATER_SET}_${WANG_TILE_FOR_MASK[p.mask]}`)
+          if (p.mask === 0) {
+            const r = GameScene.seeded(p.col * 53 + p.row * 7)
+            scratch.setFlipX(r < 0.5).setFlipY(r > 0.25 && r < 0.75)
+          } else {
+            scratch.setFlipX(false).setFlipY(false)
+          }
+          rt.draw(scratch, p.x - minX, p.y - minY) // draw() honors the object's flip state
+        }
+        scratch.destroy()
+        this.animateLake(rt)
+      }
+    }
     return true
   }
 
@@ -477,7 +509,9 @@ export class GameScene extends Phaser.Scene {
       // INTO a live-terrain screenshot (masked-alpha import, stamped at its crop origin, depth 1.5
       // = over the road edge it blends against, under props/creatures). The patch is terrain, not
       // set dressing — it must stay visible in any future inpaint shots.
+      if (o.id === 'styx' && hasTileset(WATER_SET)) continue // the water Wang layer IS the lake
       if (o.id === 'styx' && this.textures.exists('obj_styx_patch')) {
+        // legacy inpainted patch — only when the tileset is missing (safe staging fallback)
         this.animateLake(this.add.image(475, 273, 'obj_styx_patch').setOrigin(0).setDepth(1.5))
         continue
       }
@@ -620,6 +654,7 @@ export class GameScene extends Phaser.Scene {
         .setBlendMode(Phaser.BlendModes.ADD)
         .setAlpha(0.5)
         .setDisplaySize(76, 58)
+      this.setDressing.push(swirl) // dressing — hide in inpaint shots
       this.tweens.add({ targets: swirl, angle: 360, duration: 9000, repeat: -1 })
       this.tweens.add({ targets: swirl, alpha: 0.28, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     }
@@ -629,7 +664,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The Styx shimmers: a slow shine sweep + two drifting mist wisps over the water. */
-  private animateLake(lake: Phaser.GameObjects.Image): void {
+  private animateLake(lake: Phaser.GameObjects.Image | Phaser.GameObjects.RenderTexture): void {
     if (this.game.renderer.type === Phaser.WEBGL) {
       lake.postFX.addShine(0.2, 0.3, 4)
     }
@@ -645,6 +680,7 @@ export class GameScene extends Phaser.Scene {
         .setBlendMode(Phaser.BlendModes.SCREEN)
         .setAlpha(0.14 + i * 0.05)
         .setDisplaySize(120, 44)
+      this.setDressing.push(m) // mist is dressing — future inpaint shots must hide it
       this.tweens.add({
         targets: m,
         x: x + (i ? -30 : 30),

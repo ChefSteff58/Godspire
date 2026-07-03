@@ -2,6 +2,7 @@
 // placement decisions on the otherwise-open map. Pure data; rendered (as props) by GameScene.
 
 import type { Vec2 } from '../types'
+import { STYX_POINTS } from './water'
 
 export type ObstacleShape =
   | { kind: 'circle'; x: number; y: number; r: number }
@@ -30,19 +31,7 @@ export const OBSTACLES: readonly Obstacle[] = [
   {
     id: 'styx',
     label: 'Lake of Styx',
-    shape: {
-      kind: 'poly',
-      points: [
-        { x: 498, y: 278 },
-        { x: 565, y: 275 },
-        { x: 627, y: 283 },
-        { x: 670, y: 292 },
-        { x: 709, y: 333 },
-        { x: 628, y: 386 },
-        { x: 506, y: 386 },
-        { x: 480, y: 333 },
-      ],
-    },
+    shape: { kind: 'poly', points: STYX_POINTS },
     color: 0x2f6f8c,
     terrain: 'water',
   },

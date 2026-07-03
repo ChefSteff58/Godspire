@@ -7,6 +7,7 @@
 
 import type { Vec2 } from '../types'
 import { OLYMPUS_PATH } from './path'
+import { nearStyxShore } from './water'
 
 /** Canonical terrain constants — the single source for render, placement, and tests. */
 export const TERRAIN_SEED = 7
@@ -41,6 +42,10 @@ export function stonePredicate(
   tilePx = TERRAIN_TILE_PX,
 ): (x: number, y: number) => boolean {
   return (x, y) => {
+    // The Lake of Styx + its shore ring is ALWAYS solid stone (M10-S2): chasm may never touch
+    // water (the water→stone Wang set only knows one transition), and the shoreline becomes
+    // genuinely buildable ground — render and placement share this one truth.
+    if (nearStyxShore(x, y)) return true
     const vx = Math.round(x / tilePx)
     const vy = Math.round(y / tilePx)
     // two octaves of smoothed value noise over the vertex lattice (low frequency dominates → patches)
