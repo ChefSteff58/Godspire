@@ -146,6 +146,7 @@ describe('the fixed obstacles stand on buildable ground', () => {
     for (const o of OBSTACLES) {
       if (o.terrain === 'water') continue // the lake IS allowed over chasm
       const s = o.shape
+      if (s.kind === 'poly') continue // only the lake is a poly today; guarded by the line above anyway
       const cx = s.kind === 'circle' ? s.x : s.x + s.w / 2
       const cy = s.kind === 'circle' ? s.y : s.y + s.h / 2
       expect(isBuildableGround(cx, cy), `${o.id} at (${cx},${cy}) sits on chasm — nudge its coords`).toBe(true)

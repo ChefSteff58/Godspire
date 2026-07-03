@@ -28,9 +28,32 @@ export function distToPolyline(p: Vec2, pts: readonly Vec2[] = OLYMPUS_PATH): nu
   return min
 }
 
+/** Ray-cast point-in-polygon (even-odd rule). Pure; exported for GameScene's water check. */
+export function pointInPoly(p: Vec2, pts: readonly Vec2[]): boolean {
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i]
+    const b = pts[j]
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
+/** Shortest distance from a point to a polygon's edge loop (closes the ring itself). */
+function distToPolyEdge(p: Vec2, pts: readonly Vec2[]): number {
+  let min = Infinity
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    min = Math.min(min, distToSegment(p, pts[j], pts[i]))
+  }
+  return min
+}
+
 function obstacleHit(pos: Vec2, footprint: number, o: Obstacle): boolean {
   const s = o.shape
   if (s.kind === 'circle') return Math.hypot(pos.x - s.x, pos.y - s.y) < s.r + footprint
+  if (s.kind === 'poly') return pointInPoly(pos, s.points) || distToPolyEdge(pos, s.points) < footprint
   const cx = Math.max(s.x, Math.min(pos.x, s.x + s.w))
   const cy = Math.max(s.y, Math.min(pos.y, s.y + s.h))
   return Math.hypot(pos.x - cx, pos.y - cy) < footprint

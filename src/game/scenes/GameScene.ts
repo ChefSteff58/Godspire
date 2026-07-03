@@ -3,7 +3,7 @@ import { useGameStore } from '../../state/gameStore'
 import { useSessionStore } from '../../state/sessionStore'
 import { PathSystem, OLYMPUS_PATH } from '../../core/map/path'
 import { OBSTACLES } from '../../core/map/obstacles'
-import { canPlace } from '../../core/map/placement'
+import { canPlace, pointInPoly } from '../../core/map/placement'
 import {
   createEnemy,
   advanceEnemy,
@@ -170,14 +170,21 @@ export class GameScene extends Phaser.Scene {
   private stepAuras: { pos: Vec2; r2: number; damageMul: number; fireRateMul: number; detect: boolean }[] = []
   // Enemies currently charm-tinted (rebuilt each step) — hitEnemy's flash restore consults this.
   private readonly charmedIds = new Set<string>()
-  private ambientCount = 0 // live ambient ember/mote cap
+  private ambientCount = 0 // live ambient ember/mote count
+  private ambientCap = 14 // raised to 20 when the animated hellmouth adds its own ember stream
   private lastBossFrac = new Map<string, number>() // boss bar damage-ghost (lerped last-frame fill)
+  // Set dressing (glows, vignette, prop art, marker labels) — tracked so the DEV inpaint-shot helper
+  // can hide everything that isn't raw terrain+road when capturing a base image for PixelLab.
+  private setDressing: Phaser.GameObjects.GameObject[] = []
+  private inpaintShotMode = false
 
   constructor() {
     super('Game')
   }
 
   create(): void {
+    this.setDressing = []
+    this.inpaintShotMode = false
     this.drawBackground()
     this.groundTiled = this.drawTiledGround()
     this.drawTerrain()
@@ -211,6 +218,7 @@ export class GameScene extends Phaser.Scene {
     this.charmedIds.clear()
     this.lastBossFrac.clear()
     this.ambientCount = 0
+    this.ambientCap = 14
     this.elapsedAccumMs = 0
     this.elapsedSec = 0
     this.simAccumMs = 0
@@ -307,6 +315,21 @@ export class GameScene extends Phaser.Scene {
     return v - Math.floor(v)
   }
 
+  /** Bounding box + center of a polygon (for stamping prop art / fallback fills over a poly shape). */
+  private static polyBounds(pts: readonly Vec2[]): { cx: number; cy: number; w: number; h: number } {
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const p of pts) {
+      minX = Math.min(minX, p.x)
+      minY = Math.min(minY, p.y)
+      maxX = Math.max(maxX, p.x)
+      maxY = Math.max(maxY, p.y)
+    }
+    return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY }
+  }
+
   private drawBackground(): void {
     const g = this.add.graphics().setDepth(0)
     g.fillStyle(0x14121a, 1)
@@ -325,6 +348,19 @@ export class GameScene extends Phaser.Scene {
     v.fillEllipse(GAME_WIDTH, 0, 520, 340)
     v.fillEllipse(0, GAME_HEIGHT, 520, 340)
     v.fillEllipse(GAME_WIDTH, GAME_HEIGHT, 520, 340)
+    this.setDressing.push(glow, v)
+  }
+
+  /**
+   * DEV only: toggle a clean-terrain view for inpainting base shots (M9-S2). Hides everything that
+   * isn't raw ground + road — glows, vignette, prop/marker art, labels — and stops new ambient
+   * particles (live ones expire within ~4s; wait that long before capturing).
+   */
+  devPrepareInpaintShot(hide = true): void {
+    this.inpaintShotMode = hide
+    for (const obj of this.setDressing) {
+      if ('setVisible' in obj) (obj as unknown as { setVisible(v: boolean): void }).setVisible(!hide)
+    }
   }
 
   /**
@@ -428,24 +464,42 @@ export class GameScene extends Phaser.Scene {
 
   private drawObstacles(): void {
     const g = this.add.graphics().setDepth(2)
+    this.setDressing.push(g)
     for (const o of OBSTACLES) {
       const s = o.shape
       // dropped-in prop art (obj_<id>.png) replaces the drawn shape — the dead-zone FOOTPRINT is
       // still obstacles.ts data either way (canPlace never looks at pixels). Props draw LARGER than
       // their footprints (like creatures) so the map reads at real scale, not miniature.
-      const objKey = `obj_${o.id}`
-      if (this.textures.exists(objKey)) {
-        if (s.kind === 'circle') this.addSpriteScaled(objKey, s.x, s.y, s.r * 3.1).setDepth(2)
-        else this.addSpriteScaled(objKey, s.x + s.w / 2, s.y + s.h / 2, Math.max(s.w, s.h) * 1.5).setDepth(2)
+      // The Lake of Styx: prefer the M9 inpainted shoreline patch — PixelLab painted the water
+      // INTO a live-terrain screenshot (masked-alpha import, stamped at its crop origin, depth 1.5
+      // = over the road edge it blends against, under props/creatures). The patch is terrain, not
+      // set dressing — it must stay visible in any future inpaint shots.
+      if (o.id === 'styx' && this.textures.exists('obj_styx_patch')) {
+        this.animateLake(this.add.image(475, 273, 'obj_styx_patch').setOrigin(0).setDepth(1.5))
         continue
       }
-      if (o.id === 'styx' && s.kind === 'circle') {
+      const objKey = `obj_${o.id}`
+      if (this.textures.exists(objKey)) {
+        if (s.kind === 'circle') this.setDressing.push(this.addSpriteScaled(objKey, s.x, s.y, s.r * 3.1).setDepth(2))
+        else if (s.kind === 'poly') {
+          const b = GameScene.polyBounds(s.points)
+          this.setDressing.push(this.addSpriteScaled(objKey, b.cx, b.cy, Math.max(b.w, b.h) * 1.08).setDepth(2))
+        } else this.setDressing.push(this.addSpriteScaled(objKey, s.x + s.w / 2, s.y + s.h / 2, Math.max(s.w, s.h) * 1.5).setDepth(2))
+        continue
+      }
+      if (o.id === 'styx' && s.kind === 'poly') {
+        // drawn-water fallback: the traced pocket as layered fills (dark rim → body → highlight)
+        const pts = s.points.map((p) => new Phaser.Geom.Point(p.x, p.y))
         g.fillStyle(0x123847, 0.95)
-        g.fillCircle(s.x, s.y, s.r)
+        g.fillPoints(pts, true)
+        const b = GameScene.polyBounds(s.points)
+        const inner = s.points.map(
+          (p) => new Phaser.Geom.Point(b.cx + (p.x - b.cx) * 0.88, b.cy + (p.y - b.cy) * 0.88),
+        )
         g.fillStyle(0x2f6f8c, 0.95)
-        g.fillCircle(s.x, s.y, s.r - 6)
-        g.fillStyle(0x5aa6c2, 0.5)
-        g.fillCircle(s.x - 7, s.y - 7, s.r * 0.42)
+        g.fillPoints(inner, true)
+        g.fillStyle(0x5aa6c2, 0.4)
+        g.fillEllipse(b.cx - b.w * 0.12, b.cy - b.h * 0.12, b.w * 0.32, b.h * 0.22)
       } else if (o.id === 'columns' && s.kind === 'circle') {
         for (const [dx, dy] of [[-12, -4], [5, -13], [13, 7], [-5, 11]]) {
           g.fillStyle(0x5f6470, 1)
@@ -467,9 +521,12 @@ export class GameScene extends Phaser.Scene {
         g.fillCircle(s.x, s.y, s.r)
         g.fillStyle(0x63636d, 0.85)
         g.fillCircle(s.x - 6, s.y - 7, s.r * 0.5)
-      } else {
+      } else if (s.kind === 'rect') {
         g.fillStyle(o.color, 0.9)
         g.fillRoundedRect(s.x, s.y, s.w, s.h, 6)
+      } else {
+        g.fillStyle(o.color, 0.9)
+        g.fillPoints(s.points.map((p) => new Phaser.Geom.Point(p.x, p.y)), true)
       }
     }
   }
@@ -478,10 +535,14 @@ export class GameScene extends Phaser.Scene {
     const start = OLYMPUS_PATH[0]
     const end = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
     const g = this.add.graphics().setDepth(2)
-    // Mouth of Tartarus — prop art when dropped in (big enough to swallow the path start; no text
-    // label — the art has to say "hellmouth" by itself), else concentric ellipses off the edge.
-    if (this.textures.exists('obj_rift')) {
-      this.addSpriteScaled('obj_rift', start.x + 16, start.y, 270).setDepth(2)
+    this.setDressing.push(g)
+    // Mouth of Tartarus — the M9 INPAINTED patch wins: the hellmouth was painted into a live
+    // terrain screenshot (masked-alpha import at its crop origin), so blending is by construction.
+    // Fallback chain: patch → old prop art → drawn ellipses.
+    if (this.textures.exists('obj_rift_patch')) {
+      this.animateRift(this.add.image(0, 24, 'obj_rift_patch').setOrigin(0).setDepth(1.5))
+    } else if (this.textures.exists('obj_rift')) {
+      this.setDressing.push(this.addSpriteScaled('obj_rift', start.x + 16, start.y, 270).setDepth(2))
     } else {
       const rings: [number, number][] = [
         [62, 0x2a0810],
@@ -493,30 +554,102 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(c, 0.92)
         g.fillEllipse(start.x, start.y, r * 1.9, r * 1.35)
       }
-      this.add
-        .text(start.x + 34, start.y - 46, 'Tartarus', { fontFamily: 'Silkscreen, Georgia, serif', fontSize: '12px', color: '#e08a98' })
-        .setOrigin(0.5)
-        .setDepth(2)
+      this.setDressing.push(
+        this.add
+          .text(start.x + 34, start.y - 46, 'Tartarus', { fontFamily: 'Silkscreen, Georgia, serif', fontSize: '12px', color: '#e08a98' })
+          .setOrigin(0.5)
+          .setDepth(2),
+      )
     }
     // Olympus gate — prop art when dropped in (label-free for the same reason), else the drawn slab
     if (this.textures.exists('obj_gate')) {
-      this.addSpriteScaled('obj_gate', end.x - 20, end.y, 230).setDepth(2)
+      this.setDressing.push(this.addSpriteScaled('obj_gate', end.x - 20, end.y, 230).setDepth(2))
     } else {
       g.fillStyle(0xf5d061, 0.96)
       g.fillRoundedRect(end.x - 78, end.y - 36, 130, 74, 6)
       g.fillStyle(0xbfa03a, 1)
       g.fillRect(end.x - 64, end.y - 36, 11, 74)
       g.fillRect(end.x - 30, end.y - 36, 11, 74)
-      this.add
-        .text(end.x - 44, end.y, 'OLYMPUS', {
-          fontFamily: 'Silkscreen, Georgia, serif',
-          fontSize: '11px',
-          color: '#1a1407',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5)
-        .setDepth(2)
+      this.setDressing.push(
+        this.add
+          .text(end.x - 44, end.y, 'OLYMPUS', {
+            fontFamily: 'Silkscreen, Georgia, serif',
+            fontSize: '11px',
+            color: '#1a1407',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0.5)
+          .setDepth(2),
+      )
     }
+  }
+
+  // ── M9-S2 set-piece animation: Phaser built-in postFX + blend sprites, on ONLY these two
+  // objects (perf-capped by design). WebGL-guarded — Canvas renderer just shows the static art. ──
+
+  /** The hellmouth breathes: pulsing molten glow + a rotating fire vortex over the pit floor. */
+  private animateRift(rift: Phaser.GameObjects.Image): void {
+    if (this.game.renderer.type === Phaser.WEBGL) {
+      const glow = rift.postFX.addGlow(0xff5533, 2, 0, false, 0.1, 12)
+      this.tweens.add({ targets: glow, outerStrength: 6, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    }
+    // molten mouth = the bright centroid of the painted patch (measured at import: world 97,161)
+    if (this.textures.exists('fx_swirl')) {
+      const swirl = this.add
+        .image(97, 161, 'fx_swirl')
+        .setDepth(1.55)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(0.5)
+        .setDisplaySize(76, 58)
+      this.tweens.add({ targets: swirl, angle: 360, duration: 9000, repeat: -1 })
+      this.tweens.add({ targets: swirl, alpha: 0.28, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    }
+    // a second, denser ember stream rises from the mouth itself (cap raised 14→20 for it)
+    this.ambientCap = 20
+    this.time.addEvent({ delay: 520, loop: true, callback: () => this.spawnAmbient('ember', { x: 97, y: 155 }) })
+  }
+
+  /** The Styx shimmers: a slow shine sweep + two drifting mist wisps over the water. */
+  private animateLake(lake: Phaser.GameObjects.Image): void {
+    if (this.game.renderer.type === Phaser.WEBGL) {
+      lake.postFX.addShine(0.2, 0.3, 4)
+    }
+    this.ensureMistTexture()
+    const wisps: [number, number, number][] = [
+      [545, 320, 0], // [x, y, phase]
+      [635, 365, 1],
+    ]
+    for (const [x, y, i] of wisps) {
+      const m = this.add
+        .image(x, y, 'fx_mist')
+        .setDepth(1.6)
+        .setBlendMode(Phaser.BlendModes.SCREEN)
+        .setAlpha(0.14 + i * 0.05)
+        .setDisplaySize(120, 44)
+      this.tweens.add({
+        targets: m,
+        x: x + (i ? -30 : 30),
+        y: y - 8,
+        duration: 5200 + i * 1300,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
+  }
+
+  /** Procedural soft radial-gradient blob for the lake mist (no art dependency). */
+  private ensureMistTexture(): void {
+    if (this.textures.exists('fx_mist')) return
+    const c = this.textures.createCanvas('fx_mist', 96, 48)
+    if (!c) return
+    const ctx = c.getContext()
+    const grad = ctx.createRadialGradient(48, 24, 4, 48, 24, 44)
+    grad.addColorStop(0, 'rgba(190,220,230,0.5)')
+    grad.addColorStop(1, 'rgba(190,220,230,0)')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, 96, 48)
+    c.refresh()
   }
 
   update(_time: number, delta: number): void {
@@ -1457,8 +1590,10 @@ export class GameScene extends Phaser.Scene {
 
   private onWater(pos: Vec2): boolean {
     for (const o of OBSTACLES) {
-      if (o.terrain !== 'water' || o.shape.kind !== 'circle') continue
-      if (Math.hypot(pos.x - o.shape.x, pos.y - o.shape.y) <= o.shape.r) return true
+      if (o.terrain !== 'water') continue
+      const s = o.shape
+      if (s.kind === 'circle' && Math.hypot(pos.x - s.x, pos.y - s.y) <= s.r) return true
+      if (s.kind === 'poly' && pointInPoly(pos, s.points)) return true
     }
     return false
   }
@@ -1667,10 +1802,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Ambient life: an ember drifting up from the Tartarus rift, or a gold mote at the Olympus gate. */
-  private spawnAmbient(kind: 'ember' | 'mote'): void {
-    if (this.ambientCount >= 14) return // hard cap — atmosphere, not weather
+  private spawnAmbient(kind: 'ember' | 'mote', origin?: Vec2): void {
+    if (this.inpaintShotMode) return // DEV: clean-terrain capture in progress
+    if (this.ambientCount >= this.ambientCap) return // hard cap — atmosphere, not weather
     this.ambientCount++
-    const src = kind === 'ember' ? OLYMPUS_PATH[0] : OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
+    const src = origin ?? (kind === 'ember' ? OLYMPUS_PATH[0] : OLYMPUS_PATH[OLYMPUS_PATH.length - 1])
     const color = kind === 'ember' ? (Math.random() < 0.5 ? 0xd83a2a : 0xffb070) : 0xf5d061
     const p = this.add
       .circle(src.x + (Math.random() - 0.5) * 60, src.y - 6, 1 + Math.random(), color, 0.7)
