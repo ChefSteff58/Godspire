@@ -33,6 +33,15 @@ export function hasSprite(key: string): boolean {
   return key in AVAILABLE_SPRITES
 }
 
+/**
+ * Is a COMPLETE 16-tile Wang tileset present (`tile_<set>_0..15.png`)? All-or-nothing on purpose:
+ * a partial import must fall back to the drawn map, never render swiss cheese.
+ */
+export function hasTileset(set: string): boolean {
+  for (let i = 0; i < 16; i++) if (!(`tile_${set}_${i}` in AVAILABLE_SPRITES)) return false
+  return true
+}
+
 /** Resolved URL for a key's art, or undefined if it hasn't been added yet. */
 export function spriteUrl(key: string): string | undefined {
   return AVAILABLE_SPRITES[key]

@@ -40,8 +40,9 @@ import {
 import { favorFromRun } from '../../core/progress/rules'
 import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
-import { hasSprite } from '../assets/manifest'
+import { hasSprite, hasTileset } from '../assets/manifest'
 import { DirAnimSprite } from '../render/DirAnimSprite'
+import { layoutWangTiles, groundPatchPredicate, WANG_TILE_FOR_MASK } from '../render/wang'
 import { dir8, dirToTarget } from '../render/facing'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
@@ -63,9 +64,15 @@ const ATTACK_HOLD_MS = 450
 // The sim's base walk speed (px/s) — enemy walk-cycle cadence is scaled by speed/BASE so charmed foes
 // visibly crawl and satyrs visibly sprint instead of every walk cycling at one fixed fps.
 const BASE_ENEMY_SPEED = 60
-// Ground shadows are PARKED until the real terrain lands (M8 Stage 4) — on the current flat map they
-// read as "floating" per the 2026-07-01 playtest. The plumbing stays; flip this with the tileset.
-const ENABLE_SHADOWS = false
+// The Wang ground tileset (M8 Stage 4). 32px tiles over the 960×540 field → a 30×17 grid (the last
+// row overdraws 4px; Scale.FIT clips it). GROUND_SEED/RIFT_BIAS are the art-director dials for the
+// deterministic ash-patch pattern.
+const TILE_SET = 'ashen'
+const TILE_PX = 32
+const TILE_COLS = 30
+const TILE_ROWS = 17
+const GROUND_SEED = 7
+const RIFT_BIAS_RADIUS = 300
 // Per-kind art sizes — a deliberate SILHOUETTE LADDER. The old max(radius*3, 46) floor flattened
 // everything to ~46px, which is why the roster read as "too similar": size is the fastest identifier.
 const ENEMY_ART_PX: Record<string, number> = {
@@ -146,6 +153,9 @@ export class GameScene extends Phaser.Scene {
   private draftWasOpen = false
   private draftClockMs = 0 // wall-clock ms left on the open draft's decision timer
   private selectedTowerId: string | null = null
+  // True when the Wang ground tileset rendered this boot — gates the terrain-plot fallback AND the
+  // creature/tower shadows (shadows only read as grounded on real terrain, per the 07-01 playtest).
+  private groundTiled = false
   // Soft ellipse shadows ground every creature; fliers get a smaller, fainter one so altitude reads.
   private readonly enemyShadows = new Map<string, Phaser.GameObjects.Ellipse>()
   private readonly towerShadows = new Map<string, Phaser.GameObjects.Ellipse>()
@@ -170,6 +180,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.drawBackground()
+    this.groundTiled = this.drawTiledGround()
     this.drawTerrain()
     this.drawPath()
     this.drawObstacles()
@@ -301,11 +312,13 @@ export class GameScene extends Phaser.Scene {
     const g = this.add.graphics().setDepth(0)
     g.fillStyle(0x14121a, 1)
     g.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT)
-    // flat atmosphere only — ember glow at Tartarus (bottom-left), gold at Olympus (top-right)
-    g.fillStyle(0x4a121b, 0.22)
-    g.fillCircle(0, GAME_HEIGHT, 240)
-    g.fillStyle(0x3a2f10, 0.2)
-    g.fillCircle(GAME_WIDTH, 0, 240)
+    // atmosphere glows sit ABOVE the ground tiles (0.2) so they tint the terrain instead of hiding
+    // under it — ember at Tartarus (bottom-left), gold at Olympus (top-right)
+    const glow = this.add.graphics().setDepth(0.4)
+    glow.fillStyle(0x4a121b, 0.22)
+    glow.fillCircle(0, GAME_HEIGHT, 240)
+    glow.fillStyle(0x3a2f10, 0.2)
+    glow.fillCircle(GAME_WIDTH, 0, 240)
     // corner vignette — focuses the eye center-field and hides the hard canvas edge (static, no frame cost)
     const v = this.add.graphics().setDepth(0.6)
     v.fillStyle(0x000000, 0.18)
@@ -315,18 +328,46 @@ export class GameScene extends Phaser.Scene {
     v.fillEllipse(GAME_WIDTH, GAME_HEIGHT, 520, 340)
   }
 
+  /**
+   * The Wang ground layer: 30×17 static 32px tiles picked per corner-mask from the deterministic
+   * ash/stone patch pattern (see src/game/render/wang.ts). All-or-nothing on the tileset — when it
+   * isn't imported yet this renders nothing and the drawn map below carries the field (the same
+   * sprite-with-fallback rule as creatures). Returns whether tiles rendered.
+   */
+  private drawTiledGround(): boolean {
+    if (!hasTileset(TILE_SET)) return false
+    const rift = OLYMPUS_PATH[0]
+    const isStone = groundPatchPredicate(GROUND_SEED, rift, RIFT_BIAS_RADIUS, TILE_PX)
+    for (const p of layoutWangTiles(TILE_COLS, TILE_ROWS, TILE_PX, isStone)) {
+      const img = this.add
+        .image(p.x, p.y, `tile_${TILE_SET}_${WANG_TILE_FOR_MASK[p.mask]}`)
+        .setOrigin(0)
+        .setDepth(0.2)
+      // seeded flips on the SOLID tiles break repetition for free (edge tiles must not flip — their
+      // corner pattern is directional)
+      if (p.mask === 0 || p.mask === 15) {
+        const r = GameScene.seeded(p.col * 31 + p.row)
+        img.setFlipX(r < 0.5).setFlipY(r > 0.25 && r < 0.75)
+      }
+    }
+    return true
+  }
+
   private drawPath(): void {
     const g = this.add.graphics().setDepth(1)
-    // Layered road: buffer band → dark base → mid surface → a worn center stripe (depth from strokes alone)
-    g.lineStyle(46, 0x0d0b12, 1) // dead-zone buffer band (tight to the road)
+    // Layered road: buffer band → dark base → mid surface → a worn center stripe (depth from strokes
+    // alone). HYBRID with the Wang ground: the smooth polyline keeps the map's organic curves; the
+    // palette is sampled from the imported "ashen" tileset (stone ≈ #747594, ash ≈ #1c1530) so the
+    // dark violet road reads as of-a-piece while VALUE contrast against the pale stone carries it.
+    g.lineStyle(46, 0x141021, 1) // dead-zone buffer band (tight to the road)
     this.strokePolyline(g)
-    g.lineStyle(40, 0x241f2c, 1) // dark road base
+    g.lineStyle(40, 0x262038, 1) // dark road base
     this.strokePolyline(g)
-    g.lineStyle(30, 0x2a2533, 1) // mid surface
+    g.lineStyle(30, 0x2e2742, 1) // mid surface
     this.strokePolyline(g)
-    g.lineStyle(8, 0x342d40, 0.5) // center wear stripe (feet polish the middle)
+    g.lineStyle(8, 0x3b3354, 0.55) // center wear stripe (feet polish the middle)
     this.strokePolyline(g)
-    // deterministic pebbles + cracks scattered along the walkway
+    // deterministic pebbles + cracks scattered along the walkway (2px-quantized — pixel-flavored)
     for (let i = 0; i <= 50; i++) {
       const t = i / 50
       const p = this.path.getPointAt(t)
@@ -334,8 +375,8 @@ export class GameScene extends Phaser.Scene {
       const r2 = GameScene.seeded(i * 3 + 2)
       const r3 = GameScene.seeded(i * 3 + 3)
       if (r3 < 0.65) {
-        g.fillStyle(r3 < 0.3 ? 0x1c1823 : 0x3a3346, 0.8)
-        g.fillCircle(p.x + (r1 - 0.5) * 28, p.y + (r2 - 0.5) * 28, 1 + r3 * 2)
+        g.fillStyle(r3 < 0.3 ? 0x1c1530 : 0x4a4168, 0.8)
+        g.fillCircle(p.x + (r1 - 0.5) * 28, p.y + (r2 - 0.5) * 28, r3 < 0.35 ? 1 : 2)
       }
     }
   }
@@ -348,6 +389,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawTerrain(): void {
+    if (this.groundTiled) return // the Wang tileset IS the terrain — the placeholder plots retire
     const g = this.add.graphics().setDepth(0.5)
     // subtle buildable "plots" so the field reads as a map, not a flat void (placeholder; art in M8)
     const zones: [number, number, number, number, number][] = [
@@ -735,7 +777,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (enemy.stealth) sprite.setAlpha(0.5) // hidden — reads as a ghostly shimmer
     this.enemySprites.set(enemy.id, sprite)
-    if (ENABLE_SHADOWS) {
+    if (this.groundTiled) {
       // soft ellipse shadow grounds the sprite; fliers get a smaller, fainter, further-offset one
       const shDy = enemy.flying ? sizePx * 0.45 : sizePx * 0.32
       const shadow = this.add
@@ -1815,7 +1857,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private addTowerShadow(towerId: string, x: number, y: number, sizePx: number): void {
-    if (!ENABLE_SHADOWS) return
+    if (!this.groundTiled) return // shadows only read as grounded on real terrain
     this.towerShadows.set(towerId, this.add.ellipse(x, y, sizePx * 0.55, sizePx * 0.18, 0x000000, 0.3).setDepth(3.5))
   }
 
