@@ -22,18 +22,18 @@ describe('placement / dead zones', () => {
   })
 
   it('blocks building ON the path (the core bug fix)', () => {
-    const r = canPlace({ x: 100, y: 100 }, 20, { path: PATH, bounds: BOUNDS, obstacles: [] })
+    const r = canPlace({ x: 100, y: 100 }, 20, { path: PATH, bounds: BOUNDS, ground: () => true, obstacles: [] })
     expect(r).toEqual({ ok: false, reason: 'on-path' })
   })
 
   it('allows building in open ground off the path', () => {
-    const r = canPlace({ x: 100, y: 300 }, 20, { path: PATH, bounds: BOUNDS, obstacles: [] })
+    const r = canPlace({ x: 100, y: 300 }, 20, { path: PATH, bounds: BOUNDS, ground: () => true, obstacles: [] })
     expect(r.ok).toBe(true)
   })
 
   it('blocks building inside the path corridor buffer', () => {
     // just inside the corridor: dist 35 < 20 + 20 + 2 = 42
-    const r = canPlace({ x: 100, y: 135 }, 20, { path: PATH, bounds: BOUNDS, obstacles: [] })
+    const r = canPlace({ x: 100, y: 135 }, 20, { path: PATH, bounds: BOUNDS, ground: () => true, obstacles: [] })
     expect(r).toEqual({ ok: false, reason: 'on-path' })
     expect(PATH_HALF_WIDTH).toBe(20)
   })
@@ -42,24 +42,24 @@ describe('placement / dead zones', () => {
     const obstacles = [
       { id: 'pool', label: 'Pool', shape: { kind: 'circle' as const, x: 100, y: 300, r: 30 }, color: 0, terrain: 'water' as const },
     ]
-    expect(canPlace({ x: 100, y: 300 }, 20, { path: PATH, bounds: BOUNDS, obstacles })).toEqual({
+    expect(canPlace({ x: 100, y: 300 }, 20, { path: PATH, bounds: BOUNDS, ground: () => true, obstacles })).toEqual({
       ok: false,
       reason: 'obstacle',
     })
     // a water god may build there
-    expect(canPlace({ x: 100, y: 300 }, 20, { path: PATH, bounds: BOUNDS, obstacles, terrain: 'water' }).ok).toBe(true)
+    expect(canPlace({ x: 100, y: 300 }, 20, { path: PATH, bounds: BOUNDS, ground: () => true, obstacles, terrain: 'water' }).ok).toBe(true)
   })
 
   it('blocks placing too close to another tower', () => {
     const towers = [{ pos: { x: 100, y: 300 }, footprint: 20 }]
-    expect(canPlace({ x: 110, y: 300 }, 20, { path: PATH, bounds: BOUNDS, obstacles: [], towers })).toEqual({
+    expect(canPlace({ x: 110, y: 300 }, 20, { path: PATH, bounds: BOUNDS, ground: () => true, obstacles: [], towers })).toEqual({
       ok: false,
       reason: 'too-close',
     })
   })
 
   it('blocks out-of-bounds', () => {
-    expect(canPlace({ x: 5, y: 300 }, 20, { path: PATH, bounds: BOUNDS, obstacles: [] })).toEqual({
+    expect(canPlace({ x: 5, y: 300 }, 20, { path: PATH, bounds: BOUNDS, ground: () => true, obstacles: [] })).toEqual({
       ok: false,
       reason: 'oob',
     })

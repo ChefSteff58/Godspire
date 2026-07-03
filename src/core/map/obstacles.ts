@@ -22,6 +22,7 @@ export const OBSTACLES: readonly Obstacle[] = [
   // Lake of Styx — FILLS the central pocket (2026-07-02 art direction: a real lake, not a pond).
   // Land gods lose most of the pocket; Poseidon gains a real domain (he builds on water).
   { id: 'styx', label: 'Lake of Styx', shape: { kind: 'circle', x: 590, y: 320, r: 60 }, color: 0x2f6f8c, terrain: 'water' },
-  // Olive grove — upper-center pocket.
-  { id: 'olive', label: 'Olive Grove', shape: { kind: 'rect', x: 355, y: 147, w: 92, h: 46 }, color: 0x4a6b2f },
+  // Olive grove — upper-center pocket (nudged south in M9: the old anchor landed on a chasm cell
+  // once cliffs became gameplay; the sacred tree needs solid ground).
+  { id: 'olive', label: 'Olive Grove', shape: { kind: 'rect', x: 355, y: 180, w: 92, h: 46 }, color: 0x4a6b2f },
 ]

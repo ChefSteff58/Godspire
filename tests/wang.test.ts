@@ -3,7 +3,7 @@ import {
   cornerMask,
   layoutWangTiles,
   roadPredicate,
-  groundPatchPredicate,
+  stonePredicate,
   WANG_TILE_FOR_MASK,
 } from '../src/game/render/wang'
 import { OLYMPUS_PATH } from '../src/core/map/path'
@@ -65,10 +65,10 @@ describe('roadPredicate', () => {
   })
 })
 
-describe('groundPatchPredicate', () => {
+describe('stonePredicate (via wang re-export)', () => {
   it('is deterministic for the same seed and mixes both terrains', () => {
-    const a = groundPatchPredicate(7, { x: 0, y: 540 }, 300)
-    const b = groundPatchPredicate(7, { x: 0, y: 540 }, 300)
+    const a = stonePredicate(7, { x: 0, y: 540 }, 300)
+    const b = stonePredicate(7, { x: 0, y: 540 }, 300)
     let upper = 0
     let total = 0
     for (let vx = 0; vx <= 30; vx++) {
@@ -86,7 +86,7 @@ describe('groundPatchPredicate', () => {
   })
 
   it('biases toward ash (lower) near the rift', () => {
-    const p = groundPatchPredicate(7, { x: 0, y: 540 }, 300)
+    const p = stonePredicate(7, { x: 0, y: 540 }, 300)
     let nearUpper = 0
     let farUpper = 0
     let n = 0

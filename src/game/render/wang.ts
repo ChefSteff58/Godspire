@@ -61,39 +61,11 @@ export function roadPredicate(path: readonly Vec2[], halfWidth: number): (x: num
 }
 
 /**
- * Deterministic sin-hash in [0,1) — the same idiom as GameScene.seeded, duplicated here so this
- * module stays Phaser-free. Identical inputs give identical patterns on every boot (a hard
- * requirement: the map must not reshuffle between sessions).
+ * The terrain noise itself lives in CORE now (src/core/map/terrain.ts) — cliffs became GAMEPLAY in
+ * M9, so placement and rendering must share one deterministic truth. This module keeps the Wang
+ * tiling machinery; re-export the canonical predicates for render callers.
  */
-function seeded(n: number): number {
-  const v = Math.sin(n * 9871.123) * 43758.5453
-  return v - Math.floor(v)
-}
-
-/**
- * Ground-variance predicate: low-frequency deterministic value noise deciding "upper" (stone) vs
- * "lower" (ash) patches, with a radial bias pulling terrain toward ash near `biasCenter` (the
- * Tartarus rift) — one 16-tile set buys an organic, story-flavored field instead of 510 clones.
- * Sampling is snapped to the vertex grid so all four cells sharing a vertex agree on it.
- */
-export function groundPatchPredicate(
-  seed: number,
-  biasCenter: Vec2,
-  biasRadius: number,
-  tilePx = 32,
-): (x: number, y: number) => boolean {
-  return (x, y) => {
-    const vx = Math.round(x / tilePx)
-    const vy = Math.round(y / tilePx)
-    // two octaves of smoothed value noise over the vertex lattice
-    const n1 = seeded(seed + vx * 13.37 + vy * 7.77)
-    const n2 = seeded(seed * 1.7 + Math.floor(vx / 3) * 31.7 + Math.floor(vy / 3) * 17.3)
-    const noise = n1 * 0.35 + n2 * 0.65 // low-frequency dominates → patches, not confetti
-    const d = Math.hypot(x - biasCenter.x, y - biasCenter.y)
-    const ashBias = Math.max(0, 1 - d / biasRadius) * 0.45 // near the rift, ash wins more often
-    return noise - ashBias > 0.38 // tuned threshold: ~stone-dominant field with real ash pockets
-  }
-}
+export { stonePredicate, grassPredicate, terrainAt, isBuildableGround } from '../../core/map/terrain'
 
 /**
  * mask → tile index in the DOWNLOADED tileset files (`tile_<set>_<idx>.png`). PixelLab's on-disk

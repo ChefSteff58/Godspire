@@ -2,11 +2,12 @@ import type { Vec2 } from '../types'
 import { OLYMPUS_PATH } from './path'
 import type { Obstacle } from './obstacles'
 import { OBSTACLES } from './obstacles'
+import { isBuildableGround } from './terrain'
 
 export const PATH_HALF_WIDTH = 20 // tight to the walkable road so towers can hug the track
 export const PLACEMENT_BUFFER = 2
 
-export type PlaceReason = 'oob' | 'on-path' | 'obstacle' | 'too-close'
+export type PlaceReason = 'oob' | 'on-path' | 'cliff' | 'obstacle' | 'too-close'
 export type PlaceResult = { ok: true } | { ok: false; reason: PlaceReason }
 
 const OK: PlaceResult = { ok: true }
@@ -42,23 +43,33 @@ export interface PlaceCtx {
   bounds?: { w: number; h: number }
   /** A water god may build on water-terrain obstacles. */
   terrain?: 'water'
+  /** Buildable-ground predicate (defaults to the canonical terrain noise — chasm cells reject). */
+  ground?: (x: number, y: number) => boolean
 }
 
 /**
  * Can a tower with `footprint` be placed at `pos`? Pure & testable. Blocked when: off-bounds,
- * on the path corridor, overlapping an obstacle, or too close to another tower.
+ * on the path corridor, on chasm ground (M9 cliffs — center-only check: the predicate is snapped
+ * to the 32px lattice, so a ring test buys aliasing, not accuracy, and edge overhang reads as
+ * "standing at the cliff lip"), overlapping an obstacle, or too close to another tower.
  */
 export function canPlace(pos: Vec2, footprint: number, ctx: PlaceCtx = {}): PlaceResult {
   const path = ctx.path ?? OLYMPUS_PATH
   const obstacles = ctx.obstacles ?? OBSTACLES
   const towers = ctx.towers ?? []
   const bounds = ctx.bounds ?? { w: 960, h: 540 }
+  const ground = ctx.ground ?? isBuildableGround
 
   if (pos.x < footprint || pos.x > bounds.w - footprint || pos.y < footprint || pos.y > bounds.h - footprint) {
     return { ok: false, reason: 'oob' }
   }
   if (distToPolyline(pos, path) < PATH_HALF_WIDTH + footprint + PLACEMENT_BUFFER) {
     return { ok: false, reason: 'on-path' }
+  }
+  // Poseidon (terrain:'water') is exempt — his lake may sit over chasm vertices; land gods are
+  // blocked from the water by the obstacle check below anyway.
+  if (ctx.terrain !== 'water' && !ground(pos.x, pos.y)) {
+    return { ok: false, reason: 'cliff' }
   }
   for (const o of obstacles) {
     if (o.terrain === 'water' && ctx.terrain === 'water') continue

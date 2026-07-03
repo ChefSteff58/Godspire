@@ -42,7 +42,8 @@ import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
 import { hasSprite, hasTileset } from '../assets/manifest'
 import { DirAnimSprite } from '../render/DirAnimSprite'
-import { layoutWangTiles, groundPatchPredicate, WANG_TILE_FOR_MASK } from '../render/wang'
+import { layoutWangTiles, WANG_TILE_FOR_MASK } from '../render/wang'
+import { stonePredicate, grassPredicate, TERRAIN_TILE_PX } from '../../core/map/terrain'
 import { dir8, dirToTarget } from '../render/facing'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
@@ -64,15 +65,13 @@ const ATTACK_HOLD_MS = 450
 // The sim's base walk speed (px/s) — enemy walk-cycle cadence is scaled by speed/BASE so charmed foes
 // visibly crawl and satyrs visibly sprint instead of every walk cycling at one fixed fps.
 const BASE_ENEMY_SPEED = 60
-// The Wang ground tileset (M8 Stage 4). 32px tiles over the 960×540 field → a 30×17 grid (the last
-// row overdraws 4px; Scale.FIT clips it). GROUND_SEED/RIFT_BIAS are the art-director dials for the
-// deterministic ash-patch pattern.
+// The Wang ground tilesets (M8 Stage 4; M9 adds the 3-band gradient). 32px tiles over the 960×540
+// field → a 30×17 grid (the last row overdraws 4px; Scale.FIT clips it). The terrain NOISE lives in
+// src/core/map/terrain.ts — cliffs are GAMEPLAY now, so render + placement share one canonical truth.
 const TILE_SET = 'ashen'
-const TILE_PX = 32
+const GRASS_SET = 'meadow'
 const TILE_COLS = 30
 const TILE_ROWS = 17
-const GROUND_SEED = 7
-const RIFT_BIAS_RADIUS = 300
 // Per-kind art sizes — a deliberate SILHOUETTE LADDER. The old max(radius*3, 46) floor flattened
 // everything to ~46px, which is why the roster read as "too similar": size is the fastest identifier.
 const ENEMY_ART_PX: Record<string, number> = {
@@ -329,16 +328,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The Wang ground layer: 30×17 static 32px tiles picked per corner-mask from the deterministic
-   * ash/stone patch pattern (see src/game/render/wang.ts). All-or-nothing on the tileset — when it
-   * isn't imported yet this renders nothing and the drawn map below carries the field (the same
-   * sprite-with-fallback rule as creatures). Returns whether tiles rendered.
+   * The Wang ground layers. Base: chasm vs buildable stone — the CANONICAL core predicate that
+   * placement also rejects on (cliffs are gameplay). Overlay: grass ⊂ stone biased toward the gate,
+   * stamped only where its mask is non-empty (the meadow set's lower terrain IS the same stone base
+   * tile, so transitions sit seamlessly on the base layer). All-or-nothing per tileset — missing art
+   * renders nothing and the drawn map below carries the field. Returns whether tiles rendered.
    */
   private drawTiledGround(): boolean {
     if (!hasTileset(TILE_SET)) return false
-    const rift = OLYMPUS_PATH[0]
-    const isStone = groundPatchPredicate(GROUND_SEED, rift, RIFT_BIAS_RADIUS, TILE_PX)
-    for (const p of layoutWangTiles(TILE_COLS, TILE_ROWS, TILE_PX, isStone)) {
+    const isStone = stonePredicate()
+    for (const p of layoutWangTiles(TILE_COLS, TILE_ROWS, TERRAIN_TILE_PX, isStone)) {
       const img = this.add
         .image(p.x, p.y, `tile_${TILE_SET}_${WANG_TILE_FOR_MASK[p.mask]}`)
         .setOrigin(0)
@@ -348,6 +347,20 @@ export class GameScene extends Phaser.Scene {
       if (p.mask === 0 || p.mask === 15) {
         const r = GameScene.seeded(p.col * 31 + p.row)
         img.setFlipX(r < 0.5).setFlipY(r > 0.25 && r < 0.75)
+      }
+    }
+    if (hasTileset(GRASS_SET)) {
+      const isGrass = grassPredicate()
+      for (const p of layoutWangTiles(TILE_COLS, TILE_ROWS, TERRAIN_TILE_PX, isGrass)) {
+        if (p.mask === 0) continue // bare stone shows the base layer — no wasted images
+        const img = this.add
+          .image(p.x, p.y, `tile_${GRASS_SET}_${WANG_TILE_FOR_MASK[p.mask]}`)
+          .setOrigin(0)
+          .setDepth(0.25)
+        if (p.mask === 15) {
+          const r = GameScene.seeded(p.col * 47 + p.row * 3)
+          img.setFlipX(r < 0.5).setFlipY(r > 0.25 && r < 0.75)
+        }
       }
     }
     return true
