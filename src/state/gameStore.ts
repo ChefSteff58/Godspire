@@ -92,6 +92,8 @@ interface GameStore {
   runSummary: RunSummary | null
   /** The speed to restore after a draft pause — stashed so 3× FF survives the modal. */
   preDraftScale: number
+  /** Whole seconds left on the Fate Draft's decision clock (null = no draft open). */
+  draftTimerSec: number | null
   /** The currently-selected placed tower (set by the scene on click), or null. */
   selectedTower: SelectedTower | null
 
@@ -114,6 +116,7 @@ interface GameStore {
   mirrorRun: (s: RunSnapshot) => void
   setRunSummary: (s: RunSummary | null) => void
   setPreDraftScale: (scale: number) => void
+  setDraftTimer: (sec: number | null) => void
   setSelectedTower: (sel: SelectedTower | null) => void
   resetRun: () => void
   drainIntents: () => RunIntent[]
@@ -142,6 +145,7 @@ const FRESH_RUN = {
   canStartWave: true,
   runSummary: null,
   preDraftScale: 1,
+  draftTimerSec: null,
   selectedTower: null,
 }
 
@@ -210,6 +214,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }),
   setRunSummary: (runSummary) => set({ runSummary }),
   setPreDraftScale: (preDraftScale) => set({ preDraftScale }),
+  setDraftTimer: (draftTimerSec) => set((s) => (s.draftTimerSec === draftTimerSec ? s : { draftTimerSec })),
   setSelectedTower: (selectedTower) => set({ selectedTower }),
   resetRun: () => set({ ...FRESH_RUN, elapsed: 0, placingGod: null, intents: [] }),
   drainIntents: () => {

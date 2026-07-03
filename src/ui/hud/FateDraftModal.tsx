@@ -9,15 +9,23 @@ const RARITY: Record<Rarity, { ring: string; text: string; label: string }> = {
   legendary: { ring: 'border-amber-400/60 hover:border-amber-300', text: 'text-amber-300', label: 'Legendary' },
 }
 
+/** The draft's full decision window (keep in sync with GameScene's DRAFT_TIMER_MS). */
+const DRAFT_TIMER_FULL_SEC = 20
+
 /**
  * The Fate Draft: pick 1 of 3 boons between waves. The sim is paused (timeScale 0) while this is
  * open; the overlay captures pointer events so a click can't fall through to the paused canvas and
- * queue a stray tower placement that would fire on un-pause.
+ * queue a stray tower placement that would fire on un-pause. A wall-clock decision timer (driven by
+ * GameScene) counts down — at zero the Fates pick for you, so an AFK player never blocks the run.
  */
 export function FateDraftModal() {
   const options = useGameStore((s) => s.draftOptions)
   const pickDraft = useGameStore((s) => s.pickDraft)
+  const timerSec = useGameStore((s) => s.draftTimerSec)
   if (!options) return null
+
+  const urgent = timerSec !== null && timerSec <= 5
+  const frac = timerSec !== null ? Math.max(0, Math.min(1, timerSec / DRAFT_TIMER_FULL_SEC)) : 1
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-slate-950/80 backdrop-blur-sm">
@@ -25,6 +33,19 @@ export function FateDraftModal() {
         <h2 className="font-serif text-2xl font-bold text-amber-300">The Fates offer a boon</h2>
         <p className="text-sm text-slate-400">Choose one — it lasts the rest of the run.</p>
       </div>
+      {timerSec !== null && (
+        <div className="flex flex-col items-center gap-1">
+          <span className={`font-mono text-sm font-bold ${urgent ? 'animate-pulse text-red-400' : 'text-slate-300'}`}>
+            {urgent ? `⚡ The Fates choose in ${timerSec}…` : `${timerSec}s`}
+          </span>
+          <div className="h-1.5 w-64 overflow-hidden rounded-full bg-slate-800">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ease-linear ${urgent ? 'bg-red-500' : 'bg-amber-400'}`}
+              style={{ width: `${frac * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
       <div className="flex gap-4">
         {options.map((opt, i) => {
           if (opt.type !== 'boon') return null

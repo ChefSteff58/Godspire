@@ -80,6 +80,9 @@ const ENEMY_ART_PX: Record<string, number> = {
 // Kill feedback throttles: float a bounty only for meaty kills, and only while the field is readable.
 const BOUNTY_FLOAT_MIN = 8
 const BOUNTY_FLOAT_MAX_BODIES = 40
+// The Fate Draft's decision clock (wall time): urgency for the present player, and an AFK player can
+// never block the run — when it expires, the Fates choose for them (a random card).
+const DRAFT_TIMER_MS = 20_000
 
 /** A Hephaestus spike trap on the path — pops each ground enemy once, consuming a charge. */
 type Spike = { pos: Vec2; charges: number; damage: number; hitRadius: number; hitIds: Set<string> }
@@ -141,6 +144,7 @@ export class GameScene extends Phaser.Scene {
   private run = new RunController()
   private runEnded = false
   private draftWasOpen = false
+  private draftClockMs = 0 // wall-clock ms left on the open draft's decision timer
   private selectedTowerId: string | null = null
   // Soft ellipse shadows ground every creature; fliers get a smaller, fainter one so altitude reads.
   private readonly enemyShadows = new Map<string, Phaser.GameObjects.Ellipse>()
@@ -447,7 +451,7 @@ export class GameScene extends Phaser.Scene {
     this.applyIntents()
     this.run.autoStart = useGameStore.getState().autoStart // read-through preference
     if (this.run.phase === 'over' && !this.runEnded) this.endRun()
-    this.syncDraftPause()
+    this.syncDraftPause(delta)
 
     // Effective sim scale, enforced EVERY frame: any pause overlay (Pantheon / Ranks / the Fate
     // Draft) forces 0 no matter what other writers (SpeedControls' resume button, a closing sibling
@@ -598,17 +602,35 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Pause the sim for the Fate Draft, stashing the player's prior speed (so 3× FF survives). */
-  private syncDraftPause(): void {
+  /**
+   * Pause the sim for the Fate Draft (stashing the player's prior speed so 3× FF survives), and run
+   * the draft's DECISION CLOCK on wall time: when it expires, the Fates pick a random card — an AFK
+   * player never blocks the run, and a present one feels the urgency. The clock freezes while a menu
+   * overlay (Pantheon / Ranks) is open, and the delta clamp means a hidden tab resumes, not expires.
+   */
+  private syncDraftPause(deltaMs: number): void {
     const store = useGameStore.getState()
     const open = !!this.run.draft
     if (open && !this.draftWasOpen) {
       this.draftWasOpen = true
+      this.draftClockMs = DRAFT_TIMER_MS
       store.setPreDraftScale(store.timeScale === 0 ? 1 : store.timeScale)
       store.setSpeed(0)
     } else if (!open && this.draftWasOpen) {
       this.draftWasOpen = false
       store.setSpeed(store.preDraftScale || 1)
+    }
+    if (open) {
+      if (!store.pantheonOpen && !store.leaderboardOpen) {
+        this.draftClockMs -= Math.min(deltaMs, 100) // clamp: returning from a hidden tab resumes the clock
+        if (this.draftClockMs <= 0) {
+          const draft = this.run.draft!
+          this.run.pickDraft(Math.floor(Math.random() * draft.length)) // the Fates grow impatient
+        }
+      }
+      store.setDraftTimer(Math.max(0, Math.ceil(this.draftClockMs / 1000)))
+    } else {
+      store.setDraftTimer(null)
     }
   }
 
