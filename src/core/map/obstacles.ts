@@ -19,8 +19,9 @@ export const OBSTACLES: readonly Obstacle[] = [
   { id: 'columns', label: 'Ruined Columns', shape: { kind: 'circle', x: 90, y: 210, r: 24 }, color: 0x7a7d88 },
   // Boulder — right-side pocket, forces tower spacing on the approach to Olympus.
   { id: 'boulder', label: 'Boulder', shape: { kind: 'circle', x: 720, y: 200, r: 26 }, color: 0x4a4a52 },
-  // Pool of Styx — contests the central pocket (water hook for Poseidon later).
-  { id: 'styx', label: 'Pool of Styx', shape: { kind: 'circle', x: 590, y: 320, r: 30 }, color: 0x2f6f8c, terrain: 'water' },
+  // Lake of Styx — FILLS the central pocket (2026-07-02 art direction: a real lake, not a pond).
+  // Land gods lose most of the pocket; Poseidon gains a real domain (he builds on water).
+  { id: 'styx', label: 'Lake of Styx', shape: { kind: 'circle', x: 590, y: 320, r: 60 }, color: 0x2f6f8c, terrain: 'water' },
   // Olive grove — upper-center pocket.
   { id: 'olive', label: 'Olive Grove', shape: { kind: 'rect', x: 355, y: 147, w: 92, h: 46 }, color: 0x4a6b2f },
 ]

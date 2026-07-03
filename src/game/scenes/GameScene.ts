@@ -417,6 +417,15 @@ export class GameScene extends Phaser.Scene {
     const g = this.add.graphics().setDepth(2)
     for (const o of OBSTACLES) {
       const s = o.shape
+      // dropped-in prop art (obj_<id>.png) replaces the drawn shape — the dead-zone FOOTPRINT is
+      // still obstacles.ts data either way (canPlace never looks at pixels). Props draw LARGER than
+      // their footprints (like creatures) so the map reads at real scale, not miniature.
+      const objKey = `obj_${o.id}`
+      if (this.textures.exists(objKey)) {
+        if (s.kind === 'circle') this.addSpriteScaled(objKey, s.x, s.y, s.r * 3.1).setDepth(2)
+        else this.addSpriteScaled(objKey, s.x + s.w / 2, s.y + s.h / 2, Math.max(s.w, s.h) * 1.5).setDepth(2)
+        continue
+      }
       if (o.id === 'styx' && s.kind === 'circle') {
         g.fillStyle(0x123847, 0.95)
         g.fillCircle(s.x, s.y, s.r)
@@ -456,36 +465,45 @@ export class GameScene extends Phaser.Scene {
     const start = OLYMPUS_PATH[0]
     const end = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
     const g = this.add.graphics().setDepth(2)
-    // Tartarus rift — concentric ellipses bleeding off the bottom-left edge
-    const rings: [number, number][] = [
-      [62, 0x2a0810],
-      [46, 0x7a1020],
-      [30, 0xd83a2a],
-      [15, 0xffb070],
-    ]
-    for (const [r, c] of rings) {
-      g.fillStyle(c, 0.92)
-      g.fillEllipse(start.x, start.y, r * 1.9, r * 1.35)
+    // Mouth of Tartarus — prop art when dropped in (big enough to swallow the path start; no text
+    // label — the art has to say "hellmouth" by itself), else concentric ellipses off the edge.
+    if (this.textures.exists('obj_rift')) {
+      this.addSpriteScaled('obj_rift', start.x + 16, start.y, 270).setDepth(2)
+    } else {
+      const rings: [number, number][] = [
+        [62, 0x2a0810],
+        [46, 0x7a1020],
+        [30, 0xd83a2a],
+        [15, 0xffb070],
+      ]
+      for (const [r, c] of rings) {
+        g.fillStyle(c, 0.92)
+        g.fillEllipse(start.x, start.y, r * 1.9, r * 1.35)
+      }
+      this.add
+        .text(start.x + 34, start.y - 46, 'Tartarus', { fontFamily: 'Georgia, serif', fontSize: '12px', color: '#e08a98' })
+        .setOrigin(0.5)
+        .setDepth(2)
     }
-    this.add
-      .text(start.x + 34, start.y - 46, 'Tartarus', { fontFamily: 'Georgia, serif', fontSize: '12px', color: '#e08a98' })
-      .setOrigin(0.5)
-      .setDepth(2)
-    // Olympus gate — gold pillared slab off the top-right edge
-    g.fillStyle(0xf5d061, 0.96)
-    g.fillRoundedRect(end.x - 78, end.y - 36, 130, 74, 6)
-    g.fillStyle(0xbfa03a, 1)
-    g.fillRect(end.x - 64, end.y - 36, 11, 74)
-    g.fillRect(end.x - 30, end.y - 36, 11, 74)
-    this.add
-      .text(end.x - 44, end.y, 'OLYMPUS', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '11px',
-        color: '#1a1407',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(2)
+    // Olympus gate — prop art when dropped in (label-free for the same reason), else the drawn slab
+    if (this.textures.exists('obj_gate')) {
+      this.addSpriteScaled('obj_gate', end.x - 20, end.y, 230).setDepth(2)
+    } else {
+      g.fillStyle(0xf5d061, 0.96)
+      g.fillRoundedRect(end.x - 78, end.y - 36, 130, 74, 6)
+      g.fillStyle(0xbfa03a, 1)
+      g.fillRect(end.x - 64, end.y - 36, 11, 74)
+      g.fillRect(end.x - 30, end.y - 36, 11, 74)
+      this.add
+        .text(end.x - 44, end.y, 'OLYMPUS', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '11px',
+          color: '#1a1407',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(2)
+    }
   }
 
   update(_time: number, delta: number): void {
