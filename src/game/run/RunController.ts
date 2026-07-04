@@ -49,6 +49,8 @@ export class RunController {
   private buildGraceMs = BUILD_GRACE_MS
   private shieldCharges = 0
   private secondWindArmed = false
+  /** Gods currently fielded — GameScene refreshes on place/sell; draft filters dead god-boons. */
+  builtGods = new Set<string>()
   /** Pulses true the moment Nike catches a fatal leak — GameScene consumes it for the fanfare. */
   secondWindFired = false
 
@@ -271,7 +273,10 @@ export class RunController {
         this.wave,
         this.rng,
         3 + (this.meta.draftBonusOptions ?? 0), // Pantheon draft luck
-        (b) => b.effect.kind === 'secondWind' && this.secondWindArmed, // an armed Nike re-offer is a dead card
+        (b) =>
+          (b.effect.kind === 'secondWind' && this.secondWindArmed) || // an armed Nike re-offer is dead
+          (b.effect.kind === 'livesGrant' && this.lives >= this.maxLives) || // heal at full HP is dead
+          (b.effect.kind === 'godDamageMul' && !this.builtGods.has(b.effect.god)), // boon for an unfielded god is dead
       )
       this.nextDraftWave = scheduleNextDraft(this.wave, this.rng)
     }

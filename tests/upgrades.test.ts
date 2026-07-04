@@ -166,8 +166,8 @@ describe('demeterIncome', () => {
   })
 
   it('Vault scales with the wave number', () => {
-    const d = tower('demeter', 0, 1) // Seed Capital: +5 × wave
-    expect(demeterIncome(d, 10)).toBe(50 + 5 * 10)
-    expect(demeterIncome(d, 20)).toBe(50 + 5 * 20)
+    const d = tower('demeter', 0, 1) // Seed Capital: +4 × wave (fleet retune: Plutus dominance capped)
+    expect(demeterIncome(d, 10)).toBe(50 + 4 * 10)
+    expect(demeterIncome(d, 20)).toBe(50 + 4 * 20)
   })
 })

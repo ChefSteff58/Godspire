@@ -51,11 +51,11 @@ export const TOWER_DAMAGE_CAP = 12
 
 export const BOON_POOL: readonly Boon[] = [
   // ── Economy ──
-  { id: 'eco-midas-windfall', name: "Midas' Windfall", desc: '+200 gold, now.', flavor: 'Everything I touch turns to gold. Including this conversation.', icon: '🪙', rarity: 'common', category: 'eco', effect: { kind: 'goldGrant', value: 200 } },
+  { id: 'eco-midas-windfall', name: "Midas' Windfall", desc: '+300 gold, now.', flavor: 'Everything I touch turns to gold. Including this conversation.', icon: '🪙', rarity: 'common', category: 'eco', effect: { kind: 'goldGrant', value: 300 } },
   { id: 'eco-tithe-of-the-fallen', name: 'Tithe of the Fallen', desc: '+2 gold per kill.', flavor: 'Every monster pays a toll on the way to the Underworld.', icon: '💰', rarity: 'common', category: 'eco', effect: { kind: 'goldPerKillAdd', value: 2 } },
   { id: 'eco-coin-of-charon', name: 'Coin of Charon', desc: '+5 gold per kill.', flavor: "The ferryman's rates went up. Good thing your foes are paying.", icon: '⚱️', rarity: 'rare', category: 'eco', effect: { kind: 'goldPerKillAdd', value: 5 } },
   { id: 'eco-spoils-of-war', name: 'Spoils of War', desc: '+10 gold per kill.', flavor: "Don't loot the bodies — just leave them where you can reach.", icon: '🏺', rarity: 'epic', category: 'eco', effect: { kind: 'goldPerKillAdd', value: 10 } },
-  { id: 'eco-favor-of-fortuna', name: 'Favor of Fortuna', desc: '+350 gold and +10 lives, now.', flavor: 'Lady Luck owed me. I collect in gold and in lives.', icon: '🍀', rarity: 'epic', category: 'eco', effect: { kind: 'composite', effects: [{ kind: 'goldGrant', value: 350 }, { kind: 'livesGrant', value: 10 }] } },
+  { id: 'eco-favor-of-fortuna', name: 'Favor of Fortuna', desc: '+600 gold and +15 lives, now.', flavor: 'Lady Luck owed me. I collect in gold and in lives.', icon: '🍀', rarity: 'epic', category: 'eco', effect: { kind: 'composite', effects: [{ kind: 'goldGrant', value: 600 }, { kind: 'livesGrant', value: 15 }] } },
 
   // ── Offense (global) ──
   { id: 'off-divine-wrath', name: 'Divine Wrath', desc: 'All gods deal +15% damage.', flavor: 'When gods get angry, mortals get archaeology.', icon: '⚔️', rarity: 'common', category: 'off', effect: { kind: 'towerDamageMul', value: 1.15 } },
@@ -71,8 +71,8 @@ export const BOON_POOL: readonly Boon[] = [
 
   // ── Defense / survival ──
   { id: 'def-ambrosia-draught', name: 'Draught of Ambrosia', desc: '+20 lives, now.', flavor: "A sip of the gods' own brunch. Olympus exhales.", icon: '🍶', rarity: 'common', category: 'def', effect: { kind: 'livesGrant', value: 20 } },
-  { id: 'def-aegis-of-athena', name: 'Aegis of Athena', desc: '+15 max lives (and heal 15).', flavor: 'She lends the shield. You still have to not die behind it.', icon: '🛡️', rarity: 'rare', category: 'def', effect: { kind: 'maxLivesAdd', value: 15 } },
-  { id: 'def-bulwark-of-styx', name: 'Bulwark of Styx', desc: 'Gain a 5-charge gate shield — each leak burns a charge, not a life.', flavor: 'Dip Olympus in the river. Mind the one unprotected heel.', icon: '🌊', rarity: 'epic', category: 'def', effect: { kind: 'gateShield', value: 5 } },
+  { id: 'def-aegis-of-athena', name: 'Aegis of Athena', desc: '+25 max lives (and heal 25).', flavor: 'She lends the shield. You still have to not die behind it.', icon: '🛡️', rarity: 'rare', category: 'def', effect: { kind: 'maxLivesAdd', value: 25 } },
+  { id: 'def-bulwark-of-styx', name: 'Bulwark of Styx', desc: 'Gain an 8-charge gate shield — each leak burns a charge, not a life.', flavor: 'Dip Olympus in the river. Mind the one unprotected heel.', icon: '🌊', rarity: 'epic', category: 'def', effect: { kind: 'gateShield', value: 8 } },
   { id: 'def-second-wind-of-nike', name: 'Second Wind of Nike', desc: 'Once: when Olympus would fall, rise again at 25 lives.', flavor: 'Victory hates a loose end. Once, she refuses to let you lose.', icon: '🪶', rarity: 'legendary', category: 'def', effect: { kind: 'secondWind' } },
 
   // ── Utility ──
@@ -80,7 +80,7 @@ export const BOON_POOL: readonly Boon[] = [
 
   // ── Synergy / build-defining ──
   { id: 'syn-storm-front', name: 'Storm Front', desc: 'Zeus +35% damage and all gods +10% fire rate.', flavor: 'Zeus picks the target. Hermes picks the tempo.', icon: '🌩️', rarity: 'rare', category: 'syn', effect: { kind: 'composite', effects: [{ kind: 'godDamageMul', god: 'zeus', value: 1.35 }, { kind: 'fireRateMul', value: 1.1 }] } },
-  { id: 'syn-gamblers-laurel', name: "Gambler's Laurel", desc: 'Coin flip: +80% all-god damage… or −20%.', flavor: "Heads, you're a legend. Tails, the Fates laughed.", icon: '🎲', rarity: 'legendary', category: 'syn', effect: { kind: 'coinflipFold', win: { kind: 'towerDamageMul', value: 1.8 }, lose: { kind: 'towerDamageMul', value: 0.8 } } },
+  { id: 'syn-gamblers-laurel', name: "Gambler's Laurel", desc: 'Coin flip: +120% all-god damage… or −20%.', flavor: "Heads, you're a legend. Tails, the Fates laughed.", icon: '🎲', rarity: 'legendary', category: 'syn', effect: { kind: 'coinflipFold', win: { kind: 'towerDamageMul', value: 2.2 }, lose: { kind: 'towerDamageMul', value: 0.8 } } },
 ]
 
 /** A fresh RunModifiers seeded from the meta save (before any boon). godDamageMul covers every god. */

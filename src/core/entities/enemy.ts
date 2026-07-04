@@ -204,11 +204,14 @@ export function applySlow(enemy: Enemy, mul: number, durationMs: number): void {
  * The `max(1, …)` floor guarantees armored enemies are never literally unkillable, while big
  * single hits (Zeus Tyrant) shrug off armor and rapid weak shots crater against it.
  */
-export function damageEnemy(enemy: Enemy, amount: number): boolean {
+export function damageEnemy(enemy: Enemy, amount: number, bossDamageMul = 1): boolean {
   // A boss damage cap (Nemean) clamps the INCOMING hit first, THEN armor subtracts, THEN the
   // min-1 floor — so one huge bolt can't one-shot it, but it's still never literally unkillable.
   const capped = enemy.damageCap !== undefined ? Math.min(amount, enemy.damageCap) : amount
-  const dealt = Math.max(1, capped - enemy.armor)
+  // boss-slayer bonuses (Pantheon Titan-Slayer) multiply AFTER the clamp — applied before it,
+  // the capstone was worth exactly 0% against the cap boss for any hit already at the cap
+  const boosted = enemy.kind === 'boss' ? capped * bossDamageMul : capped
+  const dealt = Math.max(1, boosted - enemy.armor)
   enemy.hp -= dealt
   return enemy.hp <= 0
 }

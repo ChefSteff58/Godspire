@@ -169,6 +169,8 @@ export class GameScene extends Phaser.Scene {
   private draftClockMs = 0 // wall-clock ms left on the open draft's decision timer
   private selectedTowerId: string | null = null
   private hoveredTowerId: string | null = null
+  /** prefers-reduced-motion: camera shake/flash/zoom are gated on this (sprite tweens stay). */
+  private reduceMotion = false
   private pendingPreviewWave: number | null = null // a draft modal would swallow the telegraph
   // True when the Wang ground tileset rendered this boot — gates the terrain-plot fallback AND the
   // creature/tower shadows (shadows only read as grounded on real terrain, per the 07-01 playtest).
@@ -254,6 +256,9 @@ export class GameScene extends Phaser.Scene {
     useGameStore.getState().setSelectedTower(null)
     useGameStore.getState().mirrorRun(this.run.snapshot())
 
+    this.reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    this.hoveredTowerId = null
+    this.input.setDefaultCursor('default') // restart must not inherit a stale pointer cursor
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.worldX, y: p.worldY }
       // hover affordance: the upgrade/sell system is invisible without it (cursor + faint ring)
@@ -1095,7 +1100,7 @@ export class GameScene extends Phaser.Scene {
     const income = this.run.settle(this.enemies.length + this.pendingSpawns.length)
     if (income !== null) {
       this.payDemeterIncome()
-      this.cameras.main.flash(220, 70, 56, 10) // juice: a soft gold pulse celebrates a cleared wave
+      if (!this.reduceMotion) this.cameras.main.flash(220, 70, 56, 10) // juice: a soft gold pulse celebrates a cleared wave
       const gate = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
       this.floatText(gate.x - 44, gate.y - 44, `+${income} 🪙`, '#ffe066')
       // spike traps forget everyone they've popped — ids are unique per spawn, a settle means all dead
@@ -1233,8 +1238,8 @@ export class GameScene extends Phaser.Scene {
         sub.destroy()
       },
     })
-    this.cameras.main.flash(300, 120, 100, 30)
-    this.cameras.main.shake(220, 0.006)
+    if (!this.reduceMotion) this.cameras.main.flash(300, 120, 100, 30)
+    if (!this.reduceMotion) this.cameras.main.shake(220, 0.006)
   }
 
   /** Red pulse at the Olympus gate — the game's only negative feedback, so it's mandatory. */
@@ -1243,8 +1248,8 @@ export class GameScene extends Phaser.Scene {
     const fx = Math.min(end.x, GAME_WIDTH - 30) // the gate anchor is off-canvas — keep the sting visible
     const flash = this.add.circle(fx, end.y, 26, 0xff2d3a, 0.6).setDepth(9)
     this.tweens.add({ targets: flash, scale: 2.2, alpha: 0, duration: 320, onComplete: () => flash.destroy() })
-    this.cameras.main.shake(120, 0.004)
-    this.cameras.main.flash(160, 90, 12, 16) // juice: a dim red screen pulse — the leak STINGS
+    if (!this.reduceMotion) this.cameras.main.shake(120, 0.004)
+    if (!this.reduceMotion) this.cameras.main.flash(160, 90, 12, 16) // juice: a dim red screen pulse — the leak STINGS
   }
 
   private spawnEnemy(desc: SpawnDesc): void {
@@ -1344,7 +1349,7 @@ export class GameScene extends Phaser.Scene {
     } else if (preview.elite) {
       msg = '⚔ ELITE LEGION — Tartarus sends its heaviest!'
       color = '#ffc9a0'
-      this.cameras.main.shake(140, 0.003)
+      if (!this.reduceMotion) this.cameras.main.shake(140, 0.003)
     }
     if (!msg) return
     const t = this.add
@@ -1369,7 +1374,7 @@ export class GameScene extends Phaser.Scene {
     if (!enemy.bossId) return
     const boss = bossById(enemy.bossId)
     // juice: a dramatic entrance — shake + a brief punch-zoom that settles back
-    this.cameras.main.shake(300, 0.008)
+    if (!this.reduceMotion) this.cameras.main.shake(300, 0.008)
     this.cameras.main.zoomTo(1.08, 320, 'Sine.easeInOut')
     this.time.delayedCall(1100, () => this.cameras.main.zoomTo(1, 480, 'Sine.easeInOut'))
     // WHERE the threat comes from: the whole lane flashes in the boss's color…
@@ -1416,6 +1421,7 @@ export class GameScene extends Phaser.Scene {
     this.enemyShadows.get(enemy.id)?.destroy()
     this.enemyShadows.delete(enemy.id)
     this.posCache.delete(enemy.id)
+    this.lastBossFrac.delete(enemy.id)
     this.charmedIds.delete(enemy.id)
     for (const s of this.spikes.values()) s.hitIds.delete(enemy.id) // ids never recur — keep the sets tight
     const idx = this.enemies.indexOf(enemy)
@@ -1686,9 +1692,8 @@ export class GameScene extends Phaser.Scene {
 
   // ── damage + feedback ──
   private hitEnemy(enemy: Enemy, dmg: number, sparkColor = 0xffffff): void {
-    // Pantheon Titan-Slayer adds damage vs bosses (before the boss's own damage cap clamps it).
-    const amount = enemy.kind === 'boss' ? dmg * this.run.bossDamageMul : dmg
-    const dead = damageEnemy(enemy, amount)
+    // Pantheon Titan-Slayer multiplies AFTER the boss damage cap (inside damageEnemy).
+    const dead = damageEnemy(enemy, dmg, this.run.bossDamageMul)
     const pos = this.enemyPos(enemy)
     if (dead) {
       this.killEnemy(enemy, pos)
@@ -1698,7 +1703,8 @@ export class GameScene extends Phaser.Scene {
     // juice budget: under heavy fire, throttle the per-sprite flash (no solid-white strobing) and
     // thin the sparks so the swarm stays readable exactly when it matters most.
     const now = this.time.now
-    const canFlash = sprite ? now - ((sprite.getData('lastFlashMs') as number) ?? -1e9) >= 90 : false
+    const emerging = sprite?.getData('emergeAlpha') !== undefined // mid climb-out: no flash, no punch
+    const canFlash = !emerging && sprite ? now - ((sprite.getData('lastFlashMs') as number) ?? -1e9) >= 90 : false
     if (sprite && canFlash) {
       sprite.setData('lastFlashMs', now)
       const frac = enemy.hp / enemy.maxHp
@@ -1741,7 +1747,7 @@ export class GameScene extends Phaser.Scene {
     const color = enemyColor(enemy)
     const isBoss = enemy.kind === 'boss'
     this.burst(at.x, at.y, isBoss ? 40 : 14, color, isBoss ? 70 : 28, isBoss ? 8 : 3, isBoss ? 520 : 240)
-    if (isBoss) this.cameras.main.shake(320, 0.013) // a felled boss rocks the screen
+    if (isBoss) if (!this.reduceMotion) this.cameras.main.shake(320, 0.013) // a felled boss rocks the screen
     const poof = this.add.circle(at.x, at.y, isBoss ? 20 : 12, color, 0.7).setDepth(7)
     this.tweens.add({ targets: poof, scale: isBoss ? 4 : 2.4, alpha: 0, duration: isBoss ? 360 : 200, onComplete: () => poof.destroy() })
     // A death BEAT instead of a blink-out: detach the sprite (the sim forgets the enemy immediately —
@@ -2049,6 +2055,7 @@ export class GameScene extends Phaser.Scene {
     // radial arc fought the crisp sprite look). Sits by the feet, next to the ground shadow.
     for (const e of this.enemies) {
       if (e.hp >= e.maxHp || e.kind === 'boss') continue
+      if (this.enemySprites.get(e.id)?.getData('emergeAlpha') !== undefined) continue // still climbing out
       const p = this.enemyPos(e)
       const frac = Math.max(0, e.hp / e.maxHp)
       const w = enemyRadius(e) * 2 // width stays HITBOX-honest
@@ -2068,6 +2075,7 @@ export class GameScene extends Phaser.Scene {
   private renderBossBars(g: Phaser.GameObjects.Graphics): void {
     for (const e of this.enemies) {
       if (e.kind !== 'boss') continue
+      if (this.enemySprites.get(e.id)?.getData('emergeAlpha') !== undefined) continue // no bar over an invisible boss
       const p = this.enemyPos(e)
       const frac = Math.max(0, Math.min(1, e.hp / e.maxHp))
       // the ghost lags the real fill and drains toward it — recent damage reads as a bright chip
@@ -2097,6 +2105,12 @@ export class GameScene extends Phaser.Scene {
   /** Can this god be placed here? Adds water-gating (Poseidon) on top of the pure canPlace. */
   private canPlaceGod(god: GodKind, pos: Vec2): boolean {
     const stats = TOWER_STATS[god]
+    if (stats.mobile) {
+      // the orbit sweeps orbitRadius past the center — footprint-only bounds let the flier
+      // leave the canvas for a chunk of every loop
+      const r = stats.mobile.orbitRadius + 12
+      if (pos.x < r || pos.x > GAME_WIDTH - r || pos.y < r || pos.y > GAME_HEIGHT - r) return false
+    }
     const terrain = stats.requiresWater ? 'water' : undefined
     if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints(), terrain }).ok) return false
     if (stats.requiresWater && !this.onWater(pos)) return false
@@ -2323,6 +2337,11 @@ export class GameScene extends Phaser.Scene {
     this.towerLastFire.delete(id)
     this.towerShadows.get(id)?.destroy()
     this.towerShadows.delete(id)
+    if (this.hoveredTowerId === id) {
+      this.hoveredTowerId = null
+      this.input.setDefaultCursor('default')
+    }
+    this.run.builtGods = new Set(this.towers.filter((tw) => tw.id !== id).map((tw) => tw.god))
     this.effCache.delete(id)
     this.stepTargets.delete(id)
     this.homeBaseGfx.get(id)?.destroy() // remove a mobile god's home base with it
@@ -2398,7 +2417,7 @@ export class GameScene extends Phaser.Scene {
     if ((sprite.getData('charging') as boolean | undefined) === charging) return
     sprite.setData('charging', charging)
     if (charging) {
-      this.cameras.main.shake(110, 0.003)
+      if (!this.reduceMotion) this.cameras.main.shake(110, 0.003)
       const pos = this.enemyPos(enemy)
       this.burst(pos.x, pos.y + 8, 6, 0x8a7f6a, 20, 2, 260) // hooves kick up dust
       if (!(sprite instanceof Phaser.GameObjects.Arc)) sprite.setTint(0xff8a5a)
@@ -2473,6 +2492,7 @@ export class GameScene extends Phaser.Scene {
       // Reuse the fire loop's target pick this step; only towers it skipped (on cooldown / support)
       // re-acquire here — facing still needs a target every frame, but never a SECOND acquisition.
       let target = this.stepTargets.get(tower.id)
+      if (target && target.hp <= 0) target = undefined // a corpse pick would re-insert its posCache entry
       if (target === undefined) {
         const eff = this.towerEff(tower)
         const aura = this.auraAt(tower.pos)
@@ -2545,6 +2565,7 @@ export class GameScene extends Phaser.Scene {
   private placeTower(god: GodKind, pos: Vec2): void {
     const tower = createTower(god, pos)
     this.towers.push(tower)
+    this.run.builtGods = new Set(this.towers.map((tw) => tw.god))
     this.run.onTowerBuilt()
     const stats = TOWER_STATS[god]
     // Pixel gods: an 8-direction sprite that faces its target and casts when firing. No idle bob —
@@ -2616,6 +2637,6 @@ export class GameScene extends Phaser.Scene {
     const ring = this.add.circle(pos.x, pos.y + 8, Math.round(16 * SIZE_SCALE), 0x000000, 0).setStrokeStyle(1.5, 0xd8cfa8, 0.7).setDepth(5)
     ring.setScale(0.3)
     this.tweens.add({ targets: ring, scale: 1.4, alpha: 0, duration: 260, onComplete: () => ring.destroy() })
-    this.cameras.main.shake(60, 0.002)
+    if (!this.reduceMotion) this.cameras.main.shake(60, 0.002)
   }
 }

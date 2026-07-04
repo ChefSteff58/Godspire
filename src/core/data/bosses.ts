@@ -56,7 +56,7 @@ export const BOSS_ROSTER: readonly BossArchetype[] = [
     bounty: 120,
     leakWeight: 16,
     telegraph: 'The Nemean Lion prowls — its hide turns aside any single blow. Wear it down!',
-    mechanic: { damageCap: 45, armorBonus: 4 },
+    mechanic: { damageCap: 45, armorBonus: 2 }, // 4 floored Hermes' whole Escort path to 1s while the telegraph says 'wear it down'
   },
   {
     id: 'minotaur',
@@ -64,7 +64,7 @@ export const BOSS_ROSTER: readonly BossArchetype[] = [
     color: 0x9c3b2e,
     stroke: 0xffb59c,
     radius: 26,
-    hpMul: 18,
+    hpMul: 24, // minotaur@40 died in 4.5s of a 23s walk — massive should not mean trivial
     speedMul: 0.85,
     bounty: 140,
     leakWeight: 18,
@@ -77,7 +77,7 @@ export const BOSS_ROSTER: readonly BossArchetype[] = [
     color: 0x6b6f8a,
     stroke: 0xd6d9f0,
     radius: 30,
-    hpMul: 20,
+    hpMul: 28,
     speedMul: 0.65,
     bounty: 170,
     leakWeight: 22,
@@ -130,9 +130,9 @@ export function bossScaledStats(
   // M6 Stage 4 softened this to 0.4 after a beatability sim, but the M8 Stage 3 pixel-review pass
   // found bosses far too easy against a gold-bought board and restored 0.6 alongside the
   // hpMul 20/18/20 bump. Verified vs late-boss DPS at waves 60/80.
-  const hpScale = 1 + 0.6 * occ
-  const capScale = 1 + 0.25 * occ
-  const bountyScale = 1 + 0.3 * occ
+  const hpScale = 1 + 0.45 * occ // 0.6 outran income growth — w80 was the first unkillable wave
+  const capScale = 1 + 0.5 * occ // the cap must grow with late hit sizes or recurrences invalidate big-hit builds
+  const bountyScale = 1 + 0.5 * occ // a boss kill part-funds the next cycle
   return {
     hp: Math.round(baseHp * boss.hpMul * hpScale),
     speed: Math.max(1, Math.round(baseSpeed * boss.speedMul)),

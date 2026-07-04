@@ -18,7 +18,7 @@ export const PANTHEON_NODES: readonly SkillNode[] = [
   { id: 'war_dmg_2', branch: 'war', tier: 2, name: 'Spartan Discipline', description: 'Drilled like the Three Hundred — +8% tower damage.', cost: 2, prerequisites: ['war_dmg_1'], effect: { kind: 'towerDamageMul', value: 1.08 } },
   { id: 'war_rate_2', branch: 'war', tier: 2, name: 'Relentless Assault', description: 'No breath between volleys — +10% fire rate.', cost: 2, prerequisites: ['war_rate_1'], effect: { kind: 'fireRateMul', value: 1.1 } },
   { id: 'war_dmg_3', branch: 'war', tier: 3, name: 'Wrath of Olympus', description: 'The whole mountain glowers down — +12% tower damage.', cost: 3, prerequisites: ['war_dmg_2'], effect: { kind: 'towerDamageMul', value: 1.12 } },
-  { id: 'war_boss', branch: 'war', tier: 4, name: 'Titan-Slayer', description: 'Forged to fell the great ones — +30% damage vs bosses.', cost: 4, prerequisites: ['war_dmg_3'], effect: { kind: 'bossDamageMul', value: 1.3 } },
+  { id: 'war_boss', branch: 'war', tier: 4, name: 'Titan-Slayer', description: 'Forged to fell the great ones — +50% damage vs bosses.', cost: 4, prerequisites: ['war_dmg_3'], effect: { kind: 'bossDamageMul', value: 1.5 } },
 
   // ── Harvest (economy) ──
   { id: 'harvest_gold_1', branch: 'harvest', tier: 1, name: "Demeter's Bounty", description: 'The first harvest comes in early — +150 starting gold.', cost: 1, effect: { kind: 'startingGoldAdd', value: 150 } },

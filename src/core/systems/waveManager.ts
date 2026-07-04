@@ -13,7 +13,7 @@ const BASE_SPEED = 60 // px/sec, matches createEnemy's default
 // HP is a GENTLE tail now (was ×1.12 compounding, which made enemy health outrun gold-bought DPS
 // ~36× over 50 waves → "trivial then a wall"). ×1.05/wave only paces intra-kind attrition;
 // difficulty rides on COMPOSITION (stronger TYPES) + count, BTD6-style — not on inflating one body.
-const HP_RATE = 1.05
+const HP_RATE = 1.055 // +0.005: tightens the w13-38 slack zone (paired with the boss recurrence softening)
 
 const SPEED_PER_WAVE = 0.01
 const SPEED_CAP_MUL = 2 // never faster than 2× base
@@ -130,7 +130,7 @@ export function enemyCounts(n: number): Record<EnemyKind, number> {
   const debut = unlocked.find((k) => k !== 'shade' && KIND[k].intro === wave)
   if (debut) {
     // teaching wave: mostly the new kind (Hydra capped lower to bound the split fan-out), rest Shade
-    const share = debut === 'hydra' ? 0.4 : 0.7
+    const share = debut === 'hydra' || debut === 'talos' ? 0.4 : 0.7 // talos debut at 0.7 was a 5× wave-9 cliff
     counts[debut] = Math.min(total, Math.max(1, Math.round(total * share)))
     counts.shade = total - counts[debut]
     return counts

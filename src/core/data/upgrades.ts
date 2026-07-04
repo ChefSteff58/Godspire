@@ -63,7 +63,7 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       tiers: [
         { name: 'Forked Spark', cost: 130, desc: 'The storm grows eager — quicker bolts that reach farther.', effect: { fireRateMul: 1.4, rangeMul: 1.1 } },
         { name: 'Thunderhead', cost: 240, desc: 'The storm climbs to the clouds — now strikes flying foes, harder and quicker.', effect: { fireRateMul: 1.3, damageMul: 1.2, rangeMul: 1.1, grantsAir: true } },
-        { name: 'Wrath of the Sky', cost: 650, desc: 'A ceaseless tempest — faster, fiercer, and reaching far across the field.', effect: { fireRateMul: 1.4, damageMul: 1.4, rangeMul: 1.2 } },
+        { name: 'Wrath of the Sky', cost: 520, desc: 'A ceaseless tempest — faster, fiercer, and reaching far across the field.', effect: { fireRateMul: 1.6, damageMul: 1.4, rangeMul: 1.2 } },
       ],
     },
     B: {
@@ -110,9 +110,9 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       name: 'Vault of Plutus',
       blurb: 'Speculative wealth that scales with the wave — pays off late.',
       tiers: [
-        { name: 'Seed Capital', cost: 220, desc: 'Plant gold to grow gold — the payout swells with the wave (+5×wave).', effect: { incomeWaveScaleAdd: 5 } },
-        { name: 'Compound Growth', cost: 420, desc: 'Interest upon interest — +9×wave heaped on each harvest.', effect: { incomeWaveScaleAdd: 9 } },
-        { name: 'Wealth of the Underworld', cost: 820, desc: 'Plutus throws open the vault — +16×wave, riches that snowball late.', effect: { incomeWaveScaleAdd: 16 } },
+        { name: 'Seed Capital', cost: 220, desc: 'Plant gold to grow gold — the payout swells with the wave (+4×wave).', effect: { incomeWaveScaleAdd: 4 } },
+        { name: 'Compound Growth', cost: 420, desc: 'Interest upon interest — +6×wave heaped on each harvest.', effect: { incomeWaveScaleAdd: 6 } },
+        { name: 'Wealth of the Underworld', cost: 820, desc: 'Plutus throws open the vault — +10×wave, riches that snowball late.', effect: { incomeWaveScaleAdd: 10 } },
       ],
     },
   },

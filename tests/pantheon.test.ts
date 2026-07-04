@@ -44,7 +44,7 @@ describe('deriveModifiers folds every M6.5 effect kind', () => {
       'wisdom_secondwind', // second wind
     ])
     expect(m.fireRateMul).toBeCloseTo(1.06)
-    expect(m.bossDamageMul).toBeCloseTo(1.3)
+    expect(m.bossDamageMul).toBeCloseTo(1.5) // Titan-Slayer buffed 1.3→1.5 (fleet retune)
     expect(m.incomeMul).toBeCloseTo(1.1)
     expect(m.goldPerKillAdd).toBe(1)
     expect(m.startingShield).toBe(3)
@@ -66,7 +66,7 @@ describe('meta → RunModifiers bridge (foldRunModifiers)', () => {
     const rm = foldRunModifiers(meta, [])
     expect(rm.fireRateMul).toBeCloseTo(1.1)
     expect(rm.goldPerKillBonus).toBe(2)
-    expect(rm.bossDamageMul).toBeCloseTo(1.3)
+    expect(rm.bossDamageMul).toBeCloseTo(1.5)
     expect(rm.incomeMul).toBeCloseTo(1.18)
   })
 })

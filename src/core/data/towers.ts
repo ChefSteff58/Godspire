@@ -85,7 +85,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     icon: '🪽',
     cost: 275,
     range: 120,
-    damage: 3,
+    damage: 4, // 3 left Hermes 1.8-3.3× under Apollo per gold in the shared anti-air role
     fireRate: 3, // fast, low-damage darts
     footprint: 16,
     defaultTargeting: 'first',

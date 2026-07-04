@@ -51,5 +51,6 @@ export class PreloadScene extends Phaser.Scene {
     // anyway (worst case this run plays on base modifiers, which beats an infinite splash).
     this.time.delayedCall(6000, begin)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsub) // never leak the subscription
+    this.events.once(Phaser.Scenes.Events.DESTROY, unsub) // SHUTDOWN never fires on game.destroy (quit during splash)
   }
 }

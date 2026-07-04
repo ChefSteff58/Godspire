@@ -17,9 +17,9 @@ describe('RunController — boon effects', () => {
   it('gate shield absorbs leaks before lives are touched', () => {
     const run = new RunController(() => 0.5)
     run.start(META)
-    pick(run, 'def-bulwark-of-styx') // gateShield 5
-    expect(run.snapshot().shieldCharges).toBe(5)
-    for (let i = 0; i < 5; i++) expect(run.onLeak(1)).toBe(false) // absorbed
+    pick(run, 'def-bulwark-of-styx') // gateShield 8 (fleet retune: epic must out-defend the common)
+    expect(run.snapshot().shieldCharges).toBe(8)
+    for (let i = 0; i < 8; i++) expect(run.onLeak(1)).toBe(false) // absorbed
     expect(run.lives).toBe(100)
     expect(run.snapshot().shieldCharges).toBe(0)
     expect(run.onLeak(1)).toBe(true) // now a real life is lost
@@ -43,9 +43,9 @@ describe('RunController — boon effects', () => {
     run.start(META)
     pick(run, 'def-ambrosia-draught') // livesGrant 20 at full health → no overheal
     expect(run.lives).toBe(100)
-    pick(run, 'def-aegis-of-athena') // maxLivesAdd 15
-    expect(run.maxLives).toBe(115)
-    expect(run.lives).toBe(115)
+    pick(run, 'def-aegis-of-athena') // maxLivesAdd 25 (fleet retune)
+    expect(run.maxLives).toBe(125)
+    expect(run.lives).toBe(125)
   })
 
   it('composite applies every sub-effect (gold + lives)', () => {
@@ -53,16 +53,16 @@ describe('RunController — boon effects', () => {
     run.start(META)
     run.onLeak(50) // lives 50 so the heal is visible
     const goldBefore = run.snapshot().gold
-    pick(run, 'eco-favor-of-fortuna') // +350 gold, +10 lives
-    expect(run.snapshot().gold).toBe(goldBefore + 350)
-    expect(run.lives).toBe(60)
+    pick(run, 'eco-favor-of-fortuna') // +600 gold, +15 lives (fleet retune)
+    expect(run.snapshot().gold).toBe(goldBefore + 600)
+    expect(run.lives).toBe(65)
   })
 
   it('coinflipFold resolves deterministically from the rng (win vs lose)', () => {
     const win = new RunController(() => 0.4) // < 0.5 → win
     win.start(META)
     pick(win, 'syn-gamblers-laurel')
-    expect(win.effectiveDamage('zeus', 10)).toBeCloseTo(18) // ×1.8
+    expect(win.effectiveDamage('zeus', 10)).toBeCloseTo(22) // ×2.2 (fleet retune: legendary variance premium)
 
     const lose = new RunController(() => 0.6) // ≥ 0.5 → lose
     lose.start(META)
@@ -108,7 +108,7 @@ describe('RunController — Pantheon meta buffs at run start (M6.5)', () => {
     const meta = deriveModifiers(['war_boss'])
     const run = new RunController(() => 0.5)
     run.start(meta)
-    expect(run.bossDamageMul).toBeCloseTo(1.3)
+    expect(run.bossDamageMul).toBeCloseTo(1.5)
   })
 })
 
