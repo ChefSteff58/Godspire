@@ -28,11 +28,30 @@ describe('sacred sites (the Olive of Athena)', () => {
     }
   })
 
-  it('the relocated columns stand on buildable ground', () => {
+  it('the relocated columns stand on buildable ground (bottom-left stonefield)', () => {
     const cols = OBSTACLES.find((o) => o.id === 'columns')!
     if (cols.shape.kind === 'circle') {
-      expect(cols.shape.x).toBe(770)
+      expect(cols.shape.x).toBe(110)
+      expect(cols.shape.y).toBe(470)
       expect(isBuildableGround(cols.shape.x, cols.shape.y)).toBe(true)
     }
+  })
+
+  it('the olive itself anchors on buildable ground in its new grass pocket', () => {
+    expect(isBuildableGround(olive.pos.x, olive.pos.y)).toBe(true)
+  })
+
+  it("EASTER EGG: it is HER tree — Athena near the trunk sees +15% further", () => {
+    const egg = olive.easterEgg!
+    expect(egg.god).toBe('athena')
+    // inside the tight inner radius: Athena gets the range gift, others get nothing
+    const near = { x: olive.pos.x + egg.radius - 1, y: olive.pos.y }
+    expect(siteBuffAt(near, 'athena').rangeMul).toBeCloseTo(1.15)
+    expect(siteBuffAt(near, 'zeus').rangeMul).toBe(1)
+    expect(siteBuffAt(near).rangeMul).toBe(1)
+    // outside the inner radius (still inside the fire-rate blessing): no range gift
+    const far = { x: olive.pos.x + egg.radius + 5, y: olive.pos.y }
+    expect(siteBuffAt(far, 'athena').rangeMul).toBe(1)
+    expect(siteBuffAt(far, 'athena').fireRateMul).toBeCloseTo(1.08)
   })
 })

@@ -21,9 +21,9 @@ export interface Obstacle {
 
 export const OBSTACLES: readonly Obstacle[] = [
   // Ruined columns — upper-left build pocket.
-  // M10-S6: moved off the hellmouth's doorstep to the upper-right approach — a landmark on the
-  // road to Olympus ('the war got close before'), verified buildable stone, clear of the boulder.
-  { id: 'columns', label: 'Ruined Columns', shape: { kind: 'circle', x: 770, y: 110, r: 24 }, color: 0x7a7d88 },
+  // M10 refine: the columns yield their grassy stage to the Sacred Olive and settle in the
+  // bottom-left stonefield — ruins scattered where the lava floor gnaws at the world's rim.
+  { id: 'columns', label: 'Ruined Columns', shape: { kind: 'circle', x: 110, y: 470, r: 24 }, color: 0x7a7d88 },
   // Boulder — right-side pocket, forces tower spacing on the approach to Olympus.
   { id: 'boulder', label: 'Boulder', shape: { kind: 'circle', x: 720, y: 200, r: 26 }, color: 0x4a4a52 },
   // Lake of Styx — FILLS the road-ringed central pocket (2026-07-03: the user wants the WHOLE
@@ -37,7 +37,7 @@ export const OBSTACLES: readonly Obstacle[] = [
     color: 0x2f6f8c,
     terrain: 'water',
   },
-  // Olive grove — upper-center pocket (nudged south in M9: the old anchor landed on a chasm cell
-  // once cliffs became gameplay; the sacred tree needs solid ground).
-  { id: 'olive', label: 'Olive Grove', shape: { kind: 'rect', x: 355, y: 180, w: 92, h: 46 }, color: 0x4a6b2f },
+  // The Sacred Olive — M10 refine: moved to its OWN space in the grass on the Olympus approach
+  // (verified grass + buildable at its center). Athena's tree deserves a meadow, not a roadside.
+  { id: 'olive', label: 'Olive Grove', shape: { kind: 'rect', x: 724, y: 87, w: 92, h: 46 }, color: 0x4a6b2f },
 ]

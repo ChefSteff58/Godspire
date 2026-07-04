@@ -64,7 +64,9 @@ const SIM_STEP_MS = 16
 const MAX_STEPS_PER_FRAME = 12
 // M10-S5 BTD6-CHUNKY: one dial scales the whole unit layer (user-gated at 1.35/1.45/1.55).
 // HITBOXES DO NOT SCALE — art > hitbox is the BTD6 feel; placement/balance are untouched.
-const SIZE_SCALE = 1.45
+const SIZE_SCALE = 1.65
+// Bosses scale from a BIGGER base than the 110px ladder top — 'massive and scary' is the brief.
+const BOSS_ART_PX = Math.round(140 * SIZE_SCALE)
 // M10-S8 CINEMATIC PASS (the three.js answer, done the right way): one full-screen color grade +
 // one bloom pass on the main camera — shader-level polish inside Phaser, no second engine.
 // Kill-switch for old hardware / taste comparison.
@@ -276,11 +278,11 @@ export class GameScene extends Phaser.Scene {
     if (CINEMATIC_GRADE && this.game.renderer.type === Phaser.WEBGL) {
       const cam = this.cameras.main
       const cm = cam.postFX.addColorMatrix()
-      cm.saturate(0.08, true)
-      cm.contrast(0.04, true)
-      // warm tilt: highlights lean gold (R up, B trimmed), shadows lift faintly toward indigo (+B offset)
-      cm.multiply([1.05, 0.02, 0, 0, 0, 0.01, 1.0, 0.01, 0, 0, 0, 0.02, 0.99, 0, 4, 0, 0, 0, 1, 0], true)
-      cam.postFX.addBloom(0xffdf9e, 1, 1, 1, 0.5, 4)
+      cm.saturate(0.04, true)
+      cm.contrast(0.02, true)
+      // warm tilt at HALF strength (playtest: 'great idea, a bit too intense — turn it down')
+      cm.multiply([1.025, 0.01, 0, 0, 0, 0.005, 1.0, 0.005, 0, 0, 0, 0.01, 0.995, 0, 2, 0, 0, 0, 1, 0], true)
+      cam.postFX.addBloom(0xffdf9e, 1, 1, 1, 0.28, 4)
     }
 
     // Tell the player what wave 1 brings before they press start (debut/boss/elite telegraphs).
@@ -310,7 +312,7 @@ export class GameScene extends Phaser.Scene {
 
   /** On-screen art height for an enemy — the visual size, NOT the hitbox (bars anchor to this). */
   private enemyArtPx(e: Enemy): number {
-    return e.kind === 'boss' ? Math.round(110 * SIZE_SCALE) : (ENEMY_ART_PX[e.kind] ?? Math.max(enemyRadius(e) * 3, 46))
+    return e.kind === 'boss' ? BOSS_ART_PX : (ENEMY_ART_PX[e.kind] ?? Math.max(enemyRadius(e) * 3, 46))
   }
 
   // Memoized per enemy on pathT: recomputes only when the enemy actually moved (or was knocked back),
@@ -691,10 +693,16 @@ export class GameScene extends Phaser.Scene {
     // Fallback chain: patch → old prop art → drawn ellipses.
     if (this.textures.exists('obj_rift_patch')) {
       this.animateRift(this.add.image(0, 24, 'obj_rift_patch').setOrigin(0).setDepth(1.5))
-      // M10-S4: the pit's lower-right RIM re-stamped above the creatures (depth 6.5 > enemy 4-6) —
-      // fresh spawns slide out from UNDER the lip instead of materializing on top of the art.
-      // A cropped copy of terrain, not set dressing (double-draw in inpaint shots is identical).
-      this.add.image(0, 24, 'obj_rift_patch').setOrigin(0).setDepth(6.5).setCrop(96, 96, 96, 96)
+      // M10 refine: the RIM overlay covers the road's whole exit band at FULL height (the old
+      // lower-right quadrant let a spawn's body show, vanish, and reappear — 'walked behind a
+      // wall'). With spawns now invisible until the lip (see the sync loop's emergeAlpha ramp),
+      // this strip only has to sell the final slide-out from under the crust.
+      const rim = this.add.image(0, 24, 'obj_rift_patch').setOrigin(0).setDepth(6.5).setCrop(88, 0, 104, 192)
+      if (this.game.renderer.type === Phaser.WEBGL) {
+        // mirror the lower copy's breathing glow so the pulse doesn't die where the overlay sits
+        const rimGlow = rim.postFX.addGlow(0xff5533, 2, 0, false, 0.1, 12)
+        this.tweens.add({ targets: rimGlow, outerStrength: 6, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+      }
     } else if (this.textures.exists('obj_rift')) {
       this.setDressing.push(this.addSpriteScaled('obj_rift', start.x + 16, start.y, 270).setDepth(2))
     } else {
@@ -751,7 +759,7 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists('fx_swirl')) {
       const swirl = this.add
         .image(97, 161, 'fx_swirl')
-        .setDepth(1.55)
+        .setDepth(6.6) // ABOVE the rim overlay + creatures: the mouth's vortex swallows what it spawns
         .setBlendMode(Phaser.BlendModes.ADD)
         .setAlpha(0.5)
         .setDisplaySize(76, 58)
@@ -796,19 +804,22 @@ export class GameScene extends Phaser.Scene {
 
   /** The molten floor breathes: interior tiles shimmer between two frames, blobs glow, embers rise. */
   private animateLava(interiors: Phaser.GameObjects.Image[]): void {
-    // frame shimmer — a single clock retextures the open-lava tiles on seeded alternating phases
+    // frame shimmer — a single clock retextures the open-lava tiles on seeded phases. Three
+    // luminance-masked frames (base / surging-hot / crusting-over) so the MELT breathes while
+    // the dark crust holds still — the 'looking down into Mordor' read.
     if (this.textures.exists('tile_lava_0_f1')) {
+      const frames = ['tile_lava_0', 'tile_lava_0_f1', this.textures.exists('tile_lava_0_f2') ? 'tile_lava_0_f2' : 'tile_lava_0']
       let tick = 0
       this.time.addEvent({
-        delay: 550,
+        delay: 420,
         loop: true,
         callback: () => {
           tick++
           for (let i = 0; i < interiors.length; i++) {
             const img = interiors[i]
             if (!img.active) continue
-            const phase = GameScene.seeded(i * 17 + 3) < 0.5 ? 0 : 1
-            img.setTexture((tick + phase) % 2 === 0 ? 'tile_lava_0' : 'tile_lava_0_f1')
+            const phase = Math.floor(GameScene.seeded(i * 17 + 3) * 3)
+            img.setTexture(frames[(tick + phase) % 3])
           }
         },
       })
@@ -824,11 +835,11 @@ export class GameScene extends Phaser.Scene {
     }
     if (n > 0) {
       const glow = this.add
-        .ellipse(cx / n, cy / n, 220, 150, 0xff5a2a, 0.12)
+        .ellipse(cx / n, cy / n, 240, 160, 0xff7a20, 0.16)
         .setDepth(0.35)
         .setBlendMode(Phaser.BlendModes.ADD)
       this.setDressing.push(glow)
-      this.tweens.add({ targets: glow, alpha: 0.2, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+      this.tweens.add({ targets: glow, alpha: 0.26, duration: 2400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     }
     // embers rise off the melt (deterministic origins; cap bumped for the extra stream)
     this.ambientCap = Math.max(this.ambientCap, 24)
@@ -942,9 +953,29 @@ export class GameScene extends Phaser.Scene {
         continue
       }
       const pos = this.enemyPos(enemy)
-      this.enemySprites.get(enemy.id)?.setPosition(pos.x, pos.y)
+      const sp = this.enemySprites.get(enemy.id)
+      sp?.setPosition(pos.x, pos.y)
       const shadow = this.enemyShadows.get(enemy.id)
       shadow?.setPosition(pos.x, pos.y + (shadow.getData('dy') as number))
+      if (sp) {
+        // hellmouth climb-out: alpha tracks position across the rim lip (x 118→166), and the
+        // moment the lip is crossed the creature POPS to full size with an ember scrabble
+        const emergeA = sp.getData('emergeAlpha') as number | undefined
+        if (emergeA !== undefined) {
+          const t = Math.min(1, Math.max(0, (pos.x - 118) / 48))
+          sp.setAlpha(emergeA * t)
+          shadow?.setAlpha(0.18 * t)
+          if (pos.x >= 166 || enemy.pathT > 0.12) {
+            sp.setData('emergeAlpha', undefined)
+            sp.setAlpha(emergeA)
+            const b = (sp.getData('baseScale') as number) ?? 1
+            this.tweens.add({ targets: sp, scale: b, duration: 300, ease: 'Back.easeOut' })
+            if (this.enemies.length + this.projectiles.length <= 30) {
+              this.burst(pos.x, pos.y + 8, 5, 0xff7040, 16, 2, 240) // dirt + embers over the lip
+            }
+          }
+        }
+      }
       this.syncChargeTell(enemy)
       const eart = this.enemyArt.get(enemy.id)
       if (eart) {
@@ -965,7 +996,7 @@ export class GameScene extends Phaser.Scene {
       tower.cooldown -= dtSec
       if (tower.cooldown > 0) continue
       const aura = this.auraAt(tower.pos) // Athena buffs nearby gods + reveals stealth foes
-      const site = siteBuffAt(tower.pos) // sacred sites (the Olive of Athena) bless from the map itself
+      const site = siteBuffAt(tower.pos, tower.god) // sacred sites bless from the map itself (+ per-god easter eggs)
       const fireRate = this.run.effectiveFireRate(tower.god, eff.fireRate * aura.fireRateMul * site.fireRateMul)
       const dep = TOWER_STATS[tower.god].deployable
       if (dep) {
@@ -975,7 +1006,7 @@ export class GameScene extends Phaser.Scene {
         continue
       }
       const target = selectTarget(
-        { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
+        { pos: tower.pos, range: eff.range * site.rangeMul, canHitAir: eff.canHitAir, canDetect: aura.detect },
         this.enemies,
         this.enemyPos,
         tower.targeting,
@@ -1144,7 +1175,7 @@ export class GameScene extends Phaser.Scene {
     const texKey = isBoss && enemy.bossId ? enemy.bossId : enemy.kind
     // Pixel art reads best drawn larger than the hitbox disc; the per-kind ladder keeps silhouettes
     // distinct (shade small → talos huge), and bosses get real presence.
-    const artPx = isBoss ? Math.round(110 * SIZE_SCALE) : (ENEMY_ART_PX[enemy.kind] ?? Math.max(enemyRadius(enemy) * 3, 46))
+    const artPx = isBoss ? BOSS_ART_PX : (ENEMY_ART_PX[enemy.kind] ?? Math.max(enemyRadius(enemy) * 3, 46))
     const sizePx = DirAnimSprite.hasDirectional(this, texKey) ? artPx : enemyRadius(enemy) * 2
     let sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Image | Phaser.GameObjects.Sprite
     if (DirAnimSprite.hasDirectional(this, texKey)) {
@@ -1177,28 +1208,19 @@ export class GameScene extends Phaser.Scene {
     const base = (sprite.getData('baseScale') as number) ?? sprite.scale
     sprite.setData('baseScale', base)
     sprite.setScale(base * 0.4)
-    const fromMouth = desc.spawnAtT === undefined // fresh spawns walk out of the hellmouth
+    const fromMouth = desc.spawnAtT === undefined // fresh spawns climb out of the hellmouth
     if (fromMouth) {
-      // rise out of the pit: fade in while the sim walks them over the rim (position is NEVER
-      // tweened — the fixed-substep sim owns it). Stealth keeps its half-alpha ceiling.
-      const targetAlpha = enemy.stealth ? 0.5 : 1
+      // PORTAL CLIMB-OUT: invisible in the pit, materializing across the rim lip. Alpha follows
+      // PROGRESS (the sync loop's emergeAlpha ramp on pos.x), never wall-clock — so at any speed
+      // they read as hauling themselves over the crust, not fading in mid-bowl. Position is
+      // NEVER tweened (the fixed-substep sim owns it). Stealth keeps its half-alpha ceiling.
       sprite.setAlpha(0)
-      this.tweens.add({ targets: sprite, alpha: targetAlpha, duration: 350, ease: 'Sine.easeOut' })
-      const sh = this.enemyShadows.get(enemy.id)
-      if (sh) {
-        sh.setAlpha(0)
-        this.tweens.add({ targets: sh, alpha: 0.18, duration: 350, ease: 'Sine.easeOut' })
-      }
-      if (this.enemies.length + this.projectiles.length <= 30) {
-        this.burst(97, 161, 4, 0xff7040, 18, 2, 260) // the mouth coughs embers with each arrival
-      }
+      sprite.setData('emergeAlpha', enemy.stealth ? 0.5 : 1)
+      sprite.setScale(base * 0.55) // held small until the lip — the emergence pop finishes the job
+      this.enemyShadows.get(enemy.id)?.setAlpha(0)
+    } else {
+      this.tweens.add({ targets: sprite, scale: base, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
     }
-    this.tweens.add({
-      targets: sprite,
-      scale: base,
-      duration: isBoss ? 360 : fromMouth ? 350 : 200,
-      ease: 'Back.easeOut',
-    })
   }
 
   /**
@@ -1355,7 +1377,8 @@ export class GameScene extends Phaser.Scene {
       }
       const eff = this.towerEff(tower)
       const cap = Math.max(0, Math.floor(eff.slowTargets))
-      const r2 = eff.range * eff.range
+      const r = eff.range * siteBuffAt(tower.pos, tower.god).rangeMul
+      const r2 = r * r
       const inRange = (e: Enemy): boolean => {
         const ep = this.enemyPos(e)
         return (tower.pos.x - ep.x) ** 2 + (tower.pos.y - ep.y) ** 2 <= r2
@@ -1867,7 +1890,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (selected || showDebug) {
         const eff = this.towerEff(tower) // folded ONLY when actually drawn (this loop runs every frame)
-        const range = eff.range
+        const range = eff.range * siteBuffAt(tower.pos, tower.god).rangeMul // the ring GROWS by her tree
         const slow = TOWER_STATS[tower.god].slowAura
         const buff = TOWER_STATS[tower.god].auraBuff
         // simple solid range circles — dashes/breathing read as noise (2026-07-01 playtest)
@@ -1940,7 +1963,7 @@ export class GameScene extends Phaser.Scene {
       // the ghost lags the real fill and drains toward it — recent damage reads as a bright chip
       const ghost = Math.max(frac, (this.lastBossFrac.get(e.id) ?? frac) - 0.008)
       this.lastBossFrac.set(e.id, ghost)
-      const w = enemyRadius(e) * 2 + 36
+      const w = Math.max(enemyRadius(e) * 2 + 36, Math.round(this.enemyArtPx(e) * 0.7))
       const h = 7
       const x = p.x - w / 2
       const y = p.y - this.enemyArtPx(e) / 2 - 12
@@ -2002,7 +2025,8 @@ export class GameScene extends Phaser.Scene {
     }
     // the range ring + a faint footprint marker, coloured by validity
     g.lineStyle(1.5, tint, 0.85)
-    g.strokeCircle(this.pointer.x, this.pointer.y, stats.range)
+    // fold site easter eggs into the preview ring — dragging Athena toward her tree REVEALS it
+    g.strokeCircle(this.pointer.x, this.pointer.y, stats.range * siteBuffAt(this.pointer, placingGod).rangeMul)
     g.fillStyle(tint, 0.18)
     g.fillCircle(this.pointer.x, this.pointer.y, stats.footprint)
     // preview the actual tower under the cursor (the tower WITH its ring, not a bare circle)
@@ -2335,7 +2359,7 @@ export class GameScene extends Phaser.Scene {
         const eff = this.towerEff(tower)
         const aura = this.auraAt(tower.pos)
         target = selectTarget(
-          { pos: tower.pos, range: eff.range, canHitAir: eff.canHitAir, canDetect: aura.detect },
+          { pos: tower.pos, range: eff.range * siteBuffAt(tower.pos, tower.god).rangeMul, canHitAir: eff.canHitAir, canDetect: aura.detect },
           this.enemies,
           this.enemyPos,
           tower.targeting,

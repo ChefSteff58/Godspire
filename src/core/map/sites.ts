@@ -13,6 +13,8 @@ export interface Site {
   pos: Vec2
   radius: number
   effect: { fireRateMul?: number }
+  /** EASTER EGG: one god has a special bond with this place (a tighter inner radius). */
+  easterEgg?: { god: string; rangeMul: number; radius: number }
 }
 
 export const SITES: readonly Site[] = [
@@ -20,19 +22,23 @@ export const SITES: readonly Site[] = [
     id: 'sacred_olive',
     label: 'Sacred Olive of Athena',
     lore: "Athena's first gift still grows here — gods in its shade strike swifter.",
-    pos: { x: 401, y: 203 }, // the olive grove's center (rect 355,180 92×46)
+    pos: { x: 770, y: 110 }, // the olive grove's center (rect 724,87 92×46 — its own grass)
     radius: 110,
     effect: { fireRateMul: 1.08 },
+    // the easter egg: it is HER tree — Athena standing close to the trunk sees further
+    easterEgg: { god: 'athena', rangeMul: 1.15, radius: 70 },
   },
 ]
 
-/** Multiplicative fold of every site covering `pos`. Small on purpose (≤ +8-10% one stat). */
-export function siteBuffAt(pos: Vec2): { fireRateMul: number } {
+/** Multiplicative fold of every site covering `pos` (+ per-god easter eggs at a tighter radius).
+ *  Small on purpose (≤ +8-15% one stat). */
+export function siteBuffAt(pos: Vec2, god?: string): { fireRateMul: number; rangeMul: number } {
   let fireRateMul = 1
+  let rangeMul = 1
   for (const s of SITES) {
-    if (Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y) <= s.radius) {
-      fireRateMul *= s.effect.fireRateMul ?? 1
-    }
+    const d = Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y)
+    if (d <= s.radius) fireRateMul *= s.effect.fireRateMul ?? 1
+    if (s.easterEgg && god === s.easterEgg.god && d <= s.easterEgg.radius) rangeMul *= s.easterEgg.rangeMul
   }
-  return { fireRateMul }
+  return { fireRateMul, rangeMul }
 }

@@ -4,16 +4,26 @@
 
 import type { Vec2 } from '../types'
 
-/** The lake's shoreline polygon (traced M9-S2, retraced here as the single source of truth). */
+/** The lake's shoreline polygon — EXPANDED to fill the pocket (M10 refine): 16 points, each
+ *  pushed radially until ~24px from the road centerline so the water tucks under the road's
+ *  buffer band nearly everywhere (flush by construction, no square-peg margins). */
 export const STYX_POINTS: readonly Vec2[] = [
   { x: 498, y: 278 },
-  { x: 565, y: 275 },
-  { x: 627, y: 283 },
+  { x: 522, y: 269 },
+  { x: 556, y: 255 },
+  { x: 608, y: 235 },
+  { x: 642, y: 270 },
+  { x: 654, y: 285 },
   { x: 670, y: 292 },
+  { x: 690, y: 313 },
   { x: 709, y: 333 },
-  { x: 628, y: 386 },
-  { x: 506, y: 386 },
-  { x: 480, y: 333 },
+  { x: 676, y: 363 },
+  { x: 634, y: 394 },
+  { x: 554, y: 416 }, // clamped — the raw push escaped through the pocket's south opening
+  { x: 489, y: 400 },
+  { x: 480, y: 365 },
+  { x: 472, y: 334 },
+  { x: 461, y: 301 },
 ]
 
 // local point-in-poly + edge distance — deliberately NOT imported from placement.ts
