@@ -65,6 +65,10 @@ const MAX_STEPS_PER_FRAME = 12
 // M10-S5 BTD6-CHUNKY: one dial scales the whole unit layer (user-gated at 1.35/1.45/1.55).
 // HITBOXES DO NOT SCALE — art > hitbox is the BTD6 feel; placement/balance are untouched.
 const SIZE_SCALE = 1.45
+// M10-S8 CINEMATIC PASS (the three.js answer, done the right way): one full-screen color grade +
+// one bloom pass on the main camera — shader-level polish inside Phaser, no second engine.
+// Kill-switch for old hardware / taste comparison.
+const CINEMATIC_GRADE = true
 // On-screen height (px) an HD god sprite is drawn at — bigger than the placeholder discs so the art reads.
 const TOWER_SPRITE_PX = Math.round(72 * SIZE_SCALE)
 // Keep a pixel tower in its cast animation this long after each shot, so a flickering target can't
@@ -265,6 +269,19 @@ export class GameScene extends Phaser.Scene {
     // Ambient life: embers drift up from the Tartarus rift, gold motes at the Olympus gate.
     this.time.addEvent({ delay: 450, loop: true, callback: () => this.spawnAmbient('ember') })
     this.time.addEvent({ delay: 1300, loop: true, callback: () => this.spawnAmbient('mote') })
+
+    // M10-S8: the cinematic pass — a subtle warm grade (indigo-leaning shadows, gold-leaning
+    // highlights, a touch of saturation/contrast) + low-strength bloom keyed to the emissives
+    // (lava, bolts, the hellmouth, the lake shine). WebGL only; Canvas render stays raw.
+    if (CINEMATIC_GRADE && this.game.renderer.type === Phaser.WEBGL) {
+      const cam = this.cameras.main
+      const cm = cam.postFX.addColorMatrix()
+      cm.saturate(0.08, true)
+      cm.contrast(0.04, true)
+      // warm tilt: highlights lean gold (R up, B trimmed), shadows lift faintly toward indigo (+B offset)
+      cm.multiply([1.05, 0.02, 0, 0, 0, 0.01, 1.0, 0.01, 0, 0, 0, 0.02, 0.99, 0, 4, 0, 0, 0, 1, 0], true)
+      cam.postFX.addBloom(0xffdf9e, 1, 1, 1, 0.5, 4)
+    }
 
     // Tell the player what wave 1 brings before they press start (debut/boss/elite telegraphs).
     this.showWavePreview(1)
@@ -2108,7 +2125,36 @@ export class GameScene extends Phaser.Scene {
     if (path === 'A') tower.pathA++
     else tower.pathB++
     tower.invested += nt.cost // upgrade gold counts toward the sell refund (BTD6-style)
+    this.syncTowerAscension(tower) // tier 3 = a visible ASCENDED form when its art exists
     this.refreshSelected()
+  }
+
+  /**
+   * M10-S7: completing a path (tier 3) swaps the god to an ASCENDED sprite base — <god>_asc_a /
+   * <god>_asc_b — when that art exists (BTD6-style: upgrades you can SEE). The cross-path rule
+   * guarantees at most one path ever reaches 3, so the forms can't conflict. Missing art is a
+   * silent no-op (the drop-in contract: characters land batch by batch).
+   */
+  private syncTowerAscension(tower: Tower): void {
+    const ascKey = tower.pathA >= 3 ? `${tower.god}_asc_a` : tower.pathB >= 3 ? `${tower.god}_asc_b` : null
+    if (!ascKey || !DirAnimSprite.hasDirectional(this, ascKey)) return
+    const old = this.towerSprites.get(tower.id)
+    if (!old || (old.getData?.('ascBase') as string) === ascKey) return
+    const stats = TOWER_STATS[tower.god]
+    const sizePx = stats.mobile ? Math.round(52 * SIZE_SCALE) : TOWER_SPRITE_PX
+    this.tweens.killTweensOf(old)
+    old.destroy()
+    const art = new DirAnimSprite(this, ascKey, tower.pos.x, tower.pos.y, sizePx, 6)
+    art.sprite.setData('baseScale', art.sprite.scaleX)
+    art.sprite.setData('ascBase', ascKey)
+    this.towerSprites.set(tower.id, art.sprite)
+    this.towerArt.set(tower.id, art)
+    // ascension flourish: a white flare + an expanding ring + the settle thunk
+    const flare = this.add.circle(tower.pos.x, tower.pos.y, 10, 0xffffff, 0.9).setDepth(9).setBlendMode(Phaser.BlendModes.ADD)
+    this.tweens.add({ targets: flare, scale: 4, alpha: 0, duration: 320, onComplete: () => flare.destroy() })
+    const ring = this.add.circle(tower.pos.x, tower.pos.y, 18, 0x000000, 0).setStrokeStyle(2, 0xf5d061, 0.9).setDepth(9)
+    this.tweens.add({ targets: ring, scale: 3, alpha: 0, duration: 420, onComplete: () => ring.destroy() })
+    this.placeThunk(tower.id, tower.pos)
   }
 
   /** Set the selected tower's target priority (First / Last / Closest / Strongest). */
