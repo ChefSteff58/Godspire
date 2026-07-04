@@ -61,8 +61,11 @@ const MAX_CONCURRENT_BODIES = 60
 // can't spiral). Render/mirror still happen once per real frame. Matches devStep's 16ms convention.
 const SIM_STEP_MS = 16
 const MAX_STEPS_PER_FRAME = 12
+// M10-S5 BTD6-CHUNKY: one dial scales the whole unit layer (user-gated at 1.35/1.45/1.55).
+// HITBOXES DO NOT SCALE — art > hitbox is the BTD6 feel; placement/balance are untouched.
+const SIZE_SCALE = 1.45
 // On-screen height (px) an HD god sprite is drawn at — bigger than the placeholder discs so the art reads.
-const TOWER_SPRITE_PX = 72
+const TOWER_SPRITE_PX = Math.round(72 * SIZE_SCALE)
 // Keep a pixel tower in its cast animation this long after each shot, so a flickering target can't
 // strobe the cast back to idle (the bug: lightning fired but the body didn't animate).
 const ATTACK_HOLD_MS = 450
@@ -81,13 +84,13 @@ const TILE_ROWS = 17
 // Per-kind art sizes — a deliberate SILHOUETTE LADDER. The old max(radius*3, 46) floor flattened
 // everything to ~46px, which is why the roster read as "too similar": size is the fastest identifier.
 const ENEMY_ART_PX: Record<string, number> = {
-  shade: 36, // swarm chaff — visibly small and skittery
-  skeleton: 48, // the baseline yardstick
-  harpy: 52, // wide wings need room
-  satyr: 50,
-  gorgon: 54,
-  hydra: 62, // a brood matriarch
-  talos: 68, // the armored wall — visibly the biggest non-boss
+  shade: Math.round(36 * SIZE_SCALE), // swarm chaff — visibly small and skittery
+  skeleton: Math.round(48 * SIZE_SCALE), // the baseline yardstick
+  harpy: Math.round(52 * SIZE_SCALE), // wide wings need room
+  satyr: Math.round(50 * SIZE_SCALE),
+  gorgon: Math.round(54 * SIZE_SCALE),
+  hydra: Math.round(62 * SIZE_SCALE), // a brood matriarch
+  talos: Math.round(68 * SIZE_SCALE), // the armored wall — visibly the biggest non-boss
 }
 // Kill feedback throttles: float a bounty only for meaty kills, and only while the field is readable.
 const BOUNTY_FLOAT_MIN = 8
@@ -284,6 +287,11 @@ export class GameScene extends Phaser.Scene {
   }
   getTowers(): readonly Tower[] {
     return this.towers
+  }
+
+  /** On-screen art height for an enemy — the visual size, NOT the hitbox (bars anchor to this). */
+  private enemyArtPx(e: Enemy): number {
+    return e.kind === 'boss' ? Math.round(110 * SIZE_SCALE) : (ENEMY_ART_PX[e.kind] ?? Math.max(enemyRadius(e) * 3, 46))
   }
 
   // Memoized per enemy on pathT: recomputes only when the enemy actually moved (or was knocked back),
@@ -1056,7 +1064,7 @@ export class GameScene extends Phaser.Scene {
     const texKey = isBoss && enemy.bossId ? enemy.bossId : enemy.kind
     // Pixel art reads best drawn larger than the hitbox disc; the per-kind ladder keeps silhouettes
     // distinct (shade small → talos huge), and bosses get real presence.
-    const artPx = isBoss ? 116 : (ENEMY_ART_PX[enemy.kind] ?? Math.max(enemyRadius(enemy) * 3, 46))
+    const artPx = isBoss ? Math.round(110 * SIZE_SCALE) : (ENEMY_ART_PX[enemy.kind] ?? Math.max(enemyRadius(enemy) * 3, 46))
     const sizePx = DirAnimSprite.hasDirectional(this, texKey) ? artPx : enemyRadius(enemy) * 2
     let sprite: Phaser.GameObjects.Arc | Phaser.GameObjects.Image | Phaser.GameObjects.Sprite
     if (DirAnimSprite.hasDirectional(this, texKey)) {
@@ -1137,7 +1145,7 @@ export class GameScene extends Phaser.Scene {
     const t = this.add
       .text(GAME_WIDTH / 2, 72, msg, {
         fontFamily: 'Silkscreen, Georgia, serif',
-        fontSize: '15px',
+        fontSize: '16px',
         color,
         align: 'center',
         backgroundColor: '#000000aa',
@@ -1416,9 +1424,9 @@ export class GameScene extends Phaser.Scene {
     const angle = Math.atan2(proj.vy, proj.vx)
     const projKey = `proj_${tower.god}`
     const sprite: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image = hasSprite(projKey)
-      ? this.addSpriteScaled(projKey, proj.pos.x, proj.pos.y, 16).setRotation(angle).setDepth(7)
+      ? this.addSpriteScaled(projKey, proj.pos.x, proj.pos.y, Math.round(16 * SIZE_SCALE)).setRotation(angle).setDepth(7)
       : this.add
-          .rectangle(proj.pos.x, proj.pos.y, 16, 4, stats.color, 1)
+          .rectangle(proj.pos.x, proj.pos.y, Math.round(16 * SIZE_SCALE), Math.round(4 * SIZE_SCALE), stats.color, 1)
           .setRotation(angle)
           .setDepth(7)
           .setBlendMode(Phaser.BlendModes.ADD) // the fallback bolt glows in its element color
@@ -1725,7 +1733,7 @@ export class GameScene extends Phaser.Scene {
     // streak core: the dart sprite stretched along the flight line (falls back to a tapered blade).
     // Point-blank strikes (orbit directly over the target) skip it — atan2(0,0) points the art east.
     if (hasSprite('proj_hermes') && len >= 8) {
-      const s = this.addSpriteScaled('proj_hermes', (fx + tx) / 2, (fy + ty) / 2, 22)
+      const s = this.addSpriteScaled('proj_hermes', (fx + tx) / 2, (fy + ty) / 2, Math.round(22 * SIZE_SCALE))
         .setRotation(ang)
         .setDepth(8)
         .setBlendMode(Phaser.BlendModes.ADD)
@@ -1735,7 +1743,7 @@ export class GameScene extends Phaser.Scene {
       for (const [delay, frac, alpha] of [[40, 0.55, 0.5], [80, 0.8, 0.3]] as const) {
         this.time.delayedCall(delay, () => {
           if (!this.scene.isActive()) return
-          const ghost = this.addSpriteScaled('proj_hermes', fx + (tx - fx) * frac, fy + (ty - fy) * frac, 20)
+          const ghost = this.addSpriteScaled('proj_hermes', fx + (tx - fx) * frac, fy + (ty - fy) * frac, Math.round(20 * SIZE_SCALE))
             .setRotation(ang)
             .setAlpha(alpha)
             .setDepth(8)
@@ -1819,10 +1827,10 @@ export class GameScene extends Phaser.Scene {
       if (e.hp >= e.maxHp || e.kind === 'boss') continue
       const p = this.enemyPos(e)
       const frac = Math.max(0, e.hp / e.maxHp)
-      const w = enemyRadius(e) * 2
+      const w = enemyRadius(e) * 2 // width stays HITBOX-honest
       const h = 3
       const x = p.x - w / 2
-      const y = p.y + enemyRadius(e) + 7
+      const y = p.y + this.enemyArtPx(e) / 2 + 5 // but the bar hangs below the ART, not inside it
       g.fillStyle(0x000000, 0.7)
       g.fillRect(x - 1, y - 1, w + 2, h + 2)
       g.fillStyle(frac > 0.5 ? 0x6be36b : frac > 0.25 ? 0xe8b04a : 0xd2402f, 1)
@@ -1841,10 +1849,10 @@ export class GameScene extends Phaser.Scene {
       // the ghost lags the real fill and drains toward it — recent damage reads as a bright chip
       const ghost = Math.max(frac, (this.lastBossFrac.get(e.id) ?? frac) - 0.008)
       this.lastBossFrac.set(e.id, ghost)
-      const w = enemyRadius(e) * 2 + 24
+      const w = enemyRadius(e) * 2 + 36
       const h = 7
       const x = p.x - w / 2
-      const y = p.y - enemyRadius(e) - 16
+      const y = p.y - this.enemyArtPx(e) / 2 - 12
       g.fillStyle(0x000000, 0.55)
       g.fillRect(x - 1, y - 1, w + 2, h + 2)
       g.fillStyle(0x3a1014, 1)
@@ -1958,7 +1966,7 @@ export class GameScene extends Phaser.Scene {
       const stats = TOWER_STATS[t.god]
       // a mobile god is hard to click while moving — select via its fixed HOME BASE at the center
       const c = stats.mobile ? t.center : t.pos
-      const r = stats.footprint + 6
+      const r = Math.max(stats.footprint + 6, TOWER_SPRITE_PX * 0.33) // click the BODY you see, not the tiny footprint
       if ((c.x - pos.x) ** 2 + (c.y - pos.y) ** 2 <= r * r) {
         hit = t
         break
@@ -2073,7 +2081,7 @@ export class GameScene extends Phaser.Scene {
   /** A floating outlined number/label with a pop-in — the one shared style for all payouts/bounties. */
   private floatText(x: number, y: number, str: string, color: string): void {
     const txt = this.add
-      .text(x, y, str, { fontFamily: 'Silkscreen, "Courier New", monospace', fontSize: '15px', color, fontStyle: 'bold' })
+      .text(x, y, str, { fontFamily: 'Silkscreen, "Courier New", monospace', fontSize: '16px', color, fontStyle: 'bold' })
       .setOrigin(0.5)
       .setDepth(9)
       .setStroke('#000000', 4)
@@ -2228,7 +2236,7 @@ export class GameScene extends Phaser.Scene {
   private makeHomeBase(god: GodKind): Phaser.GameObjects.Container {
     const baseKey = `${god}_base`
     if (this.textures.exists(baseKey)) {
-      return this.add.container(0, 0, [this.addSpriteScaled(baseKey, 0, 0, 40)])
+      return this.add.container(0, 0, [this.addSpriteScaled(baseKey, 0, 0, Math.round(40 * SIZE_SCALE))])
     }
     // fallback dais: stacked stone ellipses + a gold trim ring + the god's color as the inlay
     const g = this.add.graphics()
@@ -2286,11 +2294,11 @@ export class GameScene extends Phaser.Scene {
       this.homeBaseGfx.set(tower.id, base)
       if (DirAnimSprite.hasDirectional(this, god)) {
         // pixel mobile god: the flier is his animated sprite — faces + casts while it orbits (a darting scout)
-        const art = new DirAnimSprite(this, god, pos.x, pos.y, 52, 6)
+        const art = new DirAnimSprite(this, god, pos.x, pos.y, Math.round(52 * SIZE_SCALE), 6)
         art.sprite.setData('baseScale', art.sprite.scaleX)
         this.towerSprites.set(tower.id, art.sprite)
         this.towerArt.set(tower.id, art)
-        this.addTowerShadow(tower.id, pos.x, pos.y + 18, 40) // an airborne scout's small trailing shadow
+        this.addTowerShadow(tower.id, pos.x, pos.y + Math.round(18 * SIZE_SCALE), Math.round(40 * SIZE_SCALE)) // an airborne scout's small trailing shadow
       } else {
         const flier = this.add
           .container(pos.x, pos.y, [this.add.circle(0, 0, 7, stats.color, 1).setStrokeStyle(2, 0xffffff)])
@@ -2322,7 +2330,7 @@ export class GameScene extends Phaser.Scene {
     // ground dust hugging the floor (flattened spread) + an expanding settle ring
     for (let i = 0; i < 7; i++) {
       const a = Math.random() * Math.PI * 2
-      const d = 14 + Math.random() * 12
+      const d = 20 + Math.random() * 16
       const s = this.add.circle(pos.x, pos.y + 10, 2, 0x8a7f6a, 0.8).setDepth(5)
       this.tweens.add({
         targets: s,
@@ -2333,7 +2341,7 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => s.destroy(),
       })
     }
-    const ring = this.add.circle(pos.x, pos.y + 8, 16, 0x000000, 0).setStrokeStyle(1.5, 0xd8cfa8, 0.7).setDepth(5)
+    const ring = this.add.circle(pos.x, pos.y + 8, Math.round(16 * SIZE_SCALE), 0x000000, 0).setStrokeStyle(1.5, 0xd8cfa8, 0.7).setDepth(5)
     ring.setScale(0.3)
     this.tweens.add({ targets: ring, scale: 1.4, alpha: 0, duration: 260, onComplete: () => ring.destroy() })
     this.cameras.main.shake(60, 0.002)
