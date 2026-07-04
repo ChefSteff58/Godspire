@@ -16,8 +16,10 @@ export const RIFT_BIAS_RADIUS = 300
 /** How far the gate's civilizing influence reaches (stone bonus + grass growth).
  *  380 → 420 at the 2026-07-03 S1 gate ("the grass adds exactly the vibe — let's get a little more"). */
 export const GATE_BIAS_RADIUS = 420
-/** The two bias anchors ARE the path endpoints — no magic coordinates. */
-export const RIFT: Vec2 = OLYMPUS_PATH[0]
+/** The gate anchor IS the path's end — but the RIFT is PINNED: M10-S4 moved the spawn waypoint
+ *  into the hellmouth bowl, and re-anchoring the noise there would reshuffle the ENTIRE map
+ *  (every tile, both inpainted patches). The terrain scar stays where Tartarus tore it open. */
+export const RIFT: Vec2 = { x: -30, y: 120 }
 export const GATE: Vec2 = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
 
 export type TerrainKind = 'chasm' | 'stone' | 'grass'

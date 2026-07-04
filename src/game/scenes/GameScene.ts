@@ -618,6 +618,10 @@ export class GameScene extends Phaser.Scene {
     // Fallback chain: patch → old prop art → drawn ellipses.
     if (this.textures.exists('obj_rift_patch')) {
       this.animateRift(this.add.image(0, 24, 'obj_rift_patch').setOrigin(0).setDepth(1.5))
+      // M10-S4: the pit's lower-right RIM re-stamped above the creatures (depth 6.5 > enemy 4-6) —
+      // fresh spawns slide out from UNDER the lip instead of materializing on top of the art.
+      // A cropped copy of terrain, not set dressing (double-draw in inpaint shots is identical).
+      this.add.image(0, 24, 'obj_rift_patch').setOrigin(0).setDepth(6.5).setCrop(96, 96, 96, 96)
     } else if (this.textures.exists('obj_rift')) {
       this.setDressing.push(this.addSpriteScaled('obj_rift', start.x + 16, start.y, 270).setDepth(2))
     } else {
@@ -1085,7 +1089,28 @@ export class GameScene extends Phaser.Scene {
     const base = (sprite.getData('baseScale') as number) ?? sprite.scale
     sprite.setData('baseScale', base)
     sprite.setScale(base * 0.4)
-    this.tweens.add({ targets: sprite, scale: base, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
+    const fromMouth = desc.spawnAtT === undefined // fresh spawns walk out of the hellmouth
+    if (fromMouth) {
+      // rise out of the pit: fade in while the sim walks them over the rim (position is NEVER
+      // tweened — the fixed-substep sim owns it). Stealth keeps its half-alpha ceiling.
+      const targetAlpha = enemy.stealth ? 0.5 : 1
+      sprite.setAlpha(0)
+      this.tweens.add({ targets: sprite, alpha: targetAlpha, duration: 350, ease: 'Sine.easeOut' })
+      const sh = this.enemyShadows.get(enemy.id)
+      if (sh) {
+        sh.setAlpha(0)
+        this.tweens.add({ targets: sh, alpha: 0.18, duration: 350, ease: 'Sine.easeOut' })
+      }
+      if (this.enemies.length + this.projectiles.length <= 30) {
+        this.burst(97, 161, 4, 0xff7040, 18, 2, 260) // the mouth coughs embers with each arrival
+      }
+    }
+    this.tweens.add({
+      targets: sprite,
+      scale: base,
+      duration: isBoss ? 360 : fromMouth ? 350 : 200,
+      ease: 'Back.easeOut',
+    })
   }
 
   /**
