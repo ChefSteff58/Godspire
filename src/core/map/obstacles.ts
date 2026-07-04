@@ -21,7 +21,9 @@ export interface Obstacle {
 
 export const OBSTACLES: readonly Obstacle[] = [
   // Ruined columns — upper-left build pocket.
-  { id: 'columns', label: 'Ruined Columns', shape: { kind: 'circle', x: 90, y: 210, r: 24 }, color: 0x7a7d88 },
+  // M10-S6: moved off the hellmouth's doorstep to the upper-right approach — a landmark on the
+  // road to Olympus ('the war got close before'), verified buildable stone, clear of the boulder.
+  { id: 'columns', label: 'Ruined Columns', shape: { kind: 'circle', x: 770, y: 110, r: 24 }, color: 0x7a7d88 },
   // Boulder — right-side pocket, forces tower spacing on the approach to Olympus.
   { id: 'boulder', label: 'Boulder', shape: { kind: 'circle', x: 720, y: 200, r: 26 }, color: 0x4a4a52 },
   // Lake of Styx — FILLS the road-ringed central pocket (2026-07-03: the user wants the WHOLE

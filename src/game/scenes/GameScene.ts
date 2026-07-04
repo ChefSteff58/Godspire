@@ -48,6 +48,7 @@ import { layoutWangTiles, WANG_TILE_FOR_MASK } from '../render/wang'
 import { stonePredicate, grassPredicate, isBuildableGround, terrainAt, TERRAIN_TILE_PX } from '../../core/map/terrain'
 import { waterAt } from '../../core/map/water'
 import { isLavaVertex, lavaVertexSet } from '../../core/map/lava'
+import { SITES, siteBuffAt } from '../../core/map/sites'
 import { dir8, dirToTarget } from '../render/facing'
 import { GAME_WIDTH, GAME_HEIGHT } from '../dimensions'
 
@@ -200,6 +201,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPath()
     this.drawObstacles()
     this.drawDecor()
+    this.drawSites()
     this.drawMarkers()
     this.overlay = this.add.graphics().setDepth(3)
     this.ghost = this.add.graphics().setDepth(10)
@@ -553,7 +555,12 @@ export class GameScene extends Phaser.Scene {
         else if (s.kind === 'poly') {
           const b = GameScene.polyBounds(s.points)
           this.setDressing.push(this.addSpriteScaled(objKey, b.cx, b.cy, Math.max(b.w, b.h) * 1.08).setDepth(2))
-        } else this.setDressing.push(this.addSpriteScaled(objKey, s.x + s.w / 2, s.y + s.h / 2, Math.max(s.w, s.h) * 1.5).setDepth(2))
+        } else {
+          // the Sacred Olive draws GRAND (M10-S6) — a landmark, not a shrub; other rects stay 1.5×
+          const mul = o.id === 'olive' ? 2.1 : 1.5
+          const dy = o.id === 'olive' ? -8 : 0
+          this.setDressing.push(this.addSpriteScaled(objKey, s.x + s.w / 2, s.y + s.h / 2 + dy, Math.max(s.w, s.h) * mul).setDepth(2))
+        }
         continue
       }
       if (o.id === 'styx' && s.kind === 'poly') {
@@ -603,6 +610,47 @@ export class GameScene extends Phaser.Scene {
   /** M9-S4: deterministic decor scatter — bones near Tartarus, tufts on grass, stumps and rocks
    *  between. Pure math picks the spots (src/game/render/decor.ts); missing PNGs simply filter
    *  out, so the pack lands art-by-art without ever breaking the map. */
+  /** M10-S6: sacred-site dressing — offerings + stones at fixed spots, fireflies, a hover lore
+   *  label (Phaser-side: no React/letterbox plumbing). All of it is set dressing. */
+  private siteLoreLabel?: Phaser.GameObjects.Text
+  private drawSites(): void {
+    const olive = SITES.find((s) => s.id === 'sacred_olive')
+    if (!olive) return
+    // fixed dressing (not scatterDecor — these BELONG to the tree)
+    if (this.textures.exists('obj_decor_offering')) {
+      this.setDressing.push(this.addSpriteScaled('obj_decor_offering', olive.pos.x - 58, olive.pos.y + 34, 24).setDepth(2))
+    }
+    if (this.textures.exists('obj_decor_olive_stones')) {
+      this.setDressing.push(this.addSpriteScaled('obj_decor_olive_stones', olive.pos.x + 56, olive.pos.y + 30, 26).setDepth(2))
+    }
+    // fireflies drift in the tree's shade (green-gold, slow)
+    this.ambientCap = Math.max(this.ambientCap, 26)
+    this.time.addEvent({
+      delay: 900,
+      loop: true,
+      callback: () =>
+        this.spawnAmbient('firefly', {
+          x: olive.pos.x + (Math.random() - 0.5) * 90,
+          y: olive.pos.y + 20 + (Math.random() - 0.5) * 40,
+        }),
+    })
+    // hover lore — created lazily, faded by update() when the pointer rests on the grove
+    this.siteLoreLabel = this.add
+      .text(olive.pos.x, olive.pos.y - 62, `${olive.label}\n${olive.lore}`, {
+        fontFamily: 'Silkscreen, Georgia, serif',
+        fontSize: '11px',
+        color: '#e7e3d8',
+        align: 'center',
+        backgroundColor: '#000000cc',
+        padding: { x: 8, y: 5 },
+        wordWrap: { width: 240 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(12)
+      .setAlpha(0)
+    this.setDressing.push(this.siteLoreLabel)
+  }
+
   private drawDecor(): void {
     if (!this.groundTiled) return // dressing belongs to the real terrain, not the drawn fallback
     const have = (k: string) => this.textures.exists(k)
@@ -823,6 +871,20 @@ export class GameScene extends Phaser.Scene {
     useGameStore.getState().mirrorRun(this.run.snapshot())
     this.renderOverlay()
     this.renderGhost()
+    // sacred-site lore on hover (fade, not popping): pointer resting on the grove, not placing
+    if (this.siteLoreLabel) {
+      const o = OBSTACLES.find((ob) => ob.id === 'olive')
+      const over =
+        !useGameStore.getState().placingGod &&
+        o?.shape.kind === 'rect' &&
+        this.pointer.x >= o.shape.x - 10 &&
+        this.pointer.x <= o.shape.x + o.shape.w + 10 &&
+        this.pointer.y >= o.shape.y - 10 &&
+        this.pointer.y <= o.shape.y + o.shape.h + 10
+      const target = over ? 1 : 0
+      const a = this.siteLoreLabel.alpha
+      if (Math.abs(a - target) > 0.01) this.siteLoreLabel.setAlpha(a + (target - a) * 0.18)
+    }
   }
 
   /** Opaque to TS narrowing on purpose — simStep mutates run.phase mid-loop (a run can end mid-frame). */
@@ -886,7 +948,8 @@ export class GameScene extends Phaser.Scene {
       tower.cooldown -= dtSec
       if (tower.cooldown > 0) continue
       const aura = this.auraAt(tower.pos) // Athena buffs nearby gods + reveals stealth foes
-      const fireRate = this.run.effectiveFireRate(tower.god, eff.fireRate * aura.fireRateMul)
+      const site = siteBuffAt(tower.pos) // sacred sites (the Olive of Athena) bless from the map itself
+      const fireRate = this.run.effectiveFireRate(tower.god, eff.fireRate * aura.fireRateMul * site.fireRateMul)
       const dep = TOWER_STATS[tower.god].deployable
       if (dep) {
         // Hephaestus produces a trap charge instead of shooting an enemy directly.
@@ -1774,6 +1837,17 @@ export class GameScene extends Phaser.Scene {
       // Range ring shows ONLY for the selected tower (or every tower in debug) — never always-on,
       // including the support auras (Aphrodite / Athena), which now behave like every other range ring.
       const selected = tower.id === this.selectedTowerId
+      if (selected) {
+        // standing on sacred ground? show the blessing's reach (M10-S6)
+        for (const s of SITES) {
+          if (Math.hypot(tower.pos.x - s.pos.x, tower.pos.y - s.pos.y) <= s.radius) {
+            g.lineStyle(1.5, 0xd9c879, 0.5)
+            g.strokeCircle(s.pos.x, s.pos.y, s.radius)
+            g.fillStyle(0xd9c879, 0.04)
+            g.fillCircle(s.pos.x, s.pos.y, s.radius)
+          }
+        }
+      }
       if (selected || showDebug) {
         const eff = this.towerEff(tower) // folded ONLY when actually drawn (this loop runs every frame)
         const range = eff.range
@@ -1900,6 +1974,15 @@ export class GameScene extends Phaser.Scene {
     const stats = TOWER_STATS[placingGod]
     const ok = this.canPlaceGod(placingGod, this.pointer) && this.run.canAfford(stats.cost)
     const tint = ok ? 0x6be36b : 0xff5566
+    // sacred ground: placing inside a site's blessing shows its soft gold ring (M10-S6)
+    for (const s of SITES) {
+      if (Math.hypot(this.pointer.x - s.pos.x, this.pointer.y - s.pos.y) <= s.radius) {
+        g.lineStyle(1.5, 0xd9c879, 0.5)
+        g.strokeCircle(s.pos.x, s.pos.y, s.radius)
+        g.fillStyle(0xd9c879, 0.05)
+        g.fillCircle(s.pos.x, s.pos.y, s.radius)
+      }
+    }
     // the range ring + a faint footprint marker, coloured by validity
     g.lineStyle(1.5, tint, 0.85)
     g.strokeCircle(this.pointer.x, this.pointer.y, stats.range)
@@ -2093,12 +2176,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Ambient life: an ember drifting up from the Tartarus rift, or a gold mote at the Olympus gate. */
-  private spawnAmbient(kind: 'ember' | 'mote', origin?: Vec2): void {
+  private spawnAmbient(kind: 'ember' | 'mote' | 'firefly', origin?: Vec2): void {
     if (this.inpaintShotMode) return // DEV: clean-terrain capture in progress
     if (this.ambientCount >= this.ambientCap) return // hard cap — atmosphere, not weather
     this.ambientCount++
     const src = origin ?? (kind === 'ember' ? OLYMPUS_PATH[0] : OLYMPUS_PATH[OLYMPUS_PATH.length - 1])
-    const color = kind === 'ember' ? (Math.random() < 0.5 ? 0xd83a2a : 0xffb070) : 0xf5d061
+    const color =
+      kind === 'ember' ? (Math.random() < 0.5 ? 0xd83a2a : 0xffb070) : kind === 'firefly' ? 0xc8e87a : 0xf5d061
     const p = this.add
       .circle(src.x + (Math.random() - 0.5) * 60, src.y - 6, 1 + Math.random(), color, 0.7)
       .setDepth(2.5)
