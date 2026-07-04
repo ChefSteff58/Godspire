@@ -104,7 +104,7 @@ function PathRow({ info, gold, hex, onUpgrade }: { info: SelectedTowerPath; gold
           disabled={!affordable}
           className={`arcade-raise flex flex-col rounded px-2 py-1.5 text-left ${
             affordable
-              ? 'pixel-btn--gold arcade-bevel bg-amber-500/90 text-slate-900'
+              ? 'pixel-btn pixel-btn--gold arcade-bevel bg-amber-500/90 text-slate-900'
               : 'cursor-not-allowed bg-shrine-slab text-shrine-marble/40'
           }`}
         >

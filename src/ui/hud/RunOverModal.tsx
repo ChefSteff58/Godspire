@@ -28,12 +28,12 @@ export function RunOverModal() {
           : null // idle / already-posted → nothing to announce
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-6 bg-slate-950/85 backdrop-blur-sm">
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-6 bg-shrine-abyss/85 backdrop-blur-sm">
       <div className="flex flex-col items-center text-center">
         <div className="banner-ribbon px-12 pb-6 pt-3">
           <h2 className="font-pixel text-3xl font-bold">Olympus has fallen</h2>
         </div>
-        <p className="mt-2 text-sm text-slate-400">The monsters have stormed the gates… this time.</p>
+        <p className="mt-2 text-sm text-shrine-marble/60">The monsters have stormed the gates… this time.</p>
       </div>
       <div className="flex gap-8 font-pixel text-center">
         <Stat label="Wave reached" value={`${summary.wave}`} highlight={newBest} pop />
@@ -48,9 +48,9 @@ export function RunOverModal() {
       {tiedBest && <p className="text-sm font-bold text-amber-300">Tied your best wave!</p>}
       {newBest && isSupabaseConfigured && (
         isGuest ? (
-          <p className="text-xs text-slate-300">🔗 Link an account (top-left) to post this to the leaderboard.</p>
+          <p className="text-xs text-shrine-marble/70">🔗 Link an account (top-left) to post this to the leaderboard.</p>
         ) : (
-          submitLine && <p className="text-xs text-slate-300">{submitLine}</p>
+          submitLine && <p className="text-xs text-shrine-marble/70">{submitLine}</p>
         )
       )}
       <div className="flex flex-wrap justify-center gap-x-7 gap-y-3 font-pixel text-center">
@@ -61,20 +61,20 @@ export function RunOverModal() {
         <Stat label="Towers built" value={`${summary.towersBuilt}`} small />
       </div>
       {summary.worstWaveLives > 0 && (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-shrine-marble/60">
           Bloodiest wave: <span className="font-bold text-rose-300">Wave {summary.worstWave}</span> (−{summary.worstWaveLives} lives)
         </p>
       )}
       <div className="flex items-center gap-3">
         <button
           onClick={openLeaderboard}
-          className="arcade-raise arcade-bevel font-pixel rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg"
+          className="arcade-raise arcade-bevel font-pixel rounded-full bg-shrine-stone px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg"
         >
           🏆 Ranks
         </button>
         <button
           onClick={openPantheon}
-          className="arcade-raise arcade-bevel font-pixel rounded-full bg-slate-700 px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg"
+          className="arcade-raise arcade-bevel font-pixel rounded-full bg-shrine-stone px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg"
         >
           🏛️ Pantheon
         </button>
@@ -94,11 +94,11 @@ function Stat({ label, value, highlight, small, pop }: { label: string; value: s
     <div className="flex flex-col">
       <span
         key={pop ? value : undefined}
-        className={`${pop ? 'num-pop' : ''} ${small ? 'text-xl' : 'text-3xl'} font-bold ${highlight ? 'text-amber-300' : 'text-slate-100'}`}
+        className={`${pop ? 'num-pop' : ''} ${small ? 'text-xl' : 'text-3xl'} font-bold ${highlight ? 'text-amber-300' : 'text-shrine-marble'}`}
       >
         {value}
       </span>
-      <span className="text-xs uppercase tracking-wide text-slate-500">{label}</span>
+      <span className="text-xs uppercase tracking-wide text-shrine-marble/50">{label}</span>
     </div>
   )
 }

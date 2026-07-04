@@ -21,7 +21,7 @@ export function WaveControls() {
   if (canStartWave) {
     const label = wave === 0 ? '⚔️ Begin the siege' : `▶ Start Wave ${wave + 1}`
     return (
-      <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center">
         <button
           onClick={requestStartWave}
           className="pixel-btn pixel-btn--gold font-pixel pointer-events-auto rounded-full bg-amber-400 px-6 py-2 text-sm font-bold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-300"
@@ -34,7 +34,7 @@ export function WaveControls() {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-      <span className="rounded-full bg-black/70 px-5 py-2 text-sm font-medium text-slate-300">
+      <span className="rounded-full bg-black/70 px-5 py-2 text-sm font-medium text-shrine-marble/70">
         {phase === 'spawning' ? `Wave ${wave} incoming…` : `Wave ${wave} — clear the field`}
       </span>
     </div>

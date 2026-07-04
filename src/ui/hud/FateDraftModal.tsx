@@ -3,11 +3,13 @@ import { PixelIcon } from '../kit/PixelIcon'
 import type { Rarity } from '../../core/run/boons'
 
 // Rarity → card accent: border ring, label color, backplate tint, and glow (Arcade-Shrine M9-S6).
-const RARITY: Record<Rarity, { ring: string; text: string; label: string; plate: string; glow: string }> = {
-  common: { ring: 'border-slate-500/40 hover:border-slate-300', text: 'text-slate-400', label: 'Common', plate: '#9aa4b52e', glow: 'transparent' },
-  rare: { ring: 'border-sky-500/50 hover:border-sky-300', text: 'text-sky-300', label: 'Rare', plate: '#5aa2e82e', glow: '#5aa2e855' },
-  epic: { ring: 'border-fuchsia-500/50 hover:border-fuchsia-300', text: 'text-fuchsia-300', label: 'Epic', plate: '#d65ae82e', glow: '#d65ae855' },
-  legendary: { ring: 'border-amber-400/60 hover:border-amber-300', text: 'text-amber-300', label: 'Legendary', plate: '#f5d0612e', glow: '#f5d06166' },
+// ringHex renders as an inline OUTLINE: Tailwind border-color utilities lose the cascade to the
+// unlayered .pixel-* border shorthands, and inline box-shadow would clobber .arcade-bevel's stack.
+const RARITY: Record<Rarity, { ringHex: string; text: string; label: string; plate: string; glow: string }> = {
+  common: { ringHex: '#9aa4b566', text: 'text-rarity-common', label: 'Common', plate: '#9aa4b52e', glow: 'transparent' },
+  rare: { ringHex: '#5aa2e880', text: 'text-rarity-rare', label: 'Rare', plate: '#5aa2e82e', glow: '#5aa2e855' },
+  epic: { ringHex: '#d65ae880', text: 'text-rarity-epic', label: 'Epic', plate: '#d65ae82e', glow: '#d65ae855' },
+  legendary: { ringHex: '#f5d06199', text: 'text-rarity-legendary', label: 'Legendary', plate: '#f5d0612e', glow: '#f5d06166' },
 }
 
 /** The draft's full decision window (keep in sync with GameScene's DRAFT_TIMER_MS). */
@@ -30,18 +32,18 @@ export function FateDraftModal() {
   const frac = timerSec !== null ? Math.max(0, Math.min(1, timerSec / DRAFT_TIMER_FULL_SEC)) : 1
 
   return (
-    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-slate-950/80 backdrop-blur-sm">
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-shrine-abyss/80 backdrop-blur-sm">
       <div className="text-center">
         <h2 className="font-pixel text-2xl font-bold text-amber-300">The Fates offer a boon</h2>
-        <p className="text-sm text-slate-400">Choose one — the Fates weave it into the rest of your run.</p>
+        <p className="text-sm text-shrine-marble/60">Choose one — the Fates weave it into the rest of your run.</p>
       </div>
       {timerSec !== null && (
         <div className="flex flex-col items-center gap-1">
-          <span className={`font-pixel text-sm font-bold ${urgent ? 'animate-pulse text-red-400' : 'text-slate-300'}`}>
+          <span className={`font-pixel text-sm font-bold ${urgent ? 'animate-pulse text-red-400' : 'text-shrine-marble/70'}`}>
             {urgent ? `⚡ The Fates choose in ${timerSec}…` : `${timerSec}s`}
           </span>
           {/* the thread of fate: a spun gold strand that shortens — and frays red near the cut */}
-          <div className="relative h-[5px] w-64 overflow-hidden rounded-full bg-slate-800">
+          <div className="relative h-[5px] w-64 overflow-hidden rounded-full bg-shrine-stone">
             <div
               className="h-full rounded-full transition-all duration-1000 ease-linear"
               style={{
@@ -64,8 +66,13 @@ export function FateDraftModal() {
             <button
               key={b.id}
               onClick={() => pickDraft(i)}
-              style={{ animationDelay: `${i * 90}ms`, boxShadow: b.rarity !== 'common' ? `0 0 14px 1px ${r.glow}` : undefined }}
-              className={`pixel-panel arcade-bevel card-deal arcade-raise relative flex w-48 flex-col items-center gap-2 overflow-hidden rounded-xl border bg-slate-900 p-5 text-center ${r.ring}`}
+              style={{
+                animationDelay: `${i * 90}ms`,
+                outline: `2px solid ${r.ringHex}`,
+                outlineOffset: '-2px',
+                boxShadow: b.rarity !== 'common' ? `0 0 14px 1px ${r.glow}` : undefined,
+              }}
+              className="pixel-panel arcade-bevel card-deal arcade-raise relative flex w-48 flex-col items-center gap-2 overflow-hidden rounded-xl bg-shrine-slab p-5 text-center"
             >
               {b.rarity === 'legendary' && <span className="card-shine" />}
               <span className={`font-pixel text-[10px] font-bold uppercase tracking-wider ${r.text}`}>{r.label}</span>
@@ -77,8 +84,8 @@ export function FateDraftModal() {
                 <PixelIcon name={`boon_${b.id}`} fallback={b.icon} sizeClass="h-14 w-14 text-4xl" />
               </span>
               <span className="font-pixel text-base font-bold text-amber-200">{b.name}</span>
-              <span className="text-sm text-slate-200">{b.desc}</span>
-              <span className="text-xs italic text-slate-500">{b.flavor}</span>
+              <span className="text-sm text-shrine-marble">{b.desc}</span>
+              <span className="text-xs italic text-shrine-marble/50">{b.flavor}</span>
             </button>
           )
         })}

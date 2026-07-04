@@ -67,17 +67,20 @@ export function TopBar() {
       <AccountBadge />
       <div className="flex items-center gap-2 font-pixel text-sm">
         <span
-          className={`pixel-chip rounded px-3 py-1 transition-all duration-150 ${
-            denied ? 'animate-pulse bg-red-500 text-white' : paid ? 'scale-110 bg-black/40 text-amber-200' : 'bg-black/40 text-amber-300'
+          className={`pixel-chip relative rounded px-3 py-1 transition-all duration-150 ${
+            denied ? 'text-white' : paid ? 'scale-110 bg-black/40 text-amber-200' : 'bg-black/40 text-amber-300'
           }`}
         >
+          {/* chip.png's opaque center paints over background classes — flash via a child overlay */}
+          {denied && <span className="animate-pulse pointer-events-none absolute inset-0 rounded bg-red-500/60" />}
           <PixelIcon name="icon_gold" fallback="🪙" /> {gold}
         </span>
         <span
-          className={`pixel-chip rounded px-3 py-1 transition-colors duration-150 ${
-            hurt ? 'bg-red-500 text-white' : 'bg-black/40 text-rose-300'
+          className={`pixel-chip relative rounded px-3 py-1 transition-colors duration-150 ${
+            hurt ? 'text-white' : 'bg-black/40 text-rose-300'
           }`}
         >
+          {hurt && <span className="pointer-events-none absolute inset-0 rounded bg-red-500/60" />}
           <PixelIcon name="icon_heart" fallback="❤️" /> {lives}
         </span>
         {shieldCharges > 0 && (
@@ -98,13 +101,16 @@ export function TopBar() {
           </span>
         )}
         <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-shrine-marble/80">
-          <PixelIcon name="icon_wave" fallback="🌊" /> Wave {wave}
+          <PixelIcon name="icon_wave" fallback="🌊" /> Wave{' '}
+          <span key={wave} className="num-pop">
+            {wave}
+          </span>
         </span>
-        <span className="pixel-chip rounded bg-black/40 px-3 py-1 text-shrine-marble/60">
+        <span className="pixel-chip max-lg:hidden rounded bg-black/40 px-3 py-1 text-shrine-marble/60">
           <PixelIcon name="icon_skull" fallback="💀" /> {kills}
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <SpeedControls />
         <button
           onClick={openPantheon}
@@ -120,14 +126,16 @@ export function TopBar() {
         >
           🏆 Ranks
         </button>
-        <button
-          onClick={toggleDebug}
-          className={`rounded px-3 py-1 text-sm transition ${
-            showDebug ? 'bg-amber-400 text-slate-900' : 'bg-shrine-slab text-shrine-marble/60 hover:bg-shrine-stone'
-          }`}
-        >
-          debug
-        </button>
+        {import.meta.env.DEV && (
+          <button
+            onClick={toggleDebug}
+            className={`rounded px-3 py-1 text-sm transition ${
+              showDebug ? 'bg-amber-400 text-slate-900' : 'bg-shrine-slab text-shrine-marble/60 hover:bg-shrine-stone'
+            }`}
+          >
+            debug
+          </button>
+        )}
       </div>
     </div>
   )

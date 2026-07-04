@@ -16,7 +16,7 @@ import { DevPanel } from '../hud/DevPanel'
  */
 export function GameScreen() {
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden bg-slate-950">
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-shrine-abyss">
       <TopBar />
       <div className="flex min-h-0 flex-1">
         <div className="relative min-w-0 flex-1">

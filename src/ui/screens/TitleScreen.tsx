@@ -27,7 +27,7 @@ export function TitleScreen() {
   }))
 
   return (
-    <div className="relative flex h-dvh w-full flex-col items-center justify-center overflow-hidden bg-slate-950">
+    <div className="relative flex h-dvh w-full flex-col items-center justify-center overflow-hidden bg-shrine-abyss">
       {/* backdrop: the rift's ember glow rising from below, Olympus gold above */}
       <div
         className="pointer-events-none absolute inset-0"
@@ -71,7 +71,7 @@ export function TitleScreen() {
           >
             GODSPIRE
           </h1>
-          <p className="font-pixel mt-2 text-sm text-slate-400">Hold the gates of Olympus</p>
+          <p className="font-pixel mt-2 text-sm text-shrine-marble/60">Hold the gates of Olympus</p>
         </div>
         {minotaur && <img src={minotaur} alt="" className="relative h-28 w-28 object-contain [image-rendering:pixelated]" />}
       </div>
@@ -86,13 +86,13 @@ export function TitleScreen() {
         </button>
         <button
           onClick={openPantheon}
-          className="pixel-btn arcade-raise font-pixel w-full rounded bg-slate-800 px-6 py-2.5 text-sm font-bold text-amber-200"
+          className="pixel-btn arcade-raise font-pixel w-full rounded bg-shrine-stone px-6 py-2.5 text-sm font-bold text-amber-200"
         >
           🏛️ Pantheon
         </button>
         <button
           onClick={openLeaderboard}
-          className="pixel-btn arcade-raise font-pixel w-full rounded bg-slate-800 px-6 py-2.5 text-sm font-bold text-amber-200"
+          className="pixel-btn arcade-raise font-pixel w-full rounded bg-shrine-stone px-6 py-2.5 text-sm font-bold text-amber-200"
         >
           🏆 Ranks
         </button>

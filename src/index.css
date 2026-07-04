@@ -44,6 +44,7 @@
   --color-branch-wisdom: #7fb3e0;
   --color-rarity-common: #9aa4b5;
   --color-rarity-rare: #5aa2e8;
+  --color-rarity-epic: #d65ae8;
   --color-rarity-legendary: #f5d061;
   /* bouncy spring for hover/press/pop motion */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -216,7 +217,8 @@ body {
   .ember,
   .card-deal,
   .card-shine,
-  .node-breathe {
+  .node-breathe,
+  .animate-pulse {
     animation: none !important;
     transition: none !important;
   }

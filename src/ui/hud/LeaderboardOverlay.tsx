@@ -33,15 +33,15 @@ export function LeaderboardOverlay() {
   if (!open) return null
 
   return (
-    <div className="pointer-events-auto absolute inset-0 z-40 flex flex-col items-center gap-4 overflow-auto bg-slate-950/92 p-6 backdrop-blur-sm">
+    <div className="pointer-events-auto absolute inset-0 z-40 flex flex-col items-center gap-4 overflow-auto bg-shrine-abyss/92 p-6 backdrop-blur-sm">
       <div className="flex w-full max-w-2xl items-center justify-between gap-4">
         <div>
           <h2 className="font-pixel text-2xl font-bold text-amber-300">🏆 Leaderboard</h2>
-          <p className="text-xs text-slate-400">Highest wave survived · Endless</p>
+          <p className="text-xs text-shrine-marble/60">Highest wave survived · Endless</p>
         </div>
         <button
           onClick={close}
-          className="pixel-btn--gold arcade-raise font-pixel rounded-full bg-amber-400 px-6 py-2 text-sm font-bold text-slate-900 shadow-lg shadow-amber-500/30"
+          className="pixel-btn pixel-btn--gold arcade-raise font-pixel rounded-full bg-amber-400 px-6 py-2 text-sm font-bold text-slate-900 shadow-lg shadow-amber-500/30"
         >
           Done
         </button>
@@ -52,7 +52,7 @@ export function LeaderboardOverlay() {
       ) : (
         <div className="flex w-full max-w-2xl flex-col gap-3">
           {isGuest && (
-            <div className="rounded-lg border border-sky-400/40 bg-sky-500/10 px-4 py-2 text-center text-sm text-sky-200">
+            <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-200">
               🔗 Link an account (top-left badge) to post your score and claim a spot.
             </div>
           )}
@@ -71,13 +71,12 @@ export function LeaderboardOverlay() {
                     <li
                       key={`${r.user_id ?? 'anon'}-${r.created_at}`}
                       className={`pixel-chip arcade-bevel flex items-center gap-3 rounded px-3 py-2 ${
-                        me
-                          ? 'node-breathe border border-amber-400/70 bg-amber-500/15'
-                          : 'bg-black/30'
+                        me ? 'node-breathe bg-amber-500/15' : 'bg-black/30'
                       }`}
+                      style={me ? { outline: '2px solid #f5d061b3', outlineOffset: '-2px' } : undefined}
                     >
-                      <span className="w-9 text-right font-mono text-sm font-bold text-slate-500">#{r.rank}</span>
-                      <span className="flex-1 truncate text-sm text-slate-100">
+                      <span className="w-9 text-right font-mono text-sm font-bold text-shrine-marble/50">#{r.rank}</span>
+                      <span className="flex-1 truncate text-sm text-shrine-marble">
                         {r.player_name}
                         {me && <span className="font-pixel text-amber-300"> (you)</span>}
                       </span>
@@ -95,7 +94,7 @@ export function LeaderboardOverlay() {
 }
 
 function Msg({ children }: { children: React.ReactNode }) {
-  return <p className="py-10 text-center text-sm text-slate-400">{children}</p>
+  return <p className="py-10 text-center text-sm text-shrine-marble/60">{children}</p>
 }
 
 const PODIUM = [
@@ -120,7 +119,8 @@ function Podium({ rows, userId }: { rows: RankedScore[]; userId: string | null }
           >
             <span className="text-2xl leading-none">{p.slot === 1 ? '🏆' : p.medal}</span>
             {p.slot === 1 && <span className="text-sm leading-none">🌿👑🌿</span>}
-            <span className="font-pixel w-full truncate text-center text-xs font-bold text-slate-100">
+            {/* player names stay on the system stack (Silkscreen's glyph coverage is Latin-ish) */}
+            <span className="w-full truncate text-center text-xs font-bold text-shrine-marble">
               {r.player_name}
               {me && <span className="text-amber-300"> (you)</span>}
             </span>

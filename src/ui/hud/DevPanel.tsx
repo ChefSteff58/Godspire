@@ -22,7 +22,7 @@ function DevPanelInner() {
       <button
         onClick={cheatInvincible}
         className={`rounded px-2 py-1 transition ${
-          invincible ? 'bg-emerald-500 text-slate-900' : 'bg-shrine-slab text-slate-300 hover:bg-shrine-stone'
+          invincible ? 'bg-emerald-500 text-slate-900' : 'bg-shrine-slab text-shrine-marble/70 hover:bg-shrine-stone'
         }`}
       >
         {invincible ? 'invincible ✓' : 'invincible'}
