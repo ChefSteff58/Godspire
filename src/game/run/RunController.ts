@@ -169,13 +169,15 @@ export class RunController {
   // ── the loop, driven by the scene's single clock ──
 
   /** Advance spawning by `dtSec`. Returns the enemies to spawn THIS frame (possibly several at FF). */
-  tick(dtSec: number): SpawnDesc[] {
+  tick(dtSec: number, graceDtSec = dtSec): SpawnDesc[] {
     // Auto-start: after a wave clears, begin the next one once a short grace elapses. Counted on
     // the SCALED clock (this is fed scaled dt), so it respects pause/FF and never fires mid-draft.
     // The FIRST wave never auto-starts — the player needs unhurried time to lay opening towers
     // (matches BTD6, where you press play for round 1 and rounds auto-chain after).
     if (this.autoStart && this.phase === 'building' && !this.draft && this.wave >= 1) {
-      this.buildGraceMs -= dtSec * 1000
+      // grace runs on WALL time (graceDtSec) — at 3× the sim races but the telegraph window
+      // must stay readable; at pause neither advances (tick isn't called)
+      this.buildGraceMs -= graceDtSec * 1000
       if (this.buildGraceMs <= 0) this.beginWave(this.wave + 1)
     }
     if (this.phase !== 'spawning' || !this.spec) return []

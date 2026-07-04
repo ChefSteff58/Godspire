@@ -186,7 +186,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ? s
         : {
             pantheonOpen: true,
-            preMenuScale: s.leaderboardOpen ? s.preMenuScale : s.timeScale === 0 ? 1 : s.timeScale,
+            preMenuScale: s.leaderboardOpen ? s.preMenuScale : s.timeScale, // verbatim — a manual pause must survive the round-trip
             timeScale: 0,
           },
     ),
@@ -198,7 +198,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ? s
         : {
             leaderboardOpen: true,
-            preMenuScale: s.pantheonOpen ? s.preMenuScale : s.timeScale === 0 ? 1 : s.timeScale,
+            preMenuScale: s.pantheonOpen ? s.preMenuScale : s.timeScale,
             timeScale: 0,
           },
     ),

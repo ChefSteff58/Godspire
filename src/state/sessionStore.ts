@@ -109,7 +109,15 @@ export const useSessionStore = create<SessionStore>((set, get) => {
 
         // React to future auth changes (link / sign-out). No supabase awaits inside the callback.
         subscribeAuth((u) => {
-          if (u) set({ userId: u.id, isGuest: u.isGuest })
+          if (u) {
+            set({ userId: u.id, isGuest: u.isGuest })
+          } else {
+            // cross-tab sign-out / session loss: drop identity so this tab can't resurrect the
+            // just-cleared save back into localStorage
+            clearLocalProgress()
+            clearLocalName()
+            set({ userId: null, isGuest: true, progress: emptyProgress(now()), displayName: DEFAULT_NAME })
+          }
         })
 
         const [cloud, profile] = await Promise.all([loadProgress(user.id), loadProfile(user.id)])
@@ -149,7 +157,8 @@ export const useSessionStore = create<SessionStore>((set, get) => {
      * Best-effort, never throws. Safe to call on every run-end + whenever the board opens.
      */
     submitScore: async () => {
-      const { userId, isGuest, displayName, progress } = get()
+      const { userId, isGuest, displayName, progress, lastSubmit } = get()
+      if (lastSubmit === 'posting') return // endRun + overlay-open can race → duplicate rows
       if (!isSupabaseConfigured || !userId || isGuest) return
       const best = progress.stats.bestWave
       if (best < 1) return
@@ -207,6 +216,11 @@ export const useSessionStore = create<SessionStore>((set, get) => {
         progress: emptyProgress(now()),
         displayName: DEFAULT_NAME,
       })
+      // mint a fresh guest session — boot() is one-shot, so without this the tab has NO session
+      // until reload: link buttons error and cloud saves silently stop
+      const fresh = await ensureSession()
+      if (fresh) set({ userId: fresh.id, isGuest: true })
+      else set({ status: 'offline' })
     },
   }
 })

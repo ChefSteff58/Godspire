@@ -168,6 +168,8 @@ export class GameScene extends Phaser.Scene {
   private draftWasOpen = false
   private draftClockMs = 0 // wall-clock ms left on the open draft's decision timer
   private selectedTowerId: string | null = null
+  private hoveredTowerId: string | null = null
+  private pendingPreviewWave: number | null = null // a draft modal would swallow the telegraph
   // True when the Wang ground tileset rendered this boot — gates the terrain-plot fallback AND the
   // creature/tower shadows (shadows only read as grounded on real terrain, per the 07-01 playtest).
   private groundTiled = false
@@ -254,16 +256,30 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.worldX, y: p.worldY }
+      // hover affordance: the upgrade/sell system is invisible without it (cursor + faint ring)
+      const hit = useGameStore.getState().placingGod ? null : this.towerAt(this.pointer)
+      const id = hit ? hit.id : null
+      if (id !== this.hoveredTowerId) {
+        this.hoveredTowerId = id
+        this.input.setDefaultCursor(id ? 'pointer' : 'default')
+      }
     })
     // Click-to-place (clearer than drag on a laptop): click a god in the rail, then click the
     // field to place. Clicking empty ground while not placing selects/deselects a tower.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p))
+    const typing = () => {
+      const el = document.activeElement
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')
+    }
     this.input.keyboard?.on('keydown-ESC', () => {
+      if (typing()) return
       useGameStore.getState().cancelPlacing()
       this.deselectTower()
     })
     // Hotkeys 1–8 enter placement for that god (BTD6 muscle memory); ESC still exits.
+    // Never while typing — a digit in the account panel's email field would arm a placement.
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+      if (typing()) return
       const n = parseInt(e.key, 10)
       if (n >= 1 && n <= GOD_ORDER.length) useGameStore.getState().beginPlacing(GOD_ORDER[n - 1])
     })
@@ -373,6 +389,7 @@ export class GameScene extends Phaser.Scene {
     // atmosphere glows sit ABOVE the ground tiles (0.2) so they tint the terrain instead of hiding
     // under it — ember at Tartarus (bottom-left), gold at Olympus (top-right)
     const glow = this.add.graphics().setDepth(0.4)
+    glow.setBlendMode(Phaser.BlendModes.ADD) // normal-blend dark fills STAINED the corners darker
     glow.fillStyle(0x4a121b, 0.22)
     glow.fillCircle(0, GAME_HEIGHT, 240)
     glow.fillStyle(0x3a2f10, 0.2)
@@ -777,6 +794,14 @@ export class GameScene extends Phaser.Scene {
     if (this.game.renderer.type === Phaser.WEBGL) {
       lake.postFX.addShine(0.2, 0.3, 4)
     }
+    // additive teal lift — same pattern as the lava centroid glow. Without it the water reads
+    // near-black and merges with the road where they wrap each other.
+    const waterGlow = this.add
+      .ellipse(585, 330, 230, 140, 0x2a7a6e, 0.1)
+      .setDepth(0.35)
+      .setBlendMode(Phaser.BlendModes.ADD)
+    this.setDressing.push(waterGlow)
+    this.tweens.add({ targets: waterGlow, alpha: 0.16, duration: 3400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     this.ensureMistTexture()
     const wisps: [number, number, number][] = [
       [545, 320, 0], // [x, y, phase]
@@ -933,7 +958,8 @@ export class GameScene extends Phaser.Scene {
 
     // spawn this wave's enemies on the run's schedule — but never exceed the concurrency cap;
     // over-budget spawns wait in pendingSpawns and emit as bodies die (the wave stays intact).
-    for (const desc of this.run.tick(dtSec)) this.pendingSpawns.push(desc)
+    const graceDt = dtSec / Math.max(1, useGameStore.getState().timeScale) // wall-clock for telegraph grace
+    for (const desc of this.run.tick(dtSec, graceDt)) this.pendingSpawns.push(desc)
     while (this.pendingSpawns.length > 0 && this.enemies.length < MAX_CONCURRENT_BODIES) {
       this.spawnEnemy(this.pendingSpawns.shift()!)
     }
@@ -1037,7 +1063,8 @@ export class GameScene extends Phaser.Scene {
       this.floatText(gate.x - 44, gate.y - 44, `+${income} 🪙`, '#ffe066')
       // spike traps forget everyone they've popped — ids are unique per spawn, a settle means all dead
       for (const s of this.spikes.values()) s.hitIds.clear()
-      this.showWavePreview(this.run.wave + 1) // telegraph what's coming while the player can still act
+      if (this.run.draft) this.pendingPreviewWave = this.run.wave + 1 // the draft modal would swallow it
+      else this.showWavePreview(this.run.wave + 1) // telegraph while the player can still act
     }
   }
 
@@ -1078,13 +1105,22 @@ export class GameScene extends Phaser.Scene {
     } else if (!open && this.draftWasOpen) {
       this.draftWasOpen = false
       store.setSpeed(store.preDraftScale || 1)
+      if (this.pendingPreviewWave !== null) {
+        this.showWavePreview(this.pendingPreviewWave) // the harpy lesson survives the draft
+        this.pendingPreviewWave = null
+      }
     }
     if (open) {
       if (!store.pantheonOpen && !store.leaderboardOpen) {
         this.draftClockMs -= Math.min(deltaMs, 100) // clamp: returning from a hidden tab resumes the clock
         if (this.draftClockMs <= 0) {
           const draft = this.run.draft!
-          this.run.pickDraft(Math.floor(Math.random() * draft.length)) // the Fates grow impatient
+          const idx = Math.floor(Math.random() * draft.length)
+          const chosen = draft[idx]
+          this.run.pickDraft(idx) // the Fates grow impatient
+          if (chosen.type === 'boon') {
+            this.floatText(GAME_WIDTH / 2, 132, `⚡ The Fates chose: ${chosen.boon.name}`, '#f5d061')
+          }
         }
       }
       store.setDraftTimer(Math.max(0, Math.ceil(this.draftClockMs / 1000)))
@@ -1138,7 +1174,8 @@ export class GameScene extends Phaser.Scene {
   /** Red pulse at the Olympus gate — the game's only negative feedback, so it's mandatory. */
   private flashLeak(): void {
     const end = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
-    const flash = this.add.circle(end.x, end.y, 26, 0xff2d3a, 0.6).setDepth(9)
+    const fx = Math.min(end.x, GAME_WIDTH - 30) // the gate anchor is off-canvas — keep the sting visible
+    const flash = this.add.circle(fx, end.y, 26, 0xff2d3a, 0.6).setDepth(9)
     this.tweens.add({ targets: flash, scale: 2.2, alpha: 0, duration: 320, onComplete: () => flash.destroy() })
     this.cameras.main.shake(120, 0.004)
     this.cameras.main.flash(160, 90, 12, 16) // juice: a dim red screen pulse — the leak STINGS
@@ -1877,6 +1914,13 @@ export class GameScene extends Phaser.Scene {
       // Range ring shows ONLY for the selected tower (or every tower in debug) — never always-on,
       // including the support auras (Aphrodite / Athena), which now behave like every other range ring.
       const selected = tower.id === this.selectedTowerId
+      if (!selected && tower.id === this.hoveredTowerId) {
+        // faint hover ring — the affordance that says "I'm clickable"
+        const stats = TOWER_STATS[tower.god]
+        const c = stats.mobile ? tower.center : tower.pos
+        g.lineStyle(1.5, 0xbfc6e0, 0.45)
+        g.strokeCircle(c.x, c.y, Math.max(stats.footprint + 6, TOWER_SPRITE_PX * 0.33))
+      }
       if (selected) {
         // standing on sacred ground? show the blessing's reach (M10-S6)
         for (const s of SITES) {
@@ -2084,18 +2128,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private selectTowerAt(pos: Vec2): void {
+  /** Nearest tower whose click body contains pos (build order lost ties before — nearest wins). */
+  private towerAt(pos: Vec2): Tower | null {
     let hit: Tower | null = null
+    let bestD2 = Infinity
     for (const t of this.towers) {
       const stats = TOWER_STATS[t.god]
       // a mobile god is hard to click while moving — select via its fixed HOME BASE at the center
       const c = stats.mobile ? t.center : t.pos
       const r = Math.max(stats.footprint + 6, TOWER_SPRITE_PX * 0.33) // click the BODY you see, not the tiny footprint
-      if ((c.x - pos.x) ** 2 + (c.y - pos.y) ** 2 <= r * r) {
+      const d2 = (c.x - pos.x) ** 2 + (c.y - pos.y) ** 2
+      if (d2 <= r * r && d2 < bestD2) {
+        bestD2 = d2
         hit = t
-        break
       }
     }
+    return hit
+  }
+
+  private selectTowerAt(pos: Vec2): void {
+    const hit = this.towerAt(pos)
     this.selectedTowerId = hit ? hit.id : null
     this.refreshSelected()
   }

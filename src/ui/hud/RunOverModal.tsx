@@ -80,6 +80,7 @@ export function RunOverModal() {
         </button>
         <button
           onClick={playAgain}
+          autoFocus
           className="pixel-btn pixel-btn--gold arcade-raise font-pixel rounded-full bg-amber-400 px-8 py-2.5 text-base font-bold text-slate-900 shadow-lg shadow-amber-500/30"
         >
           ⚔️ Play again
