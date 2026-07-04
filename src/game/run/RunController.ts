@@ -49,6 +49,8 @@ export class RunController {
   private buildGraceMs = BUILD_GRACE_MS
   private shieldCharges = 0
   private secondWindArmed = false
+  /** Pulses true the moment Nike catches a fatal leak — GameScene consumes it for the fanfare. */
+  secondWindFired = false
 
   // ── per-run stats for the end-of-run dump (M6) ──
   private goldSpent = 0
@@ -228,6 +230,7 @@ export class RunController {
       if (this.secondWindArmed) {
         this.secondWindArmed = false
         this.lives = 25 // Nike refuses to let you lose — once
+        this.secondWindFired = true // the game's most legendary save must not happen silently
         return true
       }
       this.lives = 0

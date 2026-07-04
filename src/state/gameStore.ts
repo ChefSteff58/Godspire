@@ -105,6 +105,7 @@ interface GameStore {
 
   /** Leave the title screen and mount the game (a deterministic 1× start). */
   startGame: () => void
+  quitToTitle: () => void
   setElapsed: (seconds: number) => void
   beginPlacing: (god: GodKind) => void
   cancelPlacing: () => void
@@ -169,6 +170,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   ...FRESH_RUN,
 
   startGame: () => set({ gamePhase: 'playing', timeScale: 1 }),
+  quitToTitle: () => {
+    get().resetRun()
+    set({ gamePhase: 'title', timeScale: 1 }) // GameScreen unmounts → GameCanvas destroys Phaser
+  },
   setElapsed: (seconds) => set({ elapsed: seconds }),
   beginPlacing: (god) => set({ placingGod: god }),
   cancelPlacing: () => set({ placingGod: null }),

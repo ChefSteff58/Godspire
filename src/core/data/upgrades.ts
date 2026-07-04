@@ -121,8 +121,8 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       name: 'Strafing Ace',
       blurb: 'A wide, hard-hitting warplane — covers the map with heavy strafing runs.',
       tiers: [
-        { name: 'War Plane', cost: 150, desc: 'A wider strafing run — more reach and heavier darts on each pass.', effect: { rangeMul: 1.25, damageMul: 1.3 } },
-        { name: 'Dive Bomber', cost: 300, desc: 'Screaming dives — punishing hits delivered across the field.', effect: { rangeMul: 1.2, damageMul: 1.5 } },
+        { name: 'Wings of War', cost: 150, desc: 'Wider sweeps on mightier wings — more reach, heavier darts each pass.', effect: { rangeMul: 1.25, damageMul: 1.3 } },
+        { name: 'Screaming Dive', cost: 300, desc: 'He folds his wings and falls like judgment — punishing hits across the field.', effect: { rangeMul: 1.2, damageMul: 1.5 } },
         { name: 'Sky Sovereign', cost: 720, desc: 'Master of the skies — devastating strafes that rule the whole map.', effect: { rangeMul: 1.25, damageMul: 1.6 } },
       ],
     },
@@ -130,8 +130,8 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       name: "Hermes' Escort",
       blurb: 'A rapid hovering gunship — a wall of darts over one chokepoint.',
       tiers: [
-        { name: 'Twin Guns', cost: 160, desc: 'A second barrel opens up — a faster stream of darts.', effect: { fireRateMul: 1.35 } },
-        { name: 'Gunship', cost: 320, desc: 'A hovering gunship — rapid, harder-hitting fire over one lane.', effect: { fireRateMul: 1.35, damageMul: 1.2 } },
+        { name: 'Twin Caducei', cost: 160, desc: 'A second serpent-staff joins the volley — a faster stream of darts.', effect: { fireRateMul: 1.35 } },
+        { name: 'Hovering Sentinel', cost: 320, desc: 'He holds the air over one lane — rapid, harder-hitting fire.', effect: { fireRateMul: 1.35, damageMul: 1.2 } },
         { name: 'Storm of Arrows', cost: 700, desc: 'An unbroken wall of darts — nothing crosses the chokepoint.', effect: { fireRateMul: 1.45, damageMul: 1.3 } },
       ],
     },
@@ -170,8 +170,8 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       name: 'Maelstrom',
       blurb: 'Relentless torpedoes — hits harder and faster (the tank-cracker).',
       tiers: [
-        { name: 'Torpedo Bay', cost: 200, desc: 'Loaded torpedoes — far heavier impacts on whatever they catch.', effect: { damageMul: 1.6 } },
-        { name: 'Depth Charges', cost: 380, desc: 'Depth charges rain down — harder, quicker slams.', effect: { damageMul: 1.5, fireRateMul: 1.3 } },
+        { name: 'Spear of the Tides', cost: 200, desc: 'The tide sharpens to a point — far heavier impacts on whatever it catches.', effect: { damageMul: 1.6 } },
+        { name: 'Wrath from Below', cost: 380, desc: 'The seafloor answers — harder, quicker slams from the deep.', effect: { damageMul: 1.5, fireRateMul: 1.3 } },
         { name: 'Kraken Rising', cost: 800, desc: 'The Kraken wakes — crushing, relentless strikes from the deep.', effect: { damageMul: 1.8, fireRateMul: 1.3 } },
       ],
     },

@@ -22,14 +22,14 @@ export const PANTHEON_NODES: readonly SkillNode[] = [
 
   // ── Harvest (economy) ──
   { id: 'harvest_gold_1', branch: 'harvest', tier: 1, name: "Demeter's Bounty", description: 'The first harvest comes in early — +150 starting gold.', cost: 1, effect: { kind: 'startingGoldAdd', value: 150 } },
-  { id: 'harvest_income_1', branch: 'harvest', tier: 1, name: 'Cornucopia', description: 'Every field yields a little more — +10% wave income.', cost: 1, effect: { kind: 'incomeMul', value: 1.1 } },
+  { id: 'harvest_income_1', branch: 'harvest', tier: 1, name: 'First Fruits', description: 'Every field yields a little more — +10% wave income.', cost: 1, effect: { kind: 'incomeMul', value: 1.1 } },
   { id: 'harvest_gold_2', branch: 'harvest', tier: 2, name: 'Fertile Start', description: 'Rich soil, richer coffers — +250 starting gold.', cost: 2, prerequisites: ['harvest_gold_1'], effect: { kind: 'startingGoldAdd', value: 250 } },
-  { id: 'harvest_kill_1', branch: 'harvest', tier: 2, name: 'Spoils of War', description: 'Strip the fallen of their bronze — +1 gold per kill.', cost: 2, prerequisites: ['harvest_gold_1'], effect: { kind: 'goldPerKillAdd', value: 1 } },
-  { id: 'harvest_income_2', branch: 'harvest', tier: 3, name: 'Horn of Plenty', description: 'The horn simply never empties — +18% wave income.', cost: 3, prerequisites: ['harvest_income_1'], effect: { kind: 'incomeMul', value: 1.18 } },
+  { id: 'harvest_kill_1', branch: 'harvest', tier: 2, name: "Reaper's Due", description: 'Strip the fallen of their bronze — +1 gold per kill.', cost: 2, prerequisites: ['harvest_gold_1'], effect: { kind: 'goldPerKillAdd', value: 1 } },
+  { id: 'harvest_income_2', branch: 'harvest', tier: 3, name: 'Fields of Elysium', description: 'The horn simply never empties — +18% wave income.', cost: 3, prerequisites: ['harvest_income_1'], effect: { kind: 'incomeMul', value: 1.18 } },
   { id: 'harvest_kill_2', branch: 'harvest', tier: 3, name: 'Golden Tribute', description: 'Even monsters pay the crown its due — +2 gold per kill.', cost: 3, prerequisites: ['harvest_kill_1'], effect: { kind: 'goldPerKillAdd', value: 2 } },
 
   // ── Wisdom (survival + utility) ──
-  { id: 'wisdom_life_1', branch: 'wisdom', tier: 1, name: 'Aegis of Athena', description: 'Her shield hangs over the gates — +10 starting lives.', cost: 1, effect: { kind: 'startingLivesAdd', value: 10 } },
+  { id: 'wisdom_life_1', branch: 'wisdom', tier: 1, name: 'Aegis of the Gates', description: 'Her shield hangs over the gates — +10 starting lives.', cost: 1, effect: { kind: 'startingLivesAdd', value: 10 } },
   { id: 'wisdom_shield_1', branch: 'wisdom', tier: 1, name: 'Gate Wards', description: 'Wards etched into the marble — start with 3 gate-shields.', cost: 2, effect: { kind: 'startingShieldAdd', value: 3 } },
   { id: 'wisdom_life_2', branch: 'wisdom', tier: 2, name: 'Olympian Resolve', description: 'Olympus does not blink — +20 starting lives.', cost: 2, prerequisites: ['wisdom_life_1'], effect: { kind: 'startingLivesAdd', value: 20 } },
   { id: 'wisdom_shield_2', branch: 'wisdom', tier: 2, name: 'Bulwark of Styx', description: 'The gates take their dip in the river — start with 5 more gate-shields.', cost: 3, prerequisites: ['wisdom_shield_1'], effect: { kind: 'startingShieldAdd', value: 5 } },

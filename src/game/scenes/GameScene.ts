@@ -829,25 +829,33 @@ export class GameScene extends Phaser.Scene {
 
   /** The molten floor breathes: interior tiles shimmer between two frames, blobs glow, embers rise. */
   private animateLava(interiors: Phaser.GameObjects.Image[]): void {
-    // frame shimmer — a single clock retextures the open-lava tiles on seeded phases. Three
-    // luminance-masked frames (base / surging-hot / crusting-over) so the MELT breathes while
-    // the dark crust holds still — the 'looking down into Mordor' read.
-    if (this.textures.exists('tile_lava_0_f1')) {
-      const frames = ['tile_lava_0', 'tile_lava_0_f1', this.textures.exists('tile_lava_0_f2') ? 'tile_lava_0_f2' : 'tile_lava_0']
-      let tick = 0
-      this.time.addEvent({
-        delay: 420,
-        loop: true,
-        callback: () => {
-          tick++
-          for (let i = 0; i < interiors.length; i++) {
-            const img = interiors[i]
-            if (!img.active) continue
-            const phase = Math.floor(GameScene.seeded(i * 17 + 3) * 3)
-            img.setTexture(frames[(tick + phase) % 3])
-          }
-        },
-      })
+    // SUB-TILE shimmer (playtest verdict: whole-32px-tile frame swaps read 'old and laggy').
+    // A soft seamless noise sheet drifts over the melt through a lava-cell mask — brightness
+    // ripples continuously at pixel grain, no chunky texture flips, one tween, zero per-frame JS.
+    if (this.game.renderer.type === Phaser.WEBGL && interiors.length > 0) {
+      this.ensureLavaNoiseTexture()
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+      const maskG = this.make.graphics({ x: 0, y: 0 }, false)
+      maskG.fillStyle(0xffffff, 1)
+      for (const img of interiors) {
+        maskG.fillRect(img.x, img.y, TERRAIN_TILE_PX, TERRAIN_TILE_PX)
+        minX = Math.min(minX, img.x)
+        minY = Math.min(minY, img.y)
+        maxX = Math.max(maxX, img.x + TERRAIN_TILE_PX)
+        maxY = Math.max(maxY, img.y + TERRAIN_TILE_PX)
+      }
+      const sheet = this.add
+        .tileSprite((minX + maxX) / 2, (minY + maxY) / 2, maxX - minX, maxY - minY, 'fx_lavanoise')
+        .setDepth(0.36)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(0.13)
+      sheet.setMask(maskG.createGeometryMask())
+      this.setDressing.push(sheet)
+      // seamless loop: exactly one texture period per cycle, linear — the wrap is invisible
+      this.tweens.add({ targets: sheet, tilePositionX: 128, tilePositionY: 128, duration: 11000, repeat: -1 })
     }
     // one breathing additive glow at the molten centroid
     let cx = 0
@@ -882,6 +890,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Procedural soft radial-gradient blob for the lake mist (no art dependency). */
+  /** A tileable ember-noise sheet (soft radial blobs, wrapped at the edges) for the lava shimmer. */
+  private ensureLavaNoiseTexture(): void {
+    if (this.textures.exists('fx_lavanoise')) return
+    const size = 128
+    const c = this.textures.createCanvas('fx_lavanoise', size, size)
+    if (!c) return
+    const ctx = c.getContext()
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(0, 0, size, size)
+    for (let i = 0; i < 46; i++) {
+      const x = GameScene.seeded(i * 3 + 1) * size
+      const y = GameScene.seeded(i * 3 + 2) * size
+      const r = 6 + GameScene.seeded(i * 3 + 3) * 16
+      // draw each blob wrapped so the sheet tiles seamlessly
+      for (const [dx, dy] of [[0, 0], [size, 0], [-size, 0], [0, size], [0, -size]] as const) {
+        const grad = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r)
+        grad.addColorStop(0, 'rgba(255,190,90,0.55)')
+        grad.addColorStop(1, 'rgba(255,90,20,0)')
+        ctx.fillStyle = grad
+        ctx.fillRect(x + dx - r, y + dy - r, r * 2, r * 2)
+      }
+    }
+    c.refresh()
+  }
+
   private ensureMistTexture(): void {
     if (this.textures.exists('fx_mist')) return
     const c = this.textures.createCanvas('fx_mist', 96, 48)
@@ -1055,6 +1088,10 @@ export class GameScene extends Phaser.Scene {
     // clear-gate: a wave ends only when fully emitted AND no enemy remains alive. Pending (capped)
     // spawns count as "still alive" so a deferred body can't let the wave clear out from under it.
     // When it clears, Demeter farms pay out their harvest and the payday floats at the gate.
+    if (this.run.secondWindFired) {
+      this.run.secondWindFired = false
+      this.secondWindFanfare()
+    }
     const income = this.run.settle(this.enemies.length + this.pendingSpawns.length)
     if (income !== null) {
       this.payDemeterIncome()
@@ -1169,6 +1206,35 @@ export class GameScene extends Phaser.Scene {
     const lost = this.run.onLeak(enemy.leakWeight)
     this.removeEnemy(enemy)
     if (lost) this.flashLeak()
+  }
+
+  /** Nike catches Olympus as it falls — the run's most legendary moment gets a real banner. */
+  private secondWindFanfare(): void {
+    const style = { fontFamily: 'Silkscreen, Georgia, serif', align: 'center' as const, backgroundColor: '#000000aa', padding: { x: 12, y: 6 } }
+    const t = this.add
+      .text(GAME_WIDTH / 2, 196, '🪶 NIKE REFUSES TO LET YOU FALL', { ...style, fontSize: '20px', color: '#ffecaa' })
+      .setOrigin(0.5)
+      .setDepth(12)
+      .setScale(0.6)
+    const sub = this.add
+      .text(GAME_WIDTH / 2, 230, 'Olympus stands — 25 lives', { ...style, fontSize: '13px', color: '#f5d061' })
+      .setOrigin(0.5)
+      .setDepth(12)
+      .setAlpha(0)
+    this.tweens.add({ targets: t, scale: 1, duration: 320, ease: 'Back.easeOut' })
+    this.tweens.add({ targets: sub, alpha: 1, duration: 300, delay: 220 })
+    this.tweens.add({
+      targets: [t, sub],
+      alpha: 0,
+      delay: 2800,
+      duration: 500,
+      onComplete: () => {
+        t.destroy()
+        sub.destroy()
+      },
+    })
+    this.cameras.main.flash(300, 120, 100, 30)
+    this.cameras.main.shake(220, 0.006)
   }
 
   /** Red pulse at the Olympus gate — the game's only negative feedback, so it's mandatory. */

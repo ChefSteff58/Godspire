@@ -7,6 +7,7 @@ export function RunOverModal() {
   const phase = useGameStore((s) => s.phase)
   const summary = useGameStore((s) => s.runSummary)
   const playAgain = useGameStore((s) => s.playAgain)
+  const quitToTitle = useGameStore((s) => s.quitToTitle)
   const openPantheon = useGameStore((s) => s.openPantheon)
   const openLeaderboard = useGameStore((s) => s.openLeaderboard)
   const isGuest = useSessionStore((s) => s.isGuest)
@@ -77,6 +78,12 @@ export function RunOverModal() {
           className="arcade-raise arcade-bevel font-pixel rounded-full bg-shrine-stone px-6 py-2.5 text-base font-bold text-amber-200 shadow-lg"
         >
           🏛️ Pantheon
+        </button>
+        <button
+          onClick={quitToTitle}
+          className="pixel-btn arcade-raise font-pixel rounded-full bg-shrine-slab px-5 py-2.5 text-sm text-shrine-gold"
+        >
+          🏠 Title
         </button>
         <button
           onClick={playAgain}

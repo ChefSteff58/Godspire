@@ -47,32 +47,35 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-2xl bg-slate-900 p-6 text-slate-100 shadow-2xl ring-1 ring-white/10"
+        className="pixel-panel arcade-bevel w-full max-w-sm rounded-2xl bg-shrine-slab p-6 text-shrine-marble shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-xl text-amber-300">Your Account</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
+          <h2 className="font-pixel text-lg font-bold text-amber-300">Your Account</h2>
+          <button onClick={onClose} className="text-shrine-marble/60 hover:text-shrine-marble">
             ✕
           </button>
         </div>
 
-        <div className="mb-4 rounded-xl bg-slate-800/60 p-4">
+        <div className="pixel-chip arcade-bevel mb-4 rounded-xl bg-black/30 p-4">
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-amber-300">Level {level}</span>
-            <span className="text-sm text-slate-400">
+            <span className="font-pixel text-xl font-bold text-amber-300">Level {level}</span>
+            <span className="text-sm text-shrine-marble/60">
               {points} Favor point{points === 1 ? '' : 's'}
             </span>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-700">
-            <div className="h-full bg-amber-400 transition-all" style={{ width: `${pct}%` }} />
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-shrine-abyss">
+            <div
+              className="h-full bg-shrine-gold transition-all"
+              style={{ width: `${pct}%`, boxShadow: '0 0 6px #f5d06188' }}
+            />
           </div>
-          <div className="mt-1 text-xs text-slate-400">
+          <div className="mt-1 text-xs text-shrine-marble/60">
             {progress.favor} Favor · best wave {progress.stats.bestWave} · {progress.stats.runsPlayed} runs
           </div>
         </div>
 
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-shrine-marble/60">
           Display name
         </label>
         <div className="mb-4 flex gap-2">
@@ -80,24 +83,24 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
             value={name}
             maxLength={32}
             onChange={(e) => setName(e.target.value)}
-            className="flex-1 rounded-lg bg-slate-800 px-3 py-2 text-sm ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+            className="flex-1 rounded-lg bg-shrine-abyss px-3 py-2 text-sm text-shrine-marble ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
           />
           <button
             onClick={() => void setDisplayName(name)}
-            className="rounded-lg bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-300"
+            className="pixel-btn pixel-btn--gold arcade-raise font-pixel rounded bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900"
           >
             Save
           </button>
         </div>
 
         {!isSupabaseConfigured ? (
-          <p className="mb-4 rounded-lg bg-slate-800/60 p-3 text-xs text-slate-400">
+          <p className="mb-4 rounded-lg bg-black/30 p-3 text-xs text-shrine-marble/60">
             Cloud sync isn't set up yet — your progress is saved on this device.
           </p>
         ) : isGuest ? (
-          <div className="mb-4 rounded-lg bg-slate-800/60 p-3">
-            <p className="mb-1 text-sm font-semibold text-amber-200">Claim your throne ⚡</p>
-            <p className="mb-3 text-xs text-slate-400">
+          <div className="pixel-chip arcade-bevel mb-4 rounded-lg bg-black/30 p-3">
+            <p className="font-pixel mb-1 text-sm font-semibold text-amber-200">Claim your throne ⚡</p>
+            <p className="mb-3 text-xs text-shrine-marble/60">
               Save your progress across devices. (As a guest, clearing your browser loses it.)
             </p>
             <div className="flex gap-2">
@@ -105,18 +108,18 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                 value={email}
                 placeholder="you@example.com"
                 onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 rounded-lg bg-slate-800 px-3 py-2 text-sm ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                className="flex-1 rounded-lg bg-shrine-abyss px-3 py-2 text-sm text-shrine-marble ring-1 ring-white/10 placeholder:text-shrine-marble/40 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
               />
               <button
                 onClick={() => void onLinkEmail()}
-                className="rounded-lg bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-300"
+                className="pixel-btn pixel-btn--gold arcade-raise font-pixel rounded bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900"
               >
                 Link
               </button>
             </div>
             <button
               onClick={() => void linkGoogle()}
-              className="mt-2 w-full rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-200"
+              className="arcade-raise mt-2 w-full rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-200"
             >
               Continue with Google
             </button>
@@ -125,15 +128,15 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
         ) : (
           <button
             onClick={() => void signOut()}
-            className="mb-4 w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300 ring-1 ring-white/10 hover:bg-slate-700"
+            className="pixel-btn arcade-raise mb-4 w-full rounded-lg bg-shrine-stone px-3 py-2 text-sm text-shrine-marble/80"
           >
             Sign out
           </button>
         )}
 
         {import.meta.env.DEV && (
-          <div className="rounded-lg border border-dashed border-slate-700 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Dev</p>
+          <div className="rounded-lg border border-dashed border-shrine-stone p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-shrine-marble/50">Dev</p>
             <button
               onClick={() =>
                 void applyRun({
@@ -142,13 +145,13 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                   kills: 10 + Math.floor(Math.random() * 40),
                 })
               }
-              className="w-full rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-400"
+              className="pixel-btn arcade-raise w-full rounded bg-shrine-stone px-3 py-2 text-sm font-semibold text-shrine-gold"
             >
               Simulate run (+Favor)
             </button>
           </div>
         )}
-        <p className="mt-2 text-center text-xs text-slate-500">{syncLabel}</p>
+        <p className="mt-2 text-center text-xs text-shrine-marble/50">{syncLabel}</p>
       </div>
     </div>
   )

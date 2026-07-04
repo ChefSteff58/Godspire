@@ -14,6 +14,7 @@ export function TopBar() {
   const toggleDebug = useGameStore((s) => s.toggleDebug)
   const openPantheon = useGameStore((s) => s.openPantheon)
   const openLeaderboard = useGameStore((s) => s.openLeaderboard)
+  const quitToTitle = useGameStore((s) => s.quitToTitle)
   const goldDeniedTick = useGameStore((s) => s.goldDeniedTick)
 
   // Flash the lives chip red on any leak — the leak is the game's only negative feedback.
@@ -125,6 +126,15 @@ export function TopBar() {
           className="pixel-btn arcade-raise font-pixel rounded bg-shrine-slab px-3 py-1 text-sm text-shrine-gold"
         >
           🏆 Ranks
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm('Return to the title? This run will be abandoned.')) quitToTitle()
+          }}
+          title="Return to the title (abandons the run)"
+          className="pixel-btn arcade-raise font-pixel rounded bg-shrine-slab px-3 py-1 text-sm text-shrine-gold"
+        >
+          🏠
         </button>
         {import.meta.env.DEV && (
           <button
