@@ -61,8 +61,8 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       name: 'Stormcaller',
       blurb: 'Rapid, wide bolts — the storm-mage line (builds toward chain lightning).',
       tiers: [
-        { name: 'Forked Spark', cost: 130, desc: 'The bolt forks and flies faster — a rapid crackle of lightning.', effect: { fireRateMul: 1.4, rangeMul: 1.1 } },
-        { name: 'Storm Caller', cost: 240, desc: 'The storm climbs to the clouds — now strikes flying foes, harder and quicker.', effect: { fireRateMul: 1.3, damageMul: 1.2, rangeMul: 1.1, grantsAir: true } },
+        { name: 'Forked Spark', cost: 130, desc: 'The storm grows eager — quicker bolts that reach farther.', effect: { fireRateMul: 1.4, rangeMul: 1.1 } },
+        { name: 'Thunderhead', cost: 240, desc: 'The storm climbs to the clouds — now strikes flying foes, harder and quicker.', effect: { fireRateMul: 1.3, damageMul: 1.2, rangeMul: 1.1, grantsAir: true } },
         { name: 'Wrath of the Sky', cost: 650, desc: 'A ceaseless tempest — faster, fiercer, and reaching far across the field.', effect: { fireRateMul: 1.4, damageMul: 1.4, rangeMul: 1.2 } },
       ],
     },
@@ -199,7 +199,7 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
   athena: {
     A: {
       name: 'Wisdom of War',
-      blurb: 'A damage amphitheater — sharpens every blade in the war-council.',
+      blurb: 'Her counsel turns lethal — every blade in the war-council cuts deeper.',
       tiers: [
         { name: 'Battle Hymn', cost: 200, desc: 'A war-hymn rallies the council — nearby gods strike +20% harder.', effect: { damageMul: 1.2 } },
         { name: 'Phalanx Doctrine', cost: 360, desc: 'Drilled formation — the damage blessing on the aura deepens.', effect: { damageMul: 1.25 } },

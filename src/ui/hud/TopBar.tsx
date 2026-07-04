@@ -108,7 +108,7 @@ export function TopBar() {
         <SpeedControls />
         <button
           onClick={openPantheon}
-          title="Spend Favor on permanent upgrades"
+          title="Spend Favor on permanent blessings"
           className="pixel-btn arcade-raise font-pixel rounded bg-shrine-slab px-3 py-1 text-sm text-shrine-gold"
         >
           🏛️ Pantheon

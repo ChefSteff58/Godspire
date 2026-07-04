@@ -48,7 +48,7 @@ export function LeaderboardOverlay() {
       </div>
 
       {!isSupabaseConfigured ? (
-        <Msg>The leaderboard needs the online backend — you're playing offline.</Msg>
+        <Msg>Word can't reach Olympus — the leaderboard is unavailable offline.</Msg>
       ) : (
         <div className="flex w-full max-w-2xl flex-col gap-3">
           {isGuest && (

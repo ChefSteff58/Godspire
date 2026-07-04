@@ -73,7 +73,7 @@ export const BOON_POOL: readonly Boon[] = [
   { id: 'def-ambrosia-draught', name: 'Draught of Ambrosia', desc: '+20 lives, now.', flavor: "A sip of the gods' own brunch. Olympus exhales.", icon: '🍶', rarity: 'common', category: 'def', effect: { kind: 'livesGrant', value: 20 } },
   { id: 'def-aegis-of-athena', name: 'Aegis of Athena', desc: '+15 max lives (and heal 15).', flavor: 'She lends the shield. You still have to not die behind it.', icon: '🛡️', rarity: 'rare', category: 'def', effect: { kind: 'maxLivesAdd', value: 15 } },
   { id: 'def-bulwark-of-styx', name: 'Bulwark of Styx', desc: 'Gain a 5-charge gate shield — each leak burns a charge, not a life.', flavor: 'Dip Olympus in the river. Mind the one unprotected heel.', icon: '🌊', rarity: 'epic', category: 'def', effect: { kind: 'gateShield', value: 5 } },
-  { id: 'def-second-wind-of-nike', name: 'Second Wind of Nike', desc: 'Once: survive your first defeat at 25 lives.', flavor: 'Victory hates a loose end. Once, she refuses to let you lose.', icon: '🪶', rarity: 'legendary', category: 'def', effect: { kind: 'secondWind' } },
+  { id: 'def-second-wind-of-nike', name: 'Second Wind of Nike', desc: 'Once: when Olympus would fall, rise again at 25 lives.', flavor: 'Victory hates a loose end. Once, she refuses to let you lose.', icon: '🪶', rarity: 'legendary', category: 'def', effect: { kind: 'secondWind' } },
 
   // ── Utility ──
   { id: 'util-festival-of-dionysus', name: 'Festival of Dionysus', desc: 'All gods fire +35% faster.', flavor: 'Everybody drinks, everybody fights faster.', icon: '🍷', rarity: 'epic', category: 'util', effect: { kind: 'fireRateMul', value: 1.35 } },

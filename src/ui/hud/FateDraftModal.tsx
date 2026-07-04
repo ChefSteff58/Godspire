@@ -33,7 +33,7 @@ export function FateDraftModal() {
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-slate-950/80 backdrop-blur-sm">
       <div className="text-center">
         <h2 className="font-pixel text-2xl font-bold text-amber-300">The Fates offer a boon</h2>
-        <p className="text-sm text-slate-400">Choose one — it lasts the rest of the run.</p>
+        <p className="text-sm text-slate-400">Choose one — the Fates weave it into the rest of your run.</p>
       </div>
       {timerSec !== null && (
         <div className="flex flex-col items-center gap-1">

@@ -68,7 +68,7 @@ export const BOSS_ROSTER: readonly BossArchetype[] = [
     speedMul: 0.85,
     bounty: 140,
     leakWeight: 18,
-    telegraph: 'The Minotaur charges — slow and knockback wash off it. Out-damage it!',
+    telegraph: 'The Minotaur charges — knockback breaks on its hide and slows barely bite. Out-damage it!',
     mechanic: { slowResist: 0.5, knockbackImmune: true, charge: { periodMs: 4500, burstMul: 2.4, durationMs: 1200 } },
   },
   {
@@ -81,7 +81,7 @@ export const BOSS_ROSTER: readonly BossArchetype[] = [
     speedMul: 0.65,
     bounty: 170,
     leakWeight: 22,
-    telegraph: 'The Cyclops lumbers in — colossal, and it shatters into spawn when it falls.',
+    telegraph: 'The Cyclops lumbers in — colossal, and its death unleashes a brood. Save something for the stragglers!',
     mechanic: { onDeathAdds: 4 },
   },
 ]

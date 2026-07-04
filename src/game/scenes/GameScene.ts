@@ -1239,7 +1239,7 @@ export class GameScene extends Phaser.Scene {
     } else if (preview.debutKind && DEBUT_HINTS[preview.debutKind]) {
       msg = `NEXT WAVE — ${DEBUT_HINTS[preview.debutKind]}`
     } else if (preview.elite) {
-      msg = '⚔ ELITE LEGION — the heavy kinds mass!'
+      msg = '⚔ ELITE LEGION — Tartarus sends its heaviest!'
       color = '#ffc9a0'
       this.cameras.main.shake(140, 0.003)
     }

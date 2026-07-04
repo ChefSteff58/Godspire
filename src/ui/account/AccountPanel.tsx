@@ -61,7 +61,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-bold text-amber-300">Level {level}</span>
             <span className="text-sm text-slate-400">
-              {points} skill point{points === 1 ? '' : 's'}
+              {points} Favor point{points === 1 ? '' : 's'}
             </span>
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-700">

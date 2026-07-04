@@ -96,7 +96,7 @@ function PathRow({ info, gold, hex, onUpgrade }: { info: SelectedTowerPath; gold
         <span className="font-pixel text-xs font-bold text-emerald-400">★ Path complete</span>
       ) : info.locked ? (
         <span className="text-xs text-slate-500/80 [text-shadow:0_1px_0_rgba(255,255,255,0.06)]">
-          🔒 Commit to the other path to unlock
+          🔒 Capped — the other path is this god's main
         </span>
       ) : (
         <button
