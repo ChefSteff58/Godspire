@@ -262,7 +262,12 @@ export class RunController {
     this.buildGraceMs = next.debutKind || next.bossId || next.elite ? BUILD_GRACE_BIG_MS : BUILD_GRACE_MS
     this.spec = null
     if (this.wave >= this.nextDraftWave) {
-      this.draft = generateDraft(this.wave, this.rng, 3 + (this.meta.draftBonusOptions ?? 0)) // Pantheon draft luck
+      this.draft = generateDraft(
+        this.wave,
+        this.rng,
+        3 + (this.meta.draftBonusOptions ?? 0), // Pantheon draft luck
+        (b) => b.effect.kind === 'secondWind' && this.secondWindArmed, // an armed Nike re-offer is a dead card
+      )
       this.nextDraftWave = scheduleNextDraft(this.wave, this.rng)
     }
     return income // a wave just cleared this frame (the scene pays Demeter income + floats the payday)

@@ -35,9 +35,14 @@ export function xpForLevel(level: number): number {
 
 /** Highest level fully paid for by `favor`. */
 export function levelForFavor(favor: number): number {
-  let level = 1
-  while (xpForLevel(level + 1) <= favor) level++
-  return level
+  if (!Number.isFinite(favor) || favor <= 0) return 1
+  // closed-form inverse of xpForLevel (BASE_XP·l + GROWTH·l² ≤ favor) — a linear loop here hangs
+  // the title screen on a corrupt save with a huge favor value. ±1 correction pins the boundary.
+  let l = Math.floor((-BASE_XP + Math.sqrt(BASE_XP * BASE_XP + 4 * GROWTH * favor)) / (2 * GROWTH))
+  if (l < 0) l = 0
+  while (xpForLevel(l + 2) <= favor) l++
+  while (l > 0 && xpForLevel(l + 1) > favor) l--
+  return l + 1
 }
 
 /** Total skill points granted by level — 1 per level after the first. */
@@ -193,9 +198,9 @@ export function migrateProgress(raw: unknown): PlayerProgress {
     const settings = (r.settings ?? {}) as Record<string, unknown>
     return {
       schemaVersion: PROGRESS_SCHEMA_VERSION,
-      favor: num(r.favor, 0),
+      favor: Math.min(num(r.favor, 0), 1e12), // sane ceiling — corrupt saves can't explode the curve
       unlockedNodes: Array.isArray(r.unlockedNodes)
-        ? r.unlockedNodes.filter((x): x is string => typeof x === 'string')
+        ? [...new Set(r.unlockedNodes.filter((x): x is string => typeof x === 'string'))] // dupes double-apply
         : [],
       settings: { muted: typeof settings.muted === 'boolean' ? settings.muted : false },
       stats: {
@@ -206,7 +211,12 @@ export function migrateProgress(raw: unknown): PlayerProgress {
         totalGoldSpent: num(stats.totalGoldSpent, 0),
         totalTowersBuilt: num(stats.totalTowersBuilt, 0),
       },
-      updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : base.updatedAt,
+      // re-normalize so lexicographic order matches chronological order — a garbage string like
+      // "~" would otherwise beat every ISO timestamp in mergeProgress forever
+      updatedAt:
+        typeof r.updatedAt === 'string' && !Number.isNaN(Date.parse(r.updatedAt))
+          ? new Date(Date.parse(r.updatedAt)).toISOString()
+          : base.updatedAt,
     }
   } catch {
     return emptyProgress()

@@ -161,9 +161,9 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       name: 'Tsunami',
       blurb: 'Wider blasts and harder knockback — mass crowd control on the straights.',
       tiers: [
-        { name: 'Breaker Wave', cost: 200, desc: 'A breaking wave — a wider slam that hurls foes back down the path.', effect: { splashRadiusMul: 1.3, knockbackMul: 1.5, damageMul: 1.2 } },
-        { name: 'Storm Surge', cost: 380, desc: 'The surge rises — bigger blasts shove the whole crowd downhill.', effect: { splashRadiusMul: 1.25, knockbackMul: 1.5, damageMul: 1.3 } },
-        { name: 'Wrath of the Deep', cost: 820, desc: "The sea's full fury — sweeps the lane and flings survivors far back.", effect: { splashRadiusMul: 1.3, knockbackMul: 2, damageMul: 1.4 } },
+        { name: 'Breaker Wave', cost: 200, desc: 'A breaking wave — a wider slam that hurls foes back down the path.', effect: { splashRadiusMul: 1.3, knockbackMul: 1.3, damageMul: 1.2 } },
+        { name: 'Storm Surge', cost: 380, desc: 'The surge rises — bigger blasts shove the whole crowd downhill.', effect: { splashRadiusMul: 1.25, knockbackMul: 1.3, damageMul: 1.3 } },
+        { name: 'Wrath of the Deep', cost: 820, desc: "The sea's full fury — sweeps the lane and flings survivors far back.", effect: { splashRadiusMul: 1.3, knockbackMul: 1.4, damageMul: 1.4 } },
       ],
     },
     B: {

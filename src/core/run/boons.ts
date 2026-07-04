@@ -46,6 +46,7 @@ export const RARITY_WEIGHT: Record<Rarity, number> = { common: 100, rare: 45, ep
 // Soft caps so an endless run can't compound multiplicative boons into a broken state
 // (the #1 balance risk the design critique flagged). Generous — power fantasy still allowed.
 export const FIRE_RATE_CAP = 3
+export const GOD_DAMAGE_CAP = 4 // a single god can quadruple, not compound forever
 export const TOWER_DAMAGE_CAP = 12
 
 export const BOON_POOL: readonly Boon[] = [
@@ -112,5 +113,8 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
   }
   rm.fireRateMul = Math.min(rm.fireRateMul, FIRE_RATE_CAP)
   rm.towerDamageMul = Math.min(rm.towerDamageMul, TOWER_DAMAGE_CAP)
+  for (const g of Object.keys(rm.godDamageMul) as (keyof typeof rm.godDamageMul)[]) {
+    rm.godDamageMul[g] = Math.min(rm.godDamageMul[g], GOD_DAMAGE_CAP) // per-god boons compound in endless too
+  }
   return rm
 }

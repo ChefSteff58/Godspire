@@ -37,7 +37,7 @@ export interface TowerStats {
 export const TOWER_STATS: Record<GodKind, TowerStats> = {
   zeus: {
     name: 'Zeus',
-    blurb: 'Chain bolt to the lead foe.',
+    blurb: 'Hurls sky-splitting bolts at the lead foe.',
     icon: '⚡',
     cost: 200,
     range: 135,
@@ -122,7 +122,7 @@ export const TOWER_STATS: Record<GodKind, TowerStats> = {
     color: 0x2f8fd0,
     attack: 'hitscan', // unused — splash overrides
     canHitAir: false,
-    splash: { radius: 55, knockback: 0.03 },
+    splash: { radius: 55, knockback: 0.018 }, // pathT fraction (~40px) — 0.03 near-stalled heavies at base
     requiresWater: true,
   },
   aphrodite: {

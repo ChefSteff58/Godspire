@@ -94,10 +94,14 @@ const buildableMemo = new Map<number, boolean>()
 
 /** THE placement contract: stone and grass build; chasm doesn't. Memoized per lattice vertex. */
 export function isBuildableGround(x: number, y: number): boolean {
-  const key = Math.round(y / TERRAIN_TILE_PX) * 64 + Math.round(x / TERRAIN_TILE_PX)
+  // evaluate at the SNAPPED lattice vertex, not the raw point — otherwise the cached answer for a
+  // cell depends on which pixel in it was queried first (and can contradict the rendered tile)
+  const vx = Math.round(x / TERRAIN_TILE_PX)
+  const vy = Math.round(y / TERRAIN_TILE_PX)
+  const key = vy * 64 + vx
   const hit = buildableMemo.get(key)
   if (hit !== undefined) return hit
-  const v = stoneCanonical(x, y)
+  const v = stoneCanonical(vx * TERRAIN_TILE_PX, vy * TERRAIN_TILE_PX)
   buildableMemo.set(key, v)
   return v
 }

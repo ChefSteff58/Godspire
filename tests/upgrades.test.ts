@@ -112,10 +112,10 @@ describe('Poseidon AoE', () => {
     expect(TOWER_STATS.poseidon.requiresWater).toBe(true)
     const base = towerEffectiveStats(tower('poseidon'))
     expect(base.splashRadius).toBe(55)
-    expect(base.knockback).toBeCloseTo(0.03)
-    const t1 = towerEffectiveStats(tower('poseidon', 1, 0)) // Breaker Wave: +30% radius, +50% knockback
+    expect(base.knockback).toBeCloseTo(0.018) // retuned 2026-07: 0.03 (~66px/hit) near-stalled heavies
+    const t1 = towerEffectiveStats(tower('poseidon', 1, 0)) // Breaker Wave: +30% radius, +30% knockback
     expect(t1.splashRadius).toBeCloseTo(55 * 1.3)
-    expect(t1.knockback).toBeCloseTo(0.03 * 1.5)
+    expect(t1.knockback).toBeCloseTo(0.018 * 1.3)
   })
 
   it('non-AoE gods report 0 splash', () => {
