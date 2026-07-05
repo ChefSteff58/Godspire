@@ -50,6 +50,9 @@ export function TowerInspector() {
           Sell 🪙{sel.sellValue}
         </button>
       </div>
+      {sel.targets && !sel.canHitAir && (
+        <p className="text-[11px] text-rose-300/90">🪶 Cannot target fliers — pair with Apollo or Hermes.</p>
+      )}
       {sel.targets && (
         <div className="flex items-center gap-1">
           <span className="font-pixel mr-0.5 text-[11px] font-bold uppercase tracking-wide text-shrine-marble/60">Target</span>

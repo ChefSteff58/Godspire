@@ -24,14 +24,15 @@ export function RightRail() {
         const active = placingGod === god
         const affordable = gold >= stats.cost
         const hex = godHex(god)
+        const nudge = affordable && !active && gold > 600 // hoarding (~3× the cheapest god) → nudge to spend
         return (
           <button
             key={god}
             onClick={() => (active ? cancelPlacing() : beginPlacing(god))}
             disabled={!affordable && !active}
             title={`${stats.blurb} — hotkey ${i + 1}; shift-click the map to place several`}
-            style={active ? { boxShadow: `0 0 10px 1px ${hex}66` } : undefined}
-            className={`arcade-bevel arcade-raise relative flex h-[60px] items-center gap-2 overflow-hidden rounded-md pr-2 text-left ${
+            style={active ? { boxShadow: `0 0 10px 1px ${hex}66` } : nudge ? { boxShadow: `0 0 8px 1px ${hex}55` } : undefined}
+            className={`arcade-bevel arcade-raise relative flex h-[60px] items-center gap-2 overflow-hidden rounded-md pr-2 text-left ${nudge ? 'node-breathe ' : ''}${
               active
                 ? 'bg-amber-400/90 text-slate-900'
                 : affordable
@@ -43,7 +44,7 @@ export function RightRail() {
             <span className="h-full w-[3px] shrink-0" style={{ background: hex }} />
             {/* 56px portrait on an element-tinted backplate */}
             <span
-              className={`flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded ${affordable || active ? '' : 'grayscale'}`}
+              className={`relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded ${affordable || active ? '' : 'grayscale'}`}
               style={{ background: `${hex}${active ? '55' : '2e'}` }}
             >
               {hasSprite(god) ? (
@@ -54,6 +55,11 @@ export function RightRail() {
                 />
               ) : (
                 <span className="text-2xl leading-none">{stats.icon}</span>
+              )}
+              {stats.canHitAir && (
+                <span className="absolute -right-0.5 -top-0.5 rounded-bl bg-black/70 px-0.5 text-[9px] leading-tight" title="Strikes flying foes">
+                  🪶
+                </span>
               )}
             </span>
             <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">

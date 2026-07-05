@@ -1218,6 +1218,7 @@ export class GameScene extends Phaser.Scene {
       worstWave: s.worstWave,
       worstWaveLives: s.worstWaveLives,
       deadliestFoe: s.deadliestFoe,
+      finalGold: this.run.snapshot().gold,
     })
   }
 
@@ -2303,6 +2304,7 @@ export class GameScene extends Phaser.Scene {
       targeting: tower.targeting,
       // only gods that actually acquire a target expose a priority (not farms / auras / spike forges)
       targets: stats.damage > 0 && !stats.deployable,
+      canHitAir: this.towerEff(tower).canHitAir,
       pathA: pathInfo('A'),
       pathB: pathInfo('B'),
     })

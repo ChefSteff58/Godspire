@@ -38,6 +38,8 @@ export interface RunSummary {
   worstWaveLives: number
   /** The enemy kind that took the most lives this run (null if none leaked). */
   deadliestFoe: { kind: string; lives: number } | null
+  /** Gold still banked at death — a hoarding nudge on the run-over screen. */
+  finalGold: number
 }
 
 /** One upgrade path's state for the selected tower's panel. */
@@ -59,6 +61,8 @@ export interface SelectedTower {
   targeting: TargetingMode
   /** Whether this god picks a target at all (false for farms / auras / spike forges). */
   targets: boolean
+  /** Effective anti-air (base OR an air-granting upgrade) — drives the 'whiffs fliers' note. */
+  canHitAir: boolean
   pathA: SelectedTowerPath
   pathB: SelectedTowerPath
 }

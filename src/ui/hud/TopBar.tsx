@@ -10,6 +10,8 @@ export function TopBar() {
   const shieldCharges = useGameStore((s) => s.shieldCharges)
   const wave = useGameStore((s) => s.wave)
   const kills = useGameStore((s) => s.kills)
+  const phase = useGameStore((s) => s.phase)
+  const nextWavePreview = useGameStore((s) => s.nextWavePreview)
   const showDebug = useGameStore((s) => s.showDebug)
   const toggleDebug = useGameStore((s) => s.toggleDebug)
   const openPantheon = useGameStore((s) => s.openPantheon)
@@ -110,6 +112,20 @@ export function TopBar() {
         <span className="pixel-chip max-lg:hidden rounded bg-black/40 px-3 py-1 text-shrine-marble/60">
           <PixelIcon name="icon_skull" fallback="💀" /> {kills}
         </span>
+        {/* pinned next-wave telegraph — the toast fades in 4.4s but the lesson stays while you build */}
+        {nextWavePreview && phase === 'building' && (
+          <span
+            className={`pixel-chip animate-pulse rounded px-2.5 py-1 text-[11px] font-bold ${
+              nextWavePreview.tone === 'boss'
+                ? 'bg-amber-500/25 text-amber-200'
+                : nextWavePreview.tone === 'debut'
+                  ? 'bg-sky-500/20 text-sky-200'
+                  : 'bg-orange-500/20 text-orange-200'
+            }`}
+          >
+            {nextWavePreview.label}
+          </span>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <SpeedControls />

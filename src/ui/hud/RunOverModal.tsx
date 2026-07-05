@@ -3,6 +3,20 @@ import { useSessionStore } from '../../state/sessionStore'
 import { isSupabaseConfigured } from '../../lib/supabase/client'
 
 /** Shown when Olympus falls. Banks Favor by highest wave; one tap to start a fresh run. */
+// kind/boss → death-screen label + one-line counter (mirrors the DEBUT_HINTS lesson).
+const FOE: Record<string, { name: string; hint: string }> = {
+  shade: { name: 'Shades', hint: 'a cheap swarm — AoE thins them' },
+  skeleton: { name: 'Skeletons', hint: 'the baseline — any god holds them' },
+  harpy: { name: 'Harpies', hint: 'fliers — only Apollo or Hermes reach them' },
+  talos: { name: 'Talos', hint: 'armored — big single hits punch through' },
+  hydra: { name: 'Hydra', hint: 'it splits — pierce the whole line' },
+  satyr: { name: 'Satyrs', hint: 'fast — slow them with Aphrodite' },
+  gorgon: { name: 'Gorgons', hint: 'hidden — station Athena to reveal them' },
+  nemean: { name: 'the Nemean Lion', hint: 'sustained DPS beats its hide' },
+  minotaur: { name: 'the Minotaur', hint: "out-damage it — slows barely bite" },
+  cyclops: { name: 'the Cyclops', hint: 'save AoE for the brood it spawns' },
+}
+
 export function RunOverModal() {
   const phase = useGameStore((s) => s.phase)
   const summary = useGameStore((s) => s.runSummary)
@@ -64,6 +78,17 @@ export function RunOverModal() {
       {summary.worstWaveLives > 0 && (
         <p className="text-xs text-shrine-marble/60">
           Bloodiest wave: <span className="font-bold text-rose-300">Wave {summary.worstWave}</span> (−{summary.worstWaveLives} lives)
+        </p>
+      )}
+      {summary.deadliestFoe && (
+        <p className="text-xs text-shrine-marble/60">
+          Deadliest foe: <span className="font-bold text-rose-300">{FOE[summary.deadliestFoe.kind]?.name ?? summary.deadliestFoe.kind}</span>{' '}
+          (−{summary.deadliestFoe.lives}) — {FOE[summary.deadliestFoe.kind]?.hint ?? 'bring its counter'}
+        </p>
+      )}
+      {summary.finalGold > 1000 && (
+        <p className="text-xs text-amber-300/80">
+          🪙{summary.finalGold} unspent — the Fates cannot spend it for you.
         </p>
       )}
       <div className="flex items-center gap-3">

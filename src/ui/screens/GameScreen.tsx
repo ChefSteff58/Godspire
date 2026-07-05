@@ -6,6 +6,7 @@ import { WaveControls } from '../hud/WaveControls'
 import { TowerInspector } from '../hud/TowerInspector'
 import { FateDraftModal } from '../hud/FateDraftModal'
 import { RunOverModal } from '../hud/RunOverModal'
+import { ActiveBoonBar } from '../hud/ActiveBoonBar'
 import { DevPanel } from '../hud/DevPanel'
 
 /**
@@ -22,6 +23,7 @@ export function GameScreen() {
         <div className="relative min-w-0 flex-1">
           <GameCanvas />
           <DevPanel />
+          <ActiveBoonBar />
           <PlacingHint />
           <WaveControls />
           <TowerInspector />
