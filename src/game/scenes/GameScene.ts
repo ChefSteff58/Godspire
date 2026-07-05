@@ -2345,18 +2345,18 @@ export class GameScene extends Phaser.Scene {
     if (path === 'A') tower.pathA++
     else tower.pathB++
     tower.invested += nt.cost // upgrade gold counts toward the sell refund (BTD6-style)
-    this.syncTowerAscension(tower) // tier 3 = a visible ASCENDED form when its art exists
+    this.syncTowerAscension(tower) // maxing a path (tier 5) = a visible ASCENDED form when its art exists
     this.refreshSelected()
   }
 
   /**
-   * M10-S7: completing a path (tier 3) swaps the god to an ASCENDED sprite base — <god>_asc_a /
-   * <god>_asc_b — when that art exists (BTD6-style: upgrades you can SEE). The cross-path rule
-   * guarantees at most one path ever reaches 3, so the forms can't conflict. Missing art is a
+   * M10-S7: MAXING a path (tier 5) swaps the god to an ASCENDED sprite base — <god>_asc_a /
+   * <god>_asc_b — when that art exists (BTD6-style: the ultimate upgrade you can SEE). The cross-path
+   * rule guarantees at most one path ever reaches 5, so the forms can't conflict. Missing art is a
    * silent no-op (the drop-in contract: characters land batch by batch).
    */
   private syncTowerAscension(tower: Tower): void {
-    const ascKey = tower.pathA >= 3 ? `${tower.god}_asc_a` : tower.pathB >= 3 ? `${tower.god}_asc_b` : null
+    const ascKey = tower.pathA >= 5 ? `${tower.god}_asc_a` : tower.pathB >= 5 ? `${tower.god}_asc_b` : null
     if (!ascKey || !DirAnimSprite.hasDirectional(this, ascKey)) return
     const old = this.towerSprites.get(tower.id)
     if (!old || (old.getData?.('ascBase') as string) === ascKey) return
