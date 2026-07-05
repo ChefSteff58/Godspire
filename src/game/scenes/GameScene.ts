@@ -1122,7 +1122,10 @@ export class GameScene extends Phaser.Scene {
       else if (it.type === 'pickDraft') {
         const chosen = this.run.draft?.[it.index] // surface the pick like the auto-pick does
         this.run.pickDraft(it.index)
-        if (chosen?.type === 'boon') this.floatText(GAME_WIDTH / 2, 150, `⚡ ${chosen.boon.name}`, '#f5d061')
+        if (chosen?.type === 'boon') {
+          this.floatText(GAME_WIDTH / 2, 150, `⚡ ${chosen.boon.name}`, '#f5d061')
+          this.recordBoon(chosen.boon)
+        }
       }
       else if (it.type === 'sellTower') this.sellSelectedTower()
       else if (it.type === 'upgradeTower') this.upgradeSelectedTower(it.path)
@@ -1171,6 +1174,7 @@ export class GameScene extends Phaser.Scene {
           this.run.pickDraft(idx) // the Fates grow impatient
           if (chosen.type === 'boon') {
             this.floatText(GAME_WIDTH / 2, 132, `⚡ The Fates chose: ${chosen.boon.name}`, '#f5d061')
+            this.recordBoon(chosen.boon)
           }
         }
       }
@@ -1213,11 +1217,12 @@ export class GameScene extends Phaser.Scene {
       towersBuilt: s.towersBuilt,
       worstWave: s.worstWave,
       worstWaveLives: s.worstWaveLives,
+      deadliestFoe: s.deadliestFoe,
     })
   }
 
   private onEnemyLeak(enemy: Enemy): void {
-    const lost = this.run.onLeak(enemy.leakWeight)
+    const lost = this.run.onLeak(enemy.leakWeight, enemy.bossId ?? enemy.kind) // tally by kind for the death screen
     this.removeEnemy(enemy)
     if (lost) this.flashLeak()
   }
@@ -1345,6 +1350,11 @@ export class GameScene extends Phaser.Scene {
    * (a debut kind's hint, a boss warning, or an elite-legion callout; boss > debut > elite priority).
    * RunController grants a longer build grace on these waves so the warning is actionable.
    */
+  /** Mirror a drafted boon into the HUD's active-boon strip (name/icon for the tray). */
+  private recordBoon(b: { id: string; name: string; icon: string; desc: string; rarity: string }): void {
+    useGameStore.getState().addActiveBoon({ id: b.id, name: b.name, icon: b.icon, desc: b.desc, rarity: b.rarity })
+  }
+
   private showWavePreview(nextWave: number): void {
     const preview = wavePreview(nextWave)
     let msg: string | null = null
@@ -1359,6 +1369,18 @@ export class GameScene extends Phaser.Scene {
       msg = '⚔ ELITE LEGION — Tartarus sends its heaviest!'
       color = '#ffc9a0'
       if (!this.reduceMotion) this.cameras.main.shake(140, 0.003)
+    }
+    // pin a compact chip for the whole build phase — the toast fades in 4.4s but the lesson must stay
+    const tone: 'debut' | 'boss' | 'elite' | null = preview.bossId ? 'boss' : preview.debutKind ? 'debut' : preview.elite ? 'elite' : null
+    if (tone) {
+      const label = preview.bossId
+        ? `⚠ ${bossById(preview.bossId).name}`
+        : preview.debutKind
+          ? `NEW: ${preview.debutKind}${preview.debutKind === 'harpy' ? ' — anti-air!' : preview.debutKind === 'talos' ? ' — big hits!' : preview.debutKind === 'gorgon' ? ' — Athena!' : ''}`
+          : '⚔ Elite legion'
+      useGameStore.getState().setNextWavePreview({ key: `${nextWave}:${tone}`, label, tone })
+    } else {
+      useGameStore.getState().setNextWavePreview(null)
     }
     if (!msg) return
     const t = this.add
@@ -1869,7 +1891,15 @@ export class GameScene extends Phaser.Scene {
       const ep = this.enemyPos(e)
       if ((ep.x - center.x) ** 2 + (ep.y - center.y) ** 2 > radius * radius) continue
       this.hitEnemy(e, damage, sparkColor)
-      if (knockback > 0 && e.hp > 0 && !e.knockbackImmune) e.pathT = Math.max(0, e.pathT - knockback) // shove survivors back
+      if (knockback > 0 && e.hp > 0 && !e.knockbackImmune) {
+        // diminishing returns: a shove within 3s of the last is damped to 0.4× so a single Poseidon
+        // firing into a lane can't near-STALL it (the Styx sits inside the SE doubleback) — the first
+        // hit still lands full, sustained fire tapers.
+        const now = this.time.now
+        const damp = e.lastKnockbackMs !== undefined && now - e.lastKnockbackMs < 3000 ? 0.4 : 1
+        e.pathT = Math.max(0, e.pathT - knockback * damp)
+        e.lastKnockbackMs = now
+      }
     }
   }
 

@@ -40,6 +40,8 @@ export interface Enemy {
   slowResist?: number
   /** Minotaur: ignores Poseidon knockback. */
   knockbackImmune?: boolean
+  /** Poseidon knockback diminishing-returns: ms of the last shove (repeats within 3s are damped). */
+  lastKnockbackMs?: number
   /** Minotaur: periodic speed-burst params (set at spawn from the roster). */
   charge?: { periodMs: number; burstMul: number; durationMs: number }
   /** Charge runtime state: ms to the next burst, ms left in the current burst, the un-charged speed. */

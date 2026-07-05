@@ -62,6 +62,8 @@ export class RunController {
   private livesLostThisWave = 0
   private worstWave = 0
   private worstWaveLives = 0
+  /** Leaked lives tallied by enemy kind — the death screen names your deadliest foe. */
+  private leaksByKind: Record<string, number> = {}
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1, fireRateMul: 1, bossDamageMul: 1, incomeMul: 1, goldPerKillAdd: 0, startingShield: 0, secondWindStart: false, draftBonusOptions: 0 }
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
@@ -114,6 +116,7 @@ export class RunController {
     this.livesLostThisWave = 0
     this.worstWave = 0
     this.worstWaveLives = 0
+    this.leaksByKind = {}
   }
 
   // ── intents (forwarded from React via the scene) ──
@@ -224,13 +227,15 @@ export class RunController {
    * A leak: a gate shield absorbs it if any charge remains; otherwise lose lives, with Second Wind
    * catching the first lethal blow. Returns true if the player felt it (life lost / saved) — for juice.
    */
-  onLeak(weight: number): boolean {
+  onLeak(weight: number, kind = 'enemy'): boolean {
     if (this.phase === 'over' || this.invincible) return false
     if (this.shieldCharges > 0) {
       this.shieldCharges -= 1 // shield eats the leak, no life lost
       return false
     }
-    this.livesLostThisWave += Math.min(weight, this.lives) // count ACTUAL lives lost, not raw weight
+    const actual = Math.min(weight, this.lives) // count ACTUAL lives lost, not raw weight
+    this.livesLostThisWave += actual
+    this.leaksByKind[kind] = (this.leaksByKind[kind] ?? 0) + actual
     this.lives -= weight
     if (this.lives <= 0) {
       if (this.secondWindArmed) {
@@ -319,7 +324,19 @@ export class RunController {
   }
 
   /** Per-run tallies for the end-of-run stats screen (read once when the run ends). */
-  runStats(): { goldSpent: number; goldEarned: number; towersBuilt: number; bossesKilled: number; worstWave: number; worstWaveLives: number } {
+  runStats(): {
+    goldSpent: number
+    goldEarned: number
+    towersBuilt: number
+    bossesKilled: number
+    worstWave: number
+    worstWaveLives: number
+    deadliestFoe: { kind: string; lives: number } | null
+  } {
+    let deadliestFoe: { kind: string; lives: number } | null = null
+    for (const [kind, lives] of Object.entries(this.leaksByKind)) {
+      if (!deadliestFoe || lives > deadliestFoe.lives) deadliestFoe = { kind, lives }
+    }
     return {
       goldSpent: this.goldSpent,
       goldEarned: this.goldEarned,
@@ -327,6 +344,7 @@ export class RunController {
       bossesKilled: this.bossesKilled,
       worstWave: this.worstWave,
       worstWaveLives: this.worstWaveLives,
+      deadliestFoe,
     }
   }
 

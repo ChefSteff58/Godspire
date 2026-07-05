@@ -6,6 +6,22 @@ import type { DraftOption } from '../core/run/draft'
 import type { RunSnapshot } from '../game/run/RunController'
 
 /** Shown on the run-over screen. Computed once when the run ends. */
+/** A drafted boon as the HUD needs it (a lean mirror — not the full Boon). */
+export interface ActiveBoon {
+  id: string
+  name: string
+  icon: string
+  desc: string
+  rarity: string
+}
+
+/** A pinned next-wave telegraph (the top-bar chip). `key` de-dupes redundant mirror writes. */
+export interface NextWavePreview {
+  key: string
+  label: string
+  tone: 'debut' | 'boss' | 'elite'
+}
+
 export interface RunSummary {
   wave: number
   favor: number
@@ -20,6 +36,8 @@ export interface RunSummary {
   /** The wave on which the most lives were lost (0 if none lost — e.g. a leak-free death by negative grant). */
   worstWave: number
   worstWaveLives: number
+  /** The enemy kind that took the most lives this run (null if none leaked). */
+  deadliestFoe: { kind: string; lives: number } | null
 }
 
 /** One upgrade path's state for the selected tower's panel. */
@@ -99,6 +117,10 @@ interface GameStore {
   draftTimerSec: number | null
   /** The currently-selected placed tower (set by the scene on click), or null. */
   selectedTower: SelectedTower | null
+  /** Boons drafted this run (name/icon/rarity) — the HUD's active-boon strip. */
+  activeBoons: ActiveBoon[]
+  /** A pinned telegraph for the wave about to start (debut/boss/elite), or null. */
+  nextWavePreview: NextWavePreview | null
 
   // intent queue
   intents: RunIntent[]
@@ -121,6 +143,8 @@ interface GameStore {
 
   mirrorRun: (s: RunSnapshot) => void
   setRunSummary: (s: RunSummary | null) => void
+  addActiveBoon: (b: ActiveBoon) => void
+  setNextWavePreview: (p: NextWavePreview | null) => void
   setPreDraftScale: (scale: number) => void
   setDraftTimer: (sec: number | null) => void
   setSelectedTower: (sel: SelectedTower | null) => void
@@ -153,6 +177,8 @@ const FRESH_RUN = {
   preDraftScale: 1,
   draftTimerSec: null,
   selectedTower: null,
+  activeBoons: [] as ActiveBoon[],
+  nextWavePreview: null as NextWavePreview | null,
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -225,6 +251,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       canStartWave: s.canStartWave,
     }),
   setRunSummary: (runSummary) => set({ runSummary }),
+  addActiveBoon: (b) => set((s) => ({ activeBoons: [...s.activeBoons, b] })),
+  setNextWavePreview: (p) =>
+    set((s) => (s.nextWavePreview?.key === p?.key ? s : { nextWavePreview: p })),
   setPreDraftScale: (preDraftScale) => set({ preDraftScale }),
   setDraftTimer: (draftTimerSec) => set((s) => (s.draftTimerSec === draftTimerSec ? s : { draftTimerSec })),
   setSelectedTower: (selectedTower) => set({ selectedTower }),
