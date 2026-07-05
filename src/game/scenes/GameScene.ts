@@ -753,9 +753,14 @@ export class GameScene extends Phaser.Scene {
           .setDepth(2),
       )
     }
-    // Olympus gate — prop art when dropped in (label-free for the same reason), else the drawn slab
+    // Olympus gate — prop art when dropped in (label-free for the same reason), else the drawn slab.
+    // With art it becomes a living set-piece to answer the hellmouth: gold glow + light sweep + motes.
     if (this.textures.exists('obj_gate')) {
-      this.setDressing.push(this.addSpriteScaled('obj_gate', end.x - 20, end.y, 230).setDepth(2))
+      // pulled well inside the right edge (was x≈980, ~95% off-canvas) so it reads as a prominent
+      // landmark — the radiant counterpart to the hellmouth — that the road climbs toward.
+      const gate = this.addSpriteScaled('obj_gate', end.x - 110, end.y - 8, 240).setDepth(2)
+      this.setDressing.push(gate)
+      this.animateGate(gate)
     } else {
       g.fillStyle(0xf5d061, 0.96)
       g.fillRoundedRect(end.x - 78, end.y - 36, 130, 74, 6)
@@ -800,6 +805,18 @@ export class GameScene extends Phaser.Scene {
     // a second, denser ember stream rises from the mouth itself (cap raised 14→20 for it)
     this.ambientCap = 20
     this.time.addEvent({ delay: 520, loop: true, callback: () => this.spawnAmbient('ember', { x: 97, y: 155 }) })
+  }
+
+  /** The gate of Olympus radiates: a pulsing gold glow, a slow divine light sweep, and rising gold motes. */
+  private animateGate(gate: Phaser.GameObjects.Image): void {
+    if (this.game.renderer.type === Phaser.WEBGL) {
+      const glow = gate.postFX.addGlow(0xf5d061, 2, 0, false, 0.1, 12)
+      this.tweens.add({ targets: glow, outerStrength: 6, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+      gate.postFX.addShine(0.3, 0.2, 5) // a slow divine light sweeps across the marble
+    }
+    // rising gold motes from the gate's glowing threshold (its lower-center, above the clouds)
+    this.ambientCap = Math.max(this.ambientCap, 20)
+    this.time.addEvent({ delay: 640, loop: true, callback: () => this.spawnAmbient('mote', { x: gate.x, y: gate.y + 40 }) })
   }
 
   /** The Styx shimmers: a slow shine sweep + two drifting mist wisps over the water. */
