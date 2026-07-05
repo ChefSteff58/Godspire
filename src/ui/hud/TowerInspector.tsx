@@ -53,6 +53,9 @@ export function TowerInspector() {
       {sel.targets && !sel.canHitAir && (
         <p className="text-[11px] text-rose-300/90">🪶 Cannot target fliers — pair with Apollo or Hermes.</p>
       )}
+      {sel.detectsInnate && (
+        <p className="text-[11px] text-sky-300/90">👁 Reveals hidden (camo) foes for nearby gods.</p>
+      )}
       {sel.targets && (
         <div className="flex items-center gap-1">
           <span className="font-pixel mr-0.5 text-[11px] font-bold uppercase tracking-wide text-shrine-marble/60">Target</span>
@@ -86,7 +89,7 @@ function PathRow({ info, gold, hex, onUpgrade }: { info: SelectedTowerPath; gold
         <span className="font-pixel text-xs font-bold text-slate-200">{info.name}</span>
         {/* chunky 8px tier squares — read at a glance, BTD6-style */}
         <span className="flex items-center gap-1">
-          {[0, 1, 2].map((i) => (
+          {[0, 1, 2, 3, 4].map((i) => (
             <span
               key={i}
               className="h-2 w-2 rounded-[2px]"
@@ -112,7 +115,14 @@ function PathRow({ info, gold, hex, onUpgrade }: { info: SelectedTowerPath; gold
           }`}
         >
           <span className="flex items-center justify-between text-xs font-bold">
-            <span className="font-pixel">{info.nextName}</span>
+            <span className="font-pixel flex items-center gap-1">
+              {info.nextName}
+              {info.nextSpecial && (
+                <span className="rounded bg-black/40 px-1 py-0.5 text-[8px] font-bold tracking-wide text-amber-300">
+                  {info.nextSpecial}
+                </span>
+              )}
+            </span>
             <span className="font-pixel num-pop" key={info.nextCost}>
               🪙{info.nextCost}
             </span>

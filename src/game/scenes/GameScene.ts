@@ -2314,6 +2314,7 @@ export class GameScene extends Phaser.Scene {
         nextName: nt?.name ?? null,
         nextCost: nt?.cost ?? null,
         nextDesc: nt?.desc ?? null,
+        nextSpecial: nt?.special ?? null,
         locked: nt !== null && !canUpgradePath(tower, path),
       }
     }
@@ -2326,6 +2327,7 @@ export class GameScene extends Phaser.Scene {
       // only gods that actually acquire a target expose a priority (not farms / auras / spike forges)
       targets: stats.damage > 0 && !stats.deployable,
       canHitAir: this.towerEff(tower).canHitAir,
+      detectsInnate: stats.auraBuff?.detect ?? false,
       pathA: pathInfo('A'),
       pathB: pathInfo('B'),
     })

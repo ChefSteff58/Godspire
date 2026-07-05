@@ -45,10 +45,11 @@ export interface RunSummary {
 /** One upgrade path's state for the selected tower's panel. */
 export interface SelectedTowerPath {
   name: string
-  tier: number // 0–3 bought
+  tier: number // 0–5 bought
   nextName: string | null // next purchasable tier name (null = maxed)
   nextCost: number | null
   nextDesc: string | null
+  nextSpecial: string | null // a NON-stat badge on the next tier ('ANTI-AIR' | 'CAMO') or null
   locked: boolean // blocked by the cross-path rule
 }
 
@@ -63,6 +64,8 @@ export interface SelectedTower {
   targets: boolean
   /** Effective anti-air (base OR an air-granting upgrade) — drives the 'whiffs fliers' note. */
   canHitAir: boolean
+  /** Detects stealth innately (Athena's owl) — surfaced so the camo question is answerable. */
+  detectsInnate: boolean
   pathA: SelectedTowerPath
   pathB: SelectedTowerPath
 }

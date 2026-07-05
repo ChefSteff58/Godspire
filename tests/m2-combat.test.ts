@@ -48,6 +48,13 @@ describe('selectTarget', () => {
     const out = enemyAt(0.4) // a second, already over the rim, is picked instead
     expect(selectTarget(tower, [climbing, out], posOf, 'first')).toBe(out)
   })
+
+  it('a detector (canDetect) acquires stealth foes a blind tower skips (Athena / Hermes camo)', () => {
+    const hidden = enemyAt(0.3)
+    hidden.stealth = true
+    expect(selectTarget({ ...tower, canDetect: false }, [hidden], posOf)).toBeNull() // blind → skipped
+    expect(selectTarget({ ...tower, canDetect: true }, [hidden], posOf)).toBe(hidden) // detector → acquired
+  })
 })
 
 describe('damageEnemy', () => {
