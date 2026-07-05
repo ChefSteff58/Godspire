@@ -116,7 +116,7 @@ const DEBUT_HINTS: Record<string, string> = {
   harpy: 'Harpies take wing — only anti-air (Apollo / Hermes) reaches them!',
   talos: 'Talos automatons lumber in — armor shrugs off chip damage; bring BIG hits.',
   satyr: 'Satyrs sprint — slow them (Aphrodite) or they slip right past!',
-  gorgon: "Gorgons stalk unseen — Athena's owl reveals them.",
+  gorgon: "Gorgons stalk unseen — station Athena AMONG your gods; her owl reveals what's near her.",
   hydra: 'Hydras split when slain — piercing shots rake the whole brood!',
 }
 
@@ -316,7 +316,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   devStep(frames: number, dtMs = 16): void {
-    for (let i = 0; i < frames; i++) this.update(0, dtMs)
+    // skip stepping while a draft is open so headless/scripted runs keep boon agency (the 20s
+    // wall-clock auto-pick is for real players, not the dev harness) — the caller drives pickDraft
+    for (let i = 0; i < frames; i++) {
+      if (this.run.draft) break
+      this.update(0, dtMs)
+    }
   }
 
   /** DEV only: jump straight to a wave (e.g. `godspireScene.devJumpToWave(40)` to test a boss). */
@@ -1114,7 +1119,11 @@ export class GameScene extends Phaser.Scene {
   private applyIntents(): void {
     for (const it of useGameStore.getState().drainIntents()) {
       if (it.type === 'startWave') this.run.requestStartWave()
-      else if (it.type === 'pickDraft') this.run.pickDraft(it.index)
+      else if (it.type === 'pickDraft') {
+        const chosen = this.run.draft?.[it.index] // surface the pick like the auto-pick does
+        this.run.pickDraft(it.index)
+        if (chosen?.type === 'boon') this.floatText(GAME_WIDTH / 2, 150, `⚡ ${chosen.boon.name}`, '#f5d061')
+      }
       else if (it.type === 'sellTower') this.sellSelectedTower()
       else if (it.type === 'upgradeTower') this.upgradeSelectedTower(it.path)
       else if (it.type === 'setTargeting') this.setSelectedTargeting(it.mode)

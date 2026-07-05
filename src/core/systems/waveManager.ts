@@ -13,7 +13,9 @@ const BASE_SPEED = 60 // px/sec, matches createEnemy's default
 // HP is a GENTLE tail now (was ×1.12 compounding, which made enemy health outrun gold-bought DPS
 // ~36× over 50 waves → "trivial then a wall"). ×1.05/wave only paces intra-kind attrition;
 // difficulty rides on COMPOSITION (stronger TYPES) + count, BTD6-style — not on inflating one body.
-const HP_RATE = 1.055 // +0.005: tightens the w13-38 slack zone (paired with the boss recurrence softening)
+const HP_RATE = 1.055 // the TEACH-zone rate (w1-20): gentle, lets composition + counters carry the lesson
+const LATE_HP_RATE = 1.075 // post-w20: fleet playtest — a competent board took ZERO damage w7-35, income 2× ahead
+const HP_BEND_WAVE = 20 // the curve bends the wave AFTER the first boss, so the tutorial arc is untouched
 
 const SPEED_PER_WAVE = 0.01
 const SPEED_CAP_MUL = 2 // never faster than 2× base
@@ -41,7 +43,12 @@ export interface WaveSpec {
 
 /** Cumulative HP multiplier at wave `n` (1-indexed) — a gentle ×1.05 tail, no late bend. */
 export function enemyHpMul(n: number): number {
-  return HP_RATE ** (Math.max(1, Math.floor(n)) - 1)
+  const w = Math.max(1, Math.floor(n))
+  // PIECEWISE (fleet retune): flat 1.055 through the teaching arc, steeper 1.075 once the first
+  // boss is behind you — so compounding player power stops outrunning the endless curve past w20.
+  const teach = Math.min(w, HP_BEND_WAVE) - 1
+  const late = Math.max(0, w - HP_BEND_WAVE)
+  return HP_RATE ** teach * LATE_HP_RATE ** late
 }
 
 export function enemyHp(n: number): number {
@@ -56,7 +63,11 @@ export function enemyHp(n: number): number {
 export const COUNT_CEILING = 45
 export function enemyCount(n: number): number {
   const w = Math.max(1, Math.floor(n))
-  return Math.round(Math.min(8 + 2.2 * Math.sqrt(w - 1), COUNT_CEILING))
+  // sqrt body-count through the teach arc, then a linear post-20 pressure term so converted
+  // economy/choke boards face real leak risk again (all 4 fun-testers cruised w21+ untouched).
+  // The 45 ceiling still caps the per-frame budget — this only reaches it sooner (~w55 vs ~w70).
+  const latePressure = 0.6 * Math.max(0, w - HP_BEND_WAVE)
+  return Math.round(Math.min(8 + 2.2 * Math.sqrt(w - 1) + latePressure, COUNT_CEILING))
 }
 
 /** Speed rises slowly and is hard-capped at 2× base (pins ~wave 100). */
@@ -130,7 +141,7 @@ export function enemyCounts(n: number): Record<EnemyKind, number> {
   const debut = unlocked.find((k) => k !== 'shade' && KIND[k].intro === wave)
   if (debut) {
     // teaching wave: mostly the new kind (Hydra capped lower to bound the split fan-out), rest Shade
-    const share = debut === 'hydra' || debut === 'talos' ? 0.4 : 0.7 // talos debut at 0.7 was a 5× wave-9 cliff
+    const share = debut === 'hydra' || debut === 'talos' || debut === 'gorgon' ? 0.4 : 0.7 // 0.7 gorgon (stealth, leakWeight 7) = a 35-50 life novice massacre
     counts[debut] = Math.min(total, Math.max(1, Math.round(total * share)))
     counts.shade = total - counts[debut]
     return counts
@@ -141,7 +152,9 @@ export function enemyCounts(n: number): Record<EnemyKind, number> {
   const elite = isEliteWave(wave)
   const w = (k: EnemyKind): number => {
     const x = weightAt(k, wave)
-    return elite && (k === 'talos' || k === 'hydra' || k === 'gorgon') ? x * 2.4 : x
+    // elite heavy surge grows once the curve bends — the w30/w40 elite waves read as weak today
+    const surge = elite ? (wave > HP_BEND_WAVE ? 3.0 : 2.4) : 1
+    return k === 'talos' || k === 'hydra' || k === 'gorgon' ? x * surge : x
   }
   const sumW = unlocked.reduce((s, k) => s + w(k), 0)
   let assigned = 0

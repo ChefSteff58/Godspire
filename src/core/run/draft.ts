@@ -17,23 +17,33 @@ type Rng = () => number
 
 /** Build a draft: `count` DISTINCT boons, sampled WEIGHTED by rarity (rarer = scarcer). Pure. */
 export function generateDraft(
-  _wave: number,
+  wave: number,
   rng: Rng = Math.random,
   count = 3,
   exclude?: (b: Boon) => boolean,
+  owned?: ReadonlyMap<string, number>,
 ): DraftOption[] {
   const pool = BOON_POOL.filter((b) => !exclude?.(b))
+  // Rarity odds ESCALATE with depth so the 6th draft of a run reads as a reward, not a rerun of the
+  // 1st (fleet playtest: deep drafts were all-common). Already-owned boons are down-weighted (not
+  // banned) so repeats become rare-but-possible instead of "the deck forgot I was there".
+  const depthMul = 1 + Math.max(0, Math.floor(wave)) / 25
+  const weightOf = (b: Boon): number => {
+    const rarityW = b.rarity === 'common' ? RARITY_WEIGHT.common : RARITY_WEIGHT[b.rarity] * depthMul
+    const ownedN = owned?.get(b.id) ?? 0
+    return rarityW * 0.3 ** ownedN
+  }
   const picks: Boon[] = []
   for (let n = 0; n < count && pool.length > 0; n++) {
-    const total = pool.reduce((s, b) => s + RARITY_WEIGHT[b.rarity], 0)
+    const total = pool.reduce((s, b) => s + weightOf(b), 0)
     let r = rng() * total
     let idx = 0
     for (let i = 0; i < pool.length; i++) {
-      r -= RARITY_WEIGHT[pool[i].rarity]
+      r -= weightOf(pool[i])
       if (r <= 0) { idx = i; break }
     }
     picks.push(pool[idx])
-    pool.splice(idx, 1) // distinct: don't draw the same card twice
+    pool.splice(idx, 1) // distinct: don't draw the same card twice in ONE draft
   }
   return picks.map((boon) => ({ type: 'boon', boon }))
 }

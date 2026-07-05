@@ -45,7 +45,7 @@ describe('wave scaling', () => {
   it('HP rises gently now (×1.05 tail), not the old runaway compounding', () => {
     expect(enemyHp(1)).toBe(10)
     for (let n = 2; n <= 60; n++) expect(enemyHp(n)).toBeGreaterThanOrEqual(enemyHp(n - 1))
-    expect(enemyHp(40)).toBeLessThan(enemyHp(1) * 10) // ~×6.7 by w40 (was ~×84) — difficulty rides on TYPE
+    expect(enemyHp(40)).toBeLessThan(enemyHp(1) * 15) // ~×11.7 by w40 (piecewise: 1.055 to w20, 1.075 after) — still far below the old ×84
   })
 
   it('count grows on a sqrt curve under a hard ceiling', () => {

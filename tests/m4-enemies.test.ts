@@ -236,7 +236,7 @@ describe('wave composition', () => {
 describe('difficulty model — Type-Carried Hybrid', () => {
   it('HP is a GENTLE tail now (×1.05), not the old runaway ×1.12 compounding', () => {
     expect(enemyHpMul(1)).toBe(1)
-    expect(enemyHpMul(40)).toBeLessThan(10) // 1.05^39 ≈ 6.7 (was 1.12^39 ≈ 84)
+    expect(enemyHpMul(40)).toBeLessThan(15) // piecewise ≈ 11.7 (1.055^19·1.075^20) — bends post-w20, still far below the old 84
     expect(enemyHpMul(20)).toBeGreaterThan(enemyHpMul(10)) // still rising
   })
 

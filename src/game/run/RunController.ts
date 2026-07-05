@@ -67,6 +67,8 @@ export class RunController {
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
   private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1 }
   private persistentEffects: BoonEffect[] = []
+  /** How many times each boon id has been drafted — de-weights repeats in later drafts. */
+  private boonCounts = new Map<string, number>()
 
   draft: DraftOption[] | null = null
   private nextDraftWave = 3
@@ -97,6 +99,7 @@ export class RunController {
     this.invincible = false
     this.buildGraceMs = BUILD_GRACE_MS
     this.persistentEffects = []
+    this.boonCounts = new Map()
     this.modifiers = foldRunModifiers(meta, this.persistentEffects)
     this.draft = null
     this.nextDraftWave = scheduleNextDraft(0, this.rng) // first draft 3–5 waves in, never before wave 1
@@ -125,6 +128,7 @@ export class RunController {
     const opt = this.draft[index]
     this.draft = null
     if (!opt || opt.type !== 'boon') return // M3 never emits 'god'; ignore defensively
+    this.boonCounts.set(opt.boon.id, (this.boonCounts.get(opt.boon.id) ?? 0) + 1)
     this.applyEffect(opt.boon.effect)
   }
 
@@ -277,6 +281,7 @@ export class RunController {
           (b.effect.kind === 'secondWind' && this.secondWindArmed) || // an armed Nike re-offer is dead
           (b.effect.kind === 'livesGrant' && this.lives >= this.maxLives) || // heal at full HP is dead
           (b.effect.kind === 'godDamageMul' && !this.builtGods.has(b.effect.god)), // boon for an unfielded god is dead
+        this.boonCounts,
       )
       this.nextDraftWave = scheduleNextDraft(this.wave, this.rng)
     }
