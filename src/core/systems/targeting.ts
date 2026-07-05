@@ -39,6 +39,7 @@ export function selectTarget(
     // ground-only towers can't acquire fliers (=== false so an unspecified caller can hit anything)
     if (e.flying && tower.canHitAir === false) continue
     if (e.stealth && !tower.canDetect) continue // hidden — needs a detector (Athena) nearby
+    if (e.emerging) continue // still climbing out of the hellmouth — no zapping into the pit
     const d2 = dist2(tower.pos, posOf(e))
     if (d2 > r2) continue
     const key =

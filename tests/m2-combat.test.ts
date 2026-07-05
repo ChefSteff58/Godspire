@@ -40,6 +40,14 @@ describe('selectTarget', () => {
     const b = enemyAt(0.3, 20)
     expect(selectTarget(tower, [a, b], posOf, 'strongest')).toBe(b)
   })
+
+  it('never targets an enemy still emerging from the hellmouth (no zapping into the pit)', () => {
+    const climbing = enemyAt(0.3)
+    climbing.emerging = true
+    expect(selectTarget(tower, [climbing], posOf)).toBeNull()
+    const out = enemyAt(0.4) // a second, already over the rim, is picked instead
+    expect(selectTarget(tower, [climbing, out], posOf, 'first')).toBe(out)
+  })
 })
 
 describe('damageEnemy', () => {

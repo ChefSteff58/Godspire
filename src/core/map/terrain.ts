@@ -24,6 +24,14 @@ export const GATE: Vec2 = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
 
 export type TerrainKind = 'chasm' | 'stone' | 'grass'
 
+/** The Sacred Olive's LIFE HALO: Athena's first gift keeps a lush ring of buildable meadow around
+ *  itself even as the rest of the map crumbles to chasm. Center mirrors sites.ts `sacred_olive`. */
+export const OLIVE_CENTER: Vec2 = { x: 770, y: 110 }
+export const OLIVE_HALO_RADIUS = 74
+export function withinOliveHalo(x: number, y: number): boolean {
+  return Math.hypot(x - OLIVE_CENTER.x, y - OLIVE_CENTER.y) <= OLIVE_HALO_RADIUS
+}
+
 /** Deterministic sin-hash in [0,1) — identical inputs give identical patterns on every boot. */
 function seeded(n: number): number {
   const v = Math.sin(n * 9871.123) * 43758.5453
@@ -48,6 +56,7 @@ export function stonePredicate(
     // water (the water→stone Wang set only knows one transition), and the shoreline becomes
     // genuinely buildable ground — render and placement share this one truth.
     if (nearStyxShore(x, y)) return true
+    if (withinOliveHalo(x, y)) return true // the Sacred Olive's life halo — always solid ground
     const vx = Math.round(x / tilePx)
     const vy = Math.round(y / tilePx)
     // two octaves of smoothed value noise over the vertex lattice (low frequency dominates → patches)
@@ -77,6 +86,7 @@ export function grassPredicate(
   const stone = stonePredicate(seed, riftCenter, riftRadius, gateCenter, gateRadius, tilePx)
   return (x, y) => {
     if (!stone(x, y)) return false
+    if (withinOliveHalo(x, y)) return true // lush grass rings the Sacred Olive even amid the crumble
     const vx = Math.round(x / tilePx)
     const vy = Math.round(y / tilePx)
     const g1 = seeded(seed * 3.1 + vx * 11.13 + vy * 5.71)

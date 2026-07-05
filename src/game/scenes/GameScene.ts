@@ -670,7 +670,7 @@ export class GameScene extends Phaser.Scene {
       this.setDressing.push(this.addSpriteScaled('obj_decor_offering', olive.pos.x - 58, olive.pos.y + 34, 24).setDepth(2))
     }
     if (this.textures.exists('obj_decor_olive_stones')) {
-      this.setDressing.push(this.addSpriteScaled('obj_decor_olive_stones', olive.pos.x + 56, olive.pos.y + 30, 26).setDepth(2))
+      this.setDressing.push(this.addSpriteScaled('obj_decor_olive_stones', 475, 50, 26).setDepth(2)) // moved off the tree to top-center (was overlapping the canopy)
     }
     // fireflies drift in the tree's shade (green-gold, slow)
     this.ambientCap = Math.max(this.ambientCap, 26)
@@ -1039,6 +1039,7 @@ export class GameScene extends Phaser.Scene {
           shadow?.setAlpha(0.18 * t)
           if (pos.x >= 166 || enemy.pathT > 0.12) {
             sp.setData('emergeAlpha', undefined)
+            enemy.emerging = false // over the lip — towers may now acquire it
             sp.setAlpha(emergeA)
             const b = (sp.getData('baseScale') as number) ?? 1
             this.tweens.add({ targets: sp, scale: b, duration: 300, ease: 'Back.easeOut' })
@@ -1342,6 +1343,7 @@ export class GameScene extends Phaser.Scene {
       // NEVER tweened (the fixed-substep sim owns it). Stealth keeps its half-alpha ceiling.
       sprite.setAlpha(0)
       sprite.setData('emergeAlpha', enemy.stealth ? 0.5 : 1)
+      enemy.emerging = true // UNtargetable until it clears the rim (selectTarget skips it)
       sprite.setScale(base * 0.55) // held small until the lip — the emergence pop finishes the job
       this.enemyShadows.get(enemy.id)?.setAlpha(0)
     } else {
@@ -1892,6 +1894,7 @@ export class GameScene extends Phaser.Scene {
     for (let j = this.enemies.length - 1; j >= 0; j--) {
       const e = this.enemies[j]
       if (e.flying) continue // a tidal wave hits the ground, not fliers
+      if (e.emerging) continue // still climbing out of the hellmouth
       const ep = this.enemyPos(e)
       if ((ep.x - center.x) ** 2 + (ep.y - center.y) ** 2 > radius * radius) continue
       this.hitEnemy(e, damage, sparkColor)
@@ -2025,21 +2028,10 @@ export class GameScene extends Phaser.Scene {
     const g = this.overlay
     g.clear()
 
-    const stealthAlive = this.enemies.some((e) => e.stealth) // Gorgons on the field → reveal Athena's owl radius
-
     for (const tower of this.towers) {
       // Range ring shows ONLY for the selected tower (or every tower in debug) — never always-on,
       // including the support auras (Aphrodite / Athena), which now behave like every other range ring.
       const selected = tower.id === this.selectedTowerId
-      // Athena's detection radius, shown on the field whenever a stealth foe is alive — so a novice
-      // who followed the 'station Athena' hint can SEE whether her owl actually covers the lane.
-      if (!selected && stealthAlive && TOWER_STATS[tower.god].auraBuff?.detect) {
-        const r = this.towerEff(tower).range * siteBuffAt(tower.pos, tower.god).rangeMul
-        g.lineStyle(1.5, 0x8fe3c8, 0.4)
-        g.strokeCircle(tower.pos.x, tower.pos.y, r)
-        g.fillStyle(0x8fe3c8, 0.05)
-        g.fillCircle(tower.pos.x, tower.pos.y, r)
-      }
       if (!selected && tower.id === this.hoveredTowerId) {
         // faint hover ring — the affordance that says "I'm clickable"
         const stats = TOWER_STATS[tower.god]

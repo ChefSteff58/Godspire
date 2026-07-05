@@ -32,6 +32,8 @@ export interface Enemy {
   slowTimerMs: number
   /** Hidden — single-target towers can't target it unless a detector (Athena) is near. */
   stealth: boolean
+  /** Climbing out of the hellmouth — UNtargetable until it clears the rim (set on fresh spawn). */
+  emerging?: boolean
   /** Set on boss enemies — selects the archetype in BOSS_ROSTER for visuals + mechanics. */
   bossId?: BossId
   /** Nemean: no single hit may exceed this (applied before armor in damageEnemy). */

@@ -1,12 +1,12 @@
 import { useGameStore } from '../../state/gameStore'
 import { GOD_ORDER, TOWER_STATS } from '../../core/data/towers'
 import { hasSprite, spriteUrl } from '../../game/assets/manifest'
-import { godHex } from '../kit/godColor'
 
 /**
- * The tower shop — Arcade-Shrine redesign (M9-S5): 8 chunky cards, 56px portraits on
- * element-colored backplates, FULL god names that never truncate, bouncy hover. Fit math:
- * header ~22 + 8×60 cards + 7×2 gaps + padding 16 = 532 ≤ 540px canvas column.
+ * The tower shop — Arcade-Shrine (M9-S5, de-colored + big-portrait pass 2026-07-05): 8 chunky cards,
+ * BIG portraits (the god fills the box, head-to-feet), FULL god names that never truncate, bouncy
+ * hover. No element color-coding (user call). Fit: header ~22 + 8×62 cards + 7×2 gaps + padding —
+ * the rail column flexes to the canvas height and is overflow-hidden, so it never crops the field.
  */
 export function RightRail() {
   const placingGod = useGameStore((s) => s.placingGod)
@@ -23,7 +23,6 @@ export function RightRail() {
         const stats = TOWER_STATS[god]
         const active = placingGod === god
         const affordable = gold >= stats.cost
-        const hex = godHex(god)
         const nudge = affordable && !active && gold > 600 // hoarding (~3× the cheapest god) → nudge to spend
         return (
           <button
@@ -31,8 +30,8 @@ export function RightRail() {
             onClick={() => (active ? cancelPlacing() : beginPlacing(god))}
             disabled={!affordable && !active}
             title={`${stats.blurb} — hotkey ${i + 1}; shift-click the map to place several`}
-            style={active ? { boxShadow: `0 0 10px 1px ${hex}66` } : nudge ? { boxShadow: `0 0 8px 1px ${hex}55` } : undefined}
-            className={`arcade-bevel arcade-raise relative flex h-[60px] items-center gap-2 overflow-hidden rounded-md pr-2 text-left ${nudge ? 'node-breathe ' : ''}${
+            style={active ? { boxShadow: '0 0 10px 1px #f5d06188' } : nudge ? { boxShadow: '0 0 8px 1px #f5d06155' } : undefined}
+            className={`arcade-bevel arcade-raise relative flex h-[62px] items-center gap-2 overflow-hidden rounded-md pr-2 text-left ${nudge ? 'node-breathe ' : ''}${
               active
                 ? 'bg-amber-400/90 text-slate-900'
                 : affordable
@@ -40,21 +39,19 @@ export function RightRail() {
                   : 'cursor-not-allowed bg-shrine-slab/50 text-shrine-marble/40'
             }`}
           >
-            {/* element strip — the god's color reads before the name does */}
-            <span className="h-full w-[3px] shrink-0" style={{ background: hex }} />
-            {/* 56px portrait on an element-tinted backplate */}
+            {/* BIG portrait — the god fills the box, head-to-feet. The sprite is zoomed inside an
+                overflow-hidden frame to eat its transparent padding (no element-colored backplate). */}
             <span
-              className={`relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded ${affordable || active ? '' : 'grayscale'}`}
-              style={{ background: `${hex}${active ? '55' : '2e'}` }}
+              className={`relative flex h-[58px] w-[58px] shrink-0 items-center justify-center overflow-hidden rounded ${affordable || active ? '' : 'grayscale'}`}
             >
               {hasSprite(god) ? (
                 <img
                   src={spriteUrl(god)}
                   alt={stats.name}
-                  className="h-[50px] w-[50px] object-contain [image-rendering:pixelated]"
+                  className="h-full w-full scale-[1.32] object-contain [image-rendering:pixelated]"
                 />
               ) : (
-                <span className="text-2xl leading-none">{stats.icon}</span>
+                <span className="text-3xl leading-none">{stats.icon}</span>
               )}
               {stats.canHitAir && (
                 <span className="absolute -right-0.5 -top-0.5 rounded-bl bg-black/70 px-0.5 text-[9px] leading-tight" title="Strikes flying foes">

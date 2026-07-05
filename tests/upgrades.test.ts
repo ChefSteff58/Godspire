@@ -160,14 +160,14 @@ describe('demeterIncome', () => {
   })
 
   it('Cornucopia adds flat per-wave gold (wave-independent)', () => {
-    const d = tower('demeter', 2, 0) // +50 +100
-    expect(demeterIncome(d, 1)).toBe(50 + 150)
-    expect(demeterIncome(d, 20)).toBe(50 + 150)
+    const d = tower('demeter', 2, 0) // +20 +45 (nerf 2026-07-05: base 20, Cornucopia 20/45)
+    expect(demeterIncome(d, 1)).toBe(20 + 65)
+    expect(demeterIncome(d, 20)).toBe(20 + 65)
   })
 
   it('Vault scales with the wave number', () => {
-    const d = tower('demeter', 0, 1) // Seed Capital: +4 × wave (fleet retune: Plutus dominance capped)
-    expect(demeterIncome(d, 10)).toBe(50 + 4 * 10)
-    expect(demeterIncome(d, 20)).toBe(50 + 4 * 20)
+    const d = tower('demeter', 0, 1) // Seed Capital: +2 × wave (nerf 2026-07-05: base 20, Vault 2/3/4)
+    expect(demeterIncome(d, 10)).toBe(20 + 2 * 10)
+    expect(demeterIncome(d, 20)).toBe(20 + 2 * 20)
   })
 })

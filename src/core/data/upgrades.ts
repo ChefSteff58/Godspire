@@ -101,18 +101,18 @@ export const UPGRADES: Record<GodKind, GodUpgrades> = {
       name: 'Cornucopia',
       blurb: 'Steady, reliable passive income — plant it and get richer.',
       tiers: [
-        { name: 'Fertile Fields', cost: 200, desc: 'Tilled and sown — a dependable +50 gold every wave.', effect: { incomePerWaveAdd: 50 } },
-        { name: 'Bountiful Harvest', cost: 360, desc: 'The fields overflow — +100 gold harvested every wave.', effect: { incomePerWaveAdd: 100 } },
-        { name: 'Horn of Plenty', cost: 700, desc: 'A cornucopia that never empties — +220 gold every wave.', effect: { incomePerWaveAdd: 220 } },
+        { name: 'Fertile Fields', cost: 200, desc: 'Tilled and sown — a dependable +20 gold every wave.', effect: { incomePerWaveAdd: 20 } },
+        { name: 'Bountiful Harvest', cost: 360, desc: 'The fields overflow — +45 gold harvested every wave.', effect: { incomePerWaveAdd: 45 } },
+        { name: 'Horn of Plenty', cost: 700, desc: 'A cornucopia that never empties — +95 gold every wave.', effect: { incomePerWaveAdd: 95 } },
       ],
     },
     B: {
       name: 'Vault of Plutus',
       blurb: 'Speculative wealth that scales with the wave — pays off late.',
       tiers: [
-        { name: 'Seed Capital', cost: 220, desc: 'Plant gold to grow gold — the payout swells with the wave (+4×wave).', effect: { incomeWaveScaleAdd: 4 } },
-        { name: 'Compound Growth', cost: 420, desc: 'Interest upon interest — +6×wave heaped on each harvest.', effect: { incomeWaveScaleAdd: 6 } },
-        { name: 'Wealth of the Underworld', cost: 820, desc: 'Plutus throws open the vault — +10×wave, riches that snowball late.', effect: { incomeWaveScaleAdd: 10 } },
+        { name: 'Seed Capital', cost: 220, desc: 'Plant gold to grow gold — the payout swells with the wave (+2×wave).', effect: { incomeWaveScaleAdd: 2 } },
+        { name: 'Compound Growth', cost: 420, desc: 'Interest upon interest — +3×wave heaped on each harvest.', effect: { incomeWaveScaleAdd: 3 } },
+        { name: 'Wealth of the Underworld', cost: 820, desc: 'Plutus throws open the vault — +4×wave, riches that snowball late.', effect: { incomeWaveScaleAdd: 4 } },
       ],
     },
   },
@@ -312,7 +312,7 @@ export function auraBuff(tower: Tower): { damageMul: number; fireRateMul: number
   }
 }
 
-export const DEMETER_BASE_INCOME = 50
+export const DEMETER_BASE_INCOME = 20 // stopgap nerf (was 50) — full redesign in M12
 
 /** Gold a Demeter farm pays out when a wave clears (0 for non-Demeter towers). Pure. */
 export function demeterIncome(tower: Tower, wave: number): number {
