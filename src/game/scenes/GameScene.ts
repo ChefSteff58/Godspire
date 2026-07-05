@@ -171,6 +171,9 @@ export class GameScene extends Phaser.Scene {
   private hoveredTowerId: string | null = null
   /** prefers-reduced-motion: camera shake/flash/zoom are gated on this (sprite tweens stay). */
   private reduceMotion = false
+  /** Cached buildable-pip heatmap (recomputed only when the placing god or tower count changes). */
+  private legalDotsKey = ''
+  private legalDots: Vec2[] = []
   private pendingPreviewWave: number | null = null // a draft modal would swallow the telegraph
   // True when the Wang ground tileset rendered this boot — gates the terrain-plot fallback AND the
   // creature/tower shadows (shadows only read as grounded on real terrain, per the 07-01 playtest).
@@ -2022,10 +2025,21 @@ export class GameScene extends Phaser.Scene {
     const g = this.overlay
     g.clear()
 
+    const stealthAlive = this.enemies.some((e) => e.stealth) // Gorgons on the field → reveal Athena's owl radius
+
     for (const tower of this.towers) {
       // Range ring shows ONLY for the selected tower (or every tower in debug) — never always-on,
       // including the support auras (Aphrodite / Athena), which now behave like every other range ring.
       const selected = tower.id === this.selectedTowerId
+      // Athena's detection radius, shown on the field whenever a stealth foe is alive — so a novice
+      // who followed the 'station Athena' hint can SEE whether her owl actually covers the lane.
+      if (!selected && stealthAlive && TOWER_STATS[tower.god].auraBuff?.detect) {
+        const r = this.towerEff(tower).range * siteBuffAt(tower.pos, tower.god).rangeMul
+        g.lineStyle(1.5, 0x8fe3c8, 0.4)
+        g.strokeCircle(tower.pos.x, tower.pos.y, r)
+        g.fillStyle(0x8fe3c8, 0.05)
+        g.fillCircle(tower.pos.x, tower.pos.y, r)
+      }
       if (!selected && tower.id === this.hoveredTowerId) {
         // faint hover ring — the affordance that says "I'm clickable"
         const stats = TOWER_STATS[tower.god]
@@ -2178,6 +2192,21 @@ export class GameScene extends Phaser.Scene {
     const stats = TOWER_STATS[placingGod]
     const ok = this.canPlaceGod(placingGod, this.pointer) && this.run.canAfford(stats.cost)
     const tint = ok ? 0x6be36b : 0xff5566
+    // buildable-spot heatmap: faint green pips on every legal cell so late-game stackers stop
+    // hunting blind for the last pocket. The legal set is pointer-INDEPENDENT, so recompute it only
+    // when the god or tower count changes — then just redraw the cached pips each frame.
+    const legalKey = `${placingGod}:${this.towers.length}`
+    if (legalKey !== this.legalDotsKey) {
+      this.legalDotsKey = legalKey
+      this.legalDots = []
+      for (let x = 24; x < GAME_WIDTH - 8; x += 34) {
+        for (let y = 24; y < GAME_HEIGHT - 8; y += 34) {
+          if (this.canPlaceGod(placingGod, { x, y })) this.legalDots.push({ x, y })
+        }
+      }
+    }
+    g.fillStyle(0x6be36b, 0.16)
+    for (const d of this.legalDots) g.fillCircle(d.x, d.y, 2)
     // sacred ground: placing inside a site's blessing shows its soft gold ring (M10-S6)
     for (const s of SITES) {
       if (Math.hypot(this.pointer.x - s.pos.x, this.pointer.y - s.pos.y) <= s.radius) {
