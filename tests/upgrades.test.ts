@@ -6,6 +6,7 @@ import {
   demeterIncome,
   nextTier,
   canUpgradePath,
+  UPGRADES,
 } from '../src/core/data/upgrades'
 import { createTower, type Tower } from '../src/core/entities/tower'
 import { TOWER_STATS } from '../src/core/data/towers'
@@ -52,20 +53,54 @@ describe('cross-path rule (one main, one secondary capped at tier 1)', () => {
     expect(canUpgradePath(tower('zeus', 0, 0), 'B')).toBe(true)
   })
 
-  it('a maxed main still permits the other path to tier 1, then locks it', () => {
-    expect(canUpgradePath(tower('zeus', 3, 0), 'B')).toBe(true) // secondary to tier 1 is fine
-    expect(canUpgradePath(tower('zeus', 3, 1), 'B')).toBe(false) // can't push the secondary past 1
-    expect(canUpgradePath(tower('zeus', 3, 0), 'A')).toBe(false) // main already maxed
+  it('a deep main permits the dip to tier 2, then locks it (L4/L5 rule)', () => {
+    expect(canUpgradePath(tower('zeus', 5, 0), 'B')).toBe(true) // dip to tier 1 is fine
+    expect(canUpgradePath(tower('zeus', 5, 1), 'B')).toBe(true) // dip to tier 2 is now allowed
+    expect(canUpgradePath(tower('zeus', 5, 2), 'B')).toBe(false) // can't push the dip past 2
+    expect(canUpgradePath(tower('zeus', 5, 0), 'A')).toBe(false) // main fully maxed at 5
+    expect(canUpgradePath(tower('zeus', 3, 0), 'A')).toBe(true) // a tier-3 main can still climb to 5
   })
 
-  it('blocks a second path from exceeding tier 1', () => {
-    expect(canUpgradePath(tower('zeus', 2, 1), 'B')).toBe(false)
-    expect(canUpgradePath(tower('zeus', 2, 1), 'A')).toBe(true) // main can still climb
+  it('blocks a second path from exceeding tier 2 (only one deep main)', () => {
+    expect(canUpgradePath(tower('zeus', 3, 2), 'B')).toBe(false) // A is the deep main → B capped at 2
+    expect(canUpgradePath(tower('zeus', 3, 2), 'A')).toBe(true) // the main can still climb
+    expect(canUpgradePath(tower('zeus', 2, 2), 'A')).toBe(true) // (2,2) → either may become the main
   })
 
-  it('nextTier returns null once a path is maxed', () => {
-    expect(nextTier('zeus', 'A', 3)).toBeNull()
+  it('nextTier returns null once a path is maxed at tier 5', () => {
+    expect(nextTier('zeus', 'A', 5)).toBeNull()
+    expect(nextTier('zeus', 'A', 3)?.name).toBe('Herald of the Storm') // T4 now exists
     expect(nextTier('zeus', 'A', 0)?.name).toBe('Forked Spark')
+  })
+
+  it('every god has FIVE tiers on both paths (L4/L5 pass)', () => {
+    for (const g of Object.keys(UPGRADES) as (keyof typeof UPGRADES)[]) {
+      expect(UPGRADES[g].A.tiers.length, `${g} A`).toBe(5)
+      expect(UPGRADES[g].B.tiers.length, `${g} B`).toBe(5)
+    }
+  })
+
+  it('tier costs rise monotonically along each path (exponential-ish curve)', () => {
+    for (const g of Object.keys(UPGRADES) as (keyof typeof UPGRADES)[]) {
+      for (const p of ['A', 'B'] as const) {
+        const costs = UPGRADES[g][p].tiers.map((t) => t.cost)
+        for (let i = 1; i < costs.length; i++) expect(costs[i], `${g} ${p} t${i}`).toBeGreaterThan(costs[i - 1])
+      }
+    }
+  })
+
+  it('CAMO: Hermes\' Sky Sovereign grants stealth detection; base Hermes cannot detect', () => {
+    expect(towerEffectiveStats(tower('hermes')).canDetect).toBe(false)
+    expect(towerEffectiveStats(tower('hermes', 3, 0)).canDetect).toBe(true) // Sky Sovereign (A T3)
+    expect(foldUpgrades('hermes', 3, 0).grantsDetect).toBe(true)
+    // a ground god without the grant still can't detect
+    expect(towerEffectiveStats(tower('zeus', 5, 0)).canDetect).toBe(false)
+  })
+
+  it('SPECIAL badges: Zeus Thunderhead = ANTI-AIR, Hermes Sky Sovereign = CAMO', () => {
+    expect(UPGRADES.zeus.A.tiers[1].special).toBe('ANTI-AIR')
+    expect(UPGRADES.hermes.A.tiers[2].special).toBe('CAMO')
+    expect(UPGRADES.zeus.A.tiers[0].special).toBeUndefined() // plain stat tiers carry no badge
   })
 })
 

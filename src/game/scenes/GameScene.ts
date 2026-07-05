@@ -1079,7 +1079,7 @@ export class GameScene extends Phaser.Scene {
         continue
       }
       const target = selectTarget(
-        { pos: tower.pos, range: eff.range * site.rangeMul, canHitAir: eff.canHitAir, canDetect: aura.detect },
+        { pos: tower.pos, range: eff.range * site.rangeMul, canHitAir: eff.canHitAir, canDetect: eff.canDetect || aura.detect },
         this.enemies,
         this.enemyPos,
         tower.targeting,
@@ -2559,7 +2559,7 @@ export class GameScene extends Phaser.Scene {
         const eff = this.towerEff(tower)
         const aura = this.auraAt(tower.pos)
         target = selectTarget(
-          { pos: tower.pos, range: eff.range * siteBuffAt(tower.pos, tower.god).rangeMul, canHitAir: eff.canHitAir, canDetect: aura.detect },
+          { pos: tower.pos, range: eff.range * siteBuffAt(tower.pos, tower.god).rangeMul, canHitAir: eff.canHitAir, canDetect: eff.canDetect || aura.detect },
           this.enemies,
           this.enemyPos,
           tower.targeting,
