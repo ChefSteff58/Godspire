@@ -32,6 +32,16 @@ export interface RunModifiers {
   charmTargetsAdd: number
   /** Hephaestus: extra spike-trap charges (+N). */
   spikeChargesAdd: number
+  // ── M11 long-shot procs (per-shot RNG rolled in the fire loop; all towers) ──
+  /** Chance [0..1] a shot deals ×critMult damage. */
+  critChance: number
+  critMult: number
+  /** Chance [0..1] a shot chains to a second nearby foe. */
+  chainChance: number
+  /** Chance [0..1] a shot instantly slays a NON-boss. */
+  instakillChance: number
+  /** Chance [0..1] a normally camo-blind tower glimpses a hidden foe this acquisition. */
+  camoRevealChance: number
 }
 
 // SpawnDesc moved to core/entities/enemy.ts (it's enemy-shaped, and onDeath returns it).

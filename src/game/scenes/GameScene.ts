@@ -28,7 +28,7 @@ import {
 } from '../../core/entities/projectile'
 import { selectTarget, type TargetingMode } from '../../core/systems/targeting'
 import { wavePreview } from '../../core/systems/waveManager'
-import { TOWER_STATS, GOD_ORDER, sellValue, type GodKind } from '../../core/data/towers'
+import { TOWER_STATS, GOD_ORDER, sellValue, type GodKind, type TowerStats } from '../../core/data/towers'
 import {
   UPGRADES,
   towerEffectiveStats,
@@ -1095,20 +1095,42 @@ export class GameScene extends Phaser.Scene {
         this.produceSpike(tower, { damage: eff.damage * aura.damageMul, maxCharges: eff.maxCharges + this.run.spikeChargesAdd }, dep) // M11 Forge Everlasting
         continue
       }
+      // M11 All-Seeing Eye — ONE glimpse-roll per shot attempt (throttled below so it can't spin per frame).
+      const canDetect = eff.canDetect || aura.detect || (this.run.camoRevealChance > 0 && Math.random() < this.run.camoRevealChance)
       const target = selectTarget(
-        { pos: tower.pos, range: eff.range * site.rangeMul, canHitAir: eff.canHitAir, canDetect: eff.canDetect || aura.detect },
+        { pos: tower.pos, range: eff.range * site.rangeMul, canHitAir: eff.canHitAir, canDetect },
         this.enemies,
         this.enemyPos,
         tower.targeting,
       )
       this.stepTargets.set(tower.id, target) // updateTowerAnims reuses this pick (no double targeting)
-      if (!target) continue
+      if (!target) {
+        // a glimpse-tower whiff still burns its fire cadence, so the reveal rolls per shot-attempt, not per
+        // frame — otherwise a tower facing only camo foes re-rolls at 60Hz and All-Seeing becomes permanent.
+        if (this.run.camoRevealChance > 0) tower.cooldown = 1 / fireRate
+        continue
+      }
       tower.cooldown = 1 / fireRate
-      const dmg = this.run.effectiveDamage(tower.god, eff.damage * aura.damageMul)
+      const baseDmg = this.run.effectiveDamage(tower.god, eff.damage * aura.damageMul)
       const stats = TOWER_STATS[tower.god]
-      if (stats.splash) this.fireSplash(tower.pos, this.enemyPos(target), dmg, eff.splashRadius, eff.knockback * (tower.god === 'poseidon' ? this.run.knockbackMul : 1), stats.color) // M11 Riptide
-      else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
-      else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
+      // M11 long-shot procs — per-shot rolls, skipped entirely when no proc boon is active (chance 0).
+      let dmg = baseDmg
+      let crit = false
+      if (this.run.critChance > 0 && Math.random() < this.run.critChance) { dmg *= this.run.critMult; crit = true }
+      if (this.run.instakillChance > 0 && target.kind !== 'boss' && Math.random() < this.run.instakillChance) {
+        // Reaper's Cut: slay the TARGET only (never a splash mass-kill) with a direct lethal blow + gold flash
+        this.hitEnemy(target, (target.hp + (target.armor ?? 0)) * 2 + 10, 0xffe066)
+        this.critFlash(this.enemyPos(target), true)
+      } else {
+        this.fireAt(tower, target, dmg, eff, stats)
+        if (crit) this.critFlash(this.enemyPos(target), false)
+      }
+      // Arc of Olympus: a rare SINGLE-target leap to one other nearby foe — base damage (no inherited crit),
+      // and never a second splash even on Poseidon (a leap is one extra verdict, not a whole second wave).
+      if (this.run.chainChance > 0 && Math.random() < this.run.chainChance) {
+        const second = this.chainTarget(tower, eff.range * site.rangeMul, target, eff.canHitAir, canDetect)
+        if (second) this.chainHit(tower, second, baseDmg)
+      }
       this.towerAttackTell(tower, target) // pixel gods: a quick lunge toward the target on each shot
     }
     this.updateTowerAnims(dtMs) // face nearest target + play attack/idle + advance frames
@@ -1912,6 +1934,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Poseidon's tidal slam — damage all GROUND foes in a radius + shove survivors back down the path. */
+  /** One shot's dispatch (splash / hitscan / projectile) — shared by the primary shot and chain procs.
+   * The Poseidon knockback boost (M11 Riptide) rides here so chained splashes shove too. */
+  private fireAt(tower: Tower, target: Enemy, dmg: number, eff: ReturnType<typeof towerEffectiveStats>, stats: TowerStats): void {
+    if (stats.splash) this.fireSplash(tower.pos, this.enemyPos(target), dmg, eff.splashRadius, eff.knockback * (tower.god === 'poseidon' ? this.run.knockbackMul : 1), stats.color)
+    else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
+    else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
+  }
+
+  /** The nearest OTHER in-range foe for an Arc-of-Olympus chain (respects the tower's air/camo gates). */
+  private chainTarget(tower: Tower, range: number, exclude: Enemy, canHitAir: boolean, canDetect: boolean): Enemy | null {
+    const others = this.enemies.filter((e) => e.id !== exclude.id)
+    return selectTarget({ pos: tower.pos, range, canHitAir, canDetect }, others, this.enemyPos, 'closest')
+  }
+
+  /** Arc of Olympus (M11): a SINGLE-target lightning leap — a brief arc VFX + one direct hit (no splash),
+   * so a chain is always exactly one extra foe regardless of the god (splash gods don't re-blast). */
+  private chainHit(tower: Tower, target: Enemy, dmg: number): void {
+    const to = this.enemyPos(target)
+    const arc = this.add.graphics().setDepth(6.4)
+    arc.lineStyle(2, 0xbfe3ff, 0.9).lineBetween(tower.pos.x, tower.pos.y, to.x, to.y)
+    this.tweens.add({ targets: arc, alpha: 0, duration: 160, onComplete: () => arc.destroy() })
+    this.hitEnemy(target, dmg, 0xbfe3ff)
+  }
+
+  /** A gold flash on a crit / instakill (M11) — additive, brief, cheap. */
+  private critFlash(pos: Vec2, big: boolean): void {
+    const flash = this.add.circle(pos.x, pos.y, big ? 20 : 12, 0xffe066, 0.85).setDepth(7).setBlendMode(Phaser.BlendModes.ADD)
+    this.tweens.add({ targets: flash, scale: big ? 2.4 : 1.8, alpha: 0, duration: big ? 340 : 220, onComplete: () => flash.destroy() })
+  }
+
   private fireSplash(origin: Vec2, center: Vec2, damage: number, radius: number, knockback: number, sparkColor = 0x3a8fb5): void {
     this.drawSplash(origin, center, radius)
     for (let j = this.enemies.length - 1; j >= 0; j--) {

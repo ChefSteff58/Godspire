@@ -73,7 +73,7 @@ export class RunController {
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1, fireRateMul: 1, bossDamageMul: 1, incomeMul: 1, goldPerKillAdd: 0, startingShield: 0, secondWindStart: false, draftBonusOptions: 0 }
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
-  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0 }
+  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0, critChance: 0, critMult: 1, chainChance: 0, instakillChance: 0, camoRevealChance: 0 }
   private persistentEffects: BoonEffect[] = []
   /** How many times each boon id has been drafted — de-weights repeats in later drafts. */
   private boonCounts = new Map<string, number>()
@@ -353,6 +353,12 @@ export class RunController {
   get auraRangeMul(): number { return this.modifiers.auraRangeMul }
   get charmTargetsAdd(): number { return this.modifiers.charmTargetsAdd }
   get spikeChargesAdd(): number { return this.modifiers.spikeChargesAdd }
+  // ── M11 long-shot proc reads (rolled per shot in the fire loop) ──
+  get critChance(): number { return this.modifiers.critChance }
+  get critMult(): number { return this.modifiers.critMult }
+  get chainChance(): number { return this.modifiers.chainChance }
+  get instakillChance(): number { return this.modifiers.instakillChance }
+  get camoRevealChance(): number { return this.modifiers.camoRevealChance }
 
   snapshot(): RunSnapshot {
     return {

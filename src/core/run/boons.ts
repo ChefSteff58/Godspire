@@ -31,6 +31,11 @@ export type BoonEffect =
   | { kind: 'auraRangeMul'; value: number } // Athena aura radius
   | { kind: 'charmTargetsAdd'; value: number } // Aphrodite simultaneous charms
   | { kind: 'spikeChargesAdd'; value: number } // Hephaestus spike charges
+  // ── M11 long-shot procs (all towers; rolled per shot in the fire loop) ──
+  | { kind: 'critChance'; chance: number; mult: number } // % of shots deal ×mult
+  | { kind: 'chainChance'; chance: number } // % of shots leap to a 2nd foe
+  | { kind: 'instakillChance'; chance: number } // % chance to slay a non-boss outright
+  | { kind: 'camoRevealChance'; chance: number } // % chance per acquisition to see a hidden foe
   // ── combinators ──
   | { kind: 'composite'; effects: BoonEffect[] }
   | { kind: 'coinflipFold'; win: BoonEffect; lose: BoonEffect } // 50/50 on pick
@@ -58,6 +63,11 @@ export const TOWER_DAMAGE_CAP = 12
 export const DEMETER_INCOME_CAP = 4
 export const KNOCKBACK_CAP = 4
 export const AURA_RANGE_CAP = 3
+// M11 proc-chance caps — stacking copies can't guarantee a proc (keeps long-shots long)
+export const CRIT_CHANCE_CAP = 0.5
+export const CHAIN_CHANCE_CAP = 0.5
+export const INSTAKILL_CHANCE_CAP = 0.1
+export const CAMO_REVEAL_CAP = 0.25
 
 export const BOON_POOL: readonly Boon[] = [
   // ── Economy ──
@@ -97,6 +107,12 @@ export const BOON_POOL: readonly Boon[] = [
   // ── Synergy / build-defining ──
   { id: 'syn-storm-front', name: 'Storm Front', desc: 'Zeus +35% damage and all gods +10% fire rate.', flavor: 'Zeus picks the target. Hermes picks the tempo.', icon: '🌩️', rarity: 'rare', category: 'syn', effect: { kind: 'composite', effects: [{ kind: 'godDamageMul', god: 'zeus', value: 1.35 }, { kind: 'fireRateMul', value: 1.1 }] } },
   { id: 'syn-gamblers-laurel', name: "Gambler's Laurel", desc: 'Coin flip: +120% all-god damage… or −20%.', flavor: "Heads, you're a legend. Tails, the Fates laughed.", icon: '🎲', rarity: 'legendary', category: 'syn', effect: { kind: 'coinflipFold', win: { kind: 'towerDamageMul', value: 2.2 }, lose: { kind: 'towerDamageMul', value: 0.8 } } },
+
+  // ── Long-shot procs (M11 S3): rare-but-electric per-shot rolls, all towers ──
+  { id: 'proc-critical-favor', name: 'Critical Favor', desc: '10% of shots strike for ×3 damage.', flavor: 'Sometimes the Fates guide the blow. Sometimes they just enjoy the mess.', icon: '💥', rarity: 'epic', category: 'off', effect: { kind: 'critChance', chance: 0.1, mult: 3 } },
+  { id: 'proc-reapers-cut', name: "Reaper's Cut", desc: '1% chance to instantly slay a non-boss foe.', flavor: "Atropos keeps shears for exactly this. She's not picky about when.", icon: '☠️', rarity: 'epic', category: 'off', effect: { kind: 'instakillChance', chance: 0.01 } },
+  { id: 'proc-arc-of-olympus', name: 'Arc of Olympus', desc: '5% of shots leap to a second nearby foe.', flavor: 'One bolt, two verdicts. Efficiency is a virtue on Olympus.', icon: '⚡', rarity: 'rare', category: 'off', effect: { kind: 'chainChance', chance: 0.05 } },
+  { id: 'proc-all-seeing-eye', name: 'All-Seeing Eye', desc: 'Every tower gets a small chance to glimpse hidden (camo) foes.', flavor: 'Now and then, the whole pantheon looks the same way at once. Hide from that.', icon: '👁️', rarity: 'legendary', category: 'util', effect: { kind: 'camoRevealChance', chance: 0.03 } },
 ]
 
 /** A fresh RunModifiers seeded from the meta save (before any boon). godDamageMul covers every god. */
@@ -116,6 +132,11 @@ export function baseRunModifiers(meta: Modifiers): RunModifiers {
     auraRangeMul: 1,
     charmTargetsAdd: 0,
     spikeChargesAdd: 0,
+    critChance: 0,
+    critMult: 1,
+    chainChance: 0,
+    instakillChance: 0,
+    camoRevealChance: 0,
   }
 }
 
@@ -150,6 +171,10 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
     else if (e.kind === 'auraRangeMul') rm.auraRangeMul *= e.value
     else if (e.kind === 'charmTargetsAdd') rm.charmTargetsAdd += e.value
     else if (e.kind === 'spikeChargesAdd') rm.spikeChargesAdd += e.value
+    else if (e.kind === 'critChance') { rm.critChance += e.chance; rm.critMult = Math.max(rm.critMult, e.mult) }
+    else if (e.kind === 'chainChance') rm.chainChance += e.chance
+    else if (e.kind === 'instakillChance') rm.instakillChance += e.chance
+    else if (e.kind === 'camoRevealChance') rm.camoRevealChance += e.chance
   }
   rm.fireRateMul = Math.min(rm.fireRateMul, FIRE_RATE_CAP)
   rm.towerDamageMul = Math.min(rm.towerDamageMul, TOWER_DAMAGE_CAP)
@@ -159,5 +184,9 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
   rm.demeterIncomeMul = Math.min(rm.demeterIncomeMul, DEMETER_INCOME_CAP)
   rm.knockbackMul = Math.min(rm.knockbackMul, KNOCKBACK_CAP)
   rm.auraRangeMul = Math.min(rm.auraRangeMul, AURA_RANGE_CAP)
+  rm.critChance = Math.min(rm.critChance, CRIT_CHANCE_CAP)
+  rm.chainChance = Math.min(rm.chainChance, CHAIN_CHANCE_CAP)
+  rm.instakillChance = Math.min(rm.instakillChance, INSTAKILL_CHANCE_CAP)
+  rm.camoRevealChance = Math.min(rm.camoRevealChance, CAMO_REVEAL_CAP)
   return rm
 }

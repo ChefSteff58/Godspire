@@ -9,7 +9,7 @@ import {
   WAVE_INCOME_PER_WAVE,
 } from '../src/core/economy/ledger'
 import { enemyHp, enemyCount, enemySpeed, waveSpec } from '../src/core/systems/waveManager'
-import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP, DEMETER_INCOME_CAP, boonGod } from '../src/core/run/boons'
+import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP, DEMETER_INCOME_CAP, INSTAKILL_CHANCE_CAP, boonGod } from '../src/core/run/boons'
 import { generateDraft, scheduleNextDraft } from '../src/core/run/draft'
 import { GOD_ORDER } from '../src/core/data/towers'
 import { BASE_MODIFIERS } from '../src/core/progress/rules'
@@ -116,6 +116,25 @@ describe('foldRunModifiers', () => {
   it('soft-caps the per-god muls so endless stacking cannot break (adds stay uncapped)', () => {
     const rm = foldRunModifiers(BASE_MODIFIERS, Array(10).fill(fx('core-demeter-golden-harvest')))
     expect(rm.demeterIncomeMul).toBe(DEMETER_INCOME_CAP)
+  })
+
+  it('folds the M11 long-shot proc chances (crit / chain / instakill / camo)', () => {
+    const rm = foldRunModifiers(BASE_MODIFIERS, [
+      fx('proc-critical-favor'), // critChance 0.1, mult 3
+      fx('proc-arc-of-olympus'), // chainChance 0.05
+      fx('proc-reapers-cut'), // instakillChance 0.01
+      fx('proc-all-seeing-eye'), // camoRevealChance 0.03
+    ])
+    expect(rm.critChance).toBeCloseTo(0.1)
+    expect(rm.critMult).toBe(3)
+    expect(rm.chainChance).toBeCloseTo(0.05)
+    expect(rm.instakillChance).toBeCloseTo(0.01)
+    expect(rm.camoRevealChance).toBeCloseTo(0.03)
+  })
+
+  it('caps proc chances so stacking copies can never guarantee a proc', () => {
+    const rm = foldRunModifiers(BASE_MODIFIERS, Array(20).fill(fx('proc-reapers-cut'))) // 0.01×20 = 0.2 → capped
+    expect(rm.instakillChance).toBe(INSTAKILL_CHANCE_CAP)
   })
 })
 
