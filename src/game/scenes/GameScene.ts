@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { useGameStore } from '../../state/gameStore'
+import { useGameStore, type SelectedFarm } from '../../state/gameStore'
 import { useSessionStore } from '../../state/sessionStore'
 import { PathSystem, OLYMPUS_PATH } from '../../core/map/path'
 import { OBSTACLES } from '../../core/map/obstacles'
@@ -36,7 +36,7 @@ import {
   nextTier,
   canUpgradePath,
 } from '../../core/data/upgrades'
-import { demeterHerdPayout } from '../../core/economy/farms'
+import { demeterHerdPayout, adjacentCount, clusterMul, CLUSTER_RADIUS } from '../../core/economy/farms'
 import { favorFromRun } from '../../core/progress/rules'
 import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
@@ -2107,10 +2107,34 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── overlay: range rings, debug target lines, HP rings ──
+  /** M12 S3 — make the Demeter cluster synergy legible: golden links between farms within cluster
+   *  range (the "harvest network"), brighter for a selected farm, whose cluster reach also shows so
+   *  you can see where to drop the next farm. Bounded, subtle — reads as guidance, not noise. */
+  private drawFarmClusters(g: Phaser.GameObjects.Graphics): void {
+    const farms = this.towers.filter((t) => t.god === 'demeter')
+    for (let i = 0; i < farms.length; i++) {
+      for (let j = i + 1; j < farms.length; j++) {
+        const a = farms[i].pos
+        const b = farms[j].pos
+        if (Math.hypot(a.x - b.x, a.y - b.y) > CLUSTER_RADIUS) continue
+        const hot = farms[i].id === this.selectedTowerId || farms[j].id === this.selectedTowerId
+        g.lineStyle(hot ? 3 : 2, 0xf5d061, hot ? 0.8 : 0.35)
+        g.lineBetween(a.x, a.y, b.x, b.y)
+      }
+    }
+    const sel = farms.find((f) => f.id === this.selectedTowerId)
+    if (sel) {
+      g.lineStyle(1.5, 0xf5d061, 0.3) // the cluster reach — a guide for the next farm's spot
+      g.strokeCircle(sel.pos.x, sel.pos.y, CLUSTER_RADIUS)
+    }
+  }
+
   private renderOverlay(): void {
     const showDebug = useGameStore.getState().showDebug
     const g = this.overlay
     g.clear()
+
+    this.drawFarmClusters(g) // M12 S3 — the golden "harvest network" under the range rings
 
     for (const tower of this.towers) {
       // Range ring shows ONLY for the selected tower (or every tower in debug) — never always-on,
@@ -2415,9 +2439,25 @@ export class GameScene extends Phaser.Scene {
       targets: stats.damage > 0 && !stats.deployable,
       canHitAir: this.towerEff(tower).canHitAir,
       detectsInnate: stats.auraBuff?.detect ?? false,
+      farm: this.selectedFarmInfo(tower),
       pathA: pathInfo('A'),
       pathB: pathInfo('B'),
     })
+  }
+
+  /** M12 S3 — a selected Demeter farm's live economics, so the inspector can teach the cluster mechanic. */
+  private selectedFarmInfo(tower: Tower): SelectedFarm | null {
+    if (tower.god !== 'demeter') return null
+    const farms = this.towers.filter((t) => t.god === 'demeter')
+    const idx = farms.findIndex((f) => f.id === tower.id)
+    const nearby = adjacentCount(farms.map((f) => f.pos), idx)
+    const base = demeterHerdPayout(farms, this.run.wave).find((p) => p.id === tower.id)?.income ?? 0
+    return {
+      income: Math.round(base * this.run.demeterIncomeMul),
+      clusterPct: Math.round((clusterMul(nearby) - 1) * 100),
+      nearby,
+      farmCount: farms.length,
+    }
   }
 
   private upgradeSelectedTower(path: 'A' | 'B'): void {

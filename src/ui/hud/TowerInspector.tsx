@@ -56,6 +56,24 @@ export function TowerInspector() {
       {sel.detectsInnate && (
         <p className="text-[11px] text-sky-300/90">👁 Reveals hidden (camo) foes for nearby gods.</p>
       )}
+      {sel.farm && (
+        <div className="rounded bg-amber-400/10 px-2 py-1.5 text-[11px]">
+          <div className="flex items-center justify-between">
+            <span className="font-pixel font-bold text-amber-200">🌾 Harvest</span>
+            <span className="font-bold text-amber-300">+{sel.farm.income}🪙 / wave</span>
+          </div>
+          {sel.farm.nearby > 0 ? (
+            <p className="mt-0.5 text-amber-200/85">
+              ✦ Cluster bonus <span className="font-bold">+{sel.farm.clusterPct}%</span> — {sel.farm.nearby} farm{sel.farm.nearby > 1 ? 's' : ''} nearby
+            </p>
+          ) : (
+            <p className="mt-0.5 text-shrine-marble/60">Place farms close together for a cluster bonus (up to +30%).</p>
+          )}
+          {sel.farm.farmCount > 1 && (
+            <p className="mt-0.5 text-shrine-marble/50">{sel.farm.farmCount} farms share the harvest — each earns a little less as the herd grows.</p>
+          )}
+        </div>
+      )}
       {sel.targets && (
         <div className="flex items-center gap-1">
           <span className="font-pixel mr-0.5 text-[11px] font-bold uppercase tracking-wide text-shrine-marble/60">Target</span>

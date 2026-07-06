@@ -66,8 +66,22 @@ export interface SelectedTower {
   canHitAir: boolean
   /** Detects stealth innately (Athena's owl) — surfaced so the camo question is answerable. */
   detectsInnate: boolean
+  /** Demeter farms only (null otherwise): live harvest economics for the M12 cluster mechanic. */
+  farm: SelectedFarm | null
   pathA: SelectedTowerPath
   pathB: SelectedTowerPath
+}
+
+/** A selected Demeter farm's live economics — teaches the cluster synergy in the inspector (M12 S3). */
+export interface SelectedFarm {
+  /** Gold this farm pays out per wave right now (after cluster, stacking DR, and boons). */
+  income: number
+  /** Cluster bonus this farm currently gets, as a percent (0 when it has no neighbours). */
+  clusterPct: number
+  /** How many other farms are within cluster range of this one. */
+  nearby: number
+  /** Total farms on the field (so the UI can explain the stacking diminishing returns). */
+  farmCount: number
 }
 
 /** React→Phaser intents. Enqueued by the UI, drained by GameScene each frame (even while paused). */
