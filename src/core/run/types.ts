@@ -42,6 +42,13 @@ export interface RunModifiers {
   instakillChance: number
   /** Chance [0..1] a normally camo-blind tower glimpses a hidden foe this acquisition. */
   camoRevealChance: number
+  // ── M11 build-defining boons (applied as a DYNAMIC fire-time factor from live run state) ──
+  /** Monotheist: ×N to all damage while exactly ONE god type is fielded (1 = inactive). */
+  monotheistMul: number
+  /** Full Pantheon: +this per DISTINCT god fielded (0 = inactive). */
+  pantheonPerGod: number
+  /** Vengeance: +this per life Olympus has lost this run (0 = inactive). */
+  vengeancePerLife: number
 }
 
 // SpawnDesc moved to core/entities/enemy.ts (it's enemy-shaped, and onDeath returns it).

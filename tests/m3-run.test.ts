@@ -9,7 +9,7 @@ import {
   WAVE_INCOME_PER_WAVE,
 } from '../src/core/economy/ledger'
 import { enemyHp, enemyCount, enemySpeed, waveSpec } from '../src/core/systems/waveManager'
-import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP, DEMETER_INCOME_CAP, INSTAKILL_CHANCE_CAP, boonGod } from '../src/core/run/boons'
+import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP, DEMETER_INCOME_CAP, INSTAKILL_CHANCE_CAP, PANTHEON_PER_GOD_CAP, boonGod } from '../src/core/run/boons'
 import { generateDraft, scheduleNextDraft } from '../src/core/run/draft'
 import { GOD_ORDER } from '../src/core/data/towers'
 import { BASE_MODIFIERS } from '../src/core/progress/rules'
@@ -135,6 +135,15 @@ describe('foldRunModifiers', () => {
   it('caps proc chances so stacking copies can never guarantee a proc', () => {
     const rm = foldRunModifiers(BASE_MODIFIERS, Array(20).fill(fx('proc-reapers-cut'))) // 0.01×20 = 0.2 → capped
     expect(rm.instakillChance).toBe(INSTAKILL_CHANCE_CAP)
+  })
+
+  it('folds the M11 build-defining boons (monotheist max, pantheon/vengeance summed + capped)', () => {
+    const rm = foldRunModifiers(BASE_MODIFIERS, [fx('syn-monotheist'), fx('syn-full-pantheon'), fx('syn-vengeance')])
+    expect(rm.monotheistMul).toBe(2)
+    expect(rm.pantheonPerGod).toBeCloseTo(0.06)
+    expect(rm.vengeancePerLife).toBeCloseTo(0.02)
+    const capped = foldRunModifiers(BASE_MODIFIERS, Array(5).fill(fx('syn-full-pantheon'))) // 0.3 → capped
+    expect(capped.pantheonPerGod).toBe(PANTHEON_PER_GOD_CAP)
   })
 })
 

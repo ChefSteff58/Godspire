@@ -36,6 +36,10 @@ export type BoonEffect =
   | { kind: 'chainChance'; chance: number } // % of shots leap to a 2nd foe
   | { kind: 'instakillChance'; chance: number } // % chance to slay a non-boss outright
   | { kind: 'camoRevealChance'; chance: number } // % chance per acquisition to see a hidden foe
+  // ── M11 build-defining (a dynamic fire-time factor from live run state; folded as flags/rates) ──
+  | { kind: 'monotheistMul'; value: number } // ×dmg while exactly one god fielded
+  | { kind: 'pantheonPerGod'; value: number } // +dmg per distinct god fielded
+  | { kind: 'vengeancePerLife'; value: number } // +dmg per life lost this run
   // ── combinators ──
   | { kind: 'composite'; effects: BoonEffect[] }
   | { kind: 'coinflipFold'; win: BoonEffect; lose: BoonEffect } // 50/50 on pick
@@ -68,6 +72,10 @@ export const CRIT_CHANCE_CAP = 0.5
 export const CHAIN_CHANCE_CAP = 0.5
 export const INSTAKILL_CHANCE_CAP = 0.1
 export const CAMO_REVEAL_CAP = 0.25
+// M11 build-defining caps (the dynamic factor stacks with the damage caps, so keep its parts bounded)
+export const MONOTHEIST_CAP = 3
+export const PANTHEON_PER_GOD_CAP = 0.15
+export const VENGEANCE_PER_LIFE_CAP = 0.05
 
 export const BOON_POOL: readonly Boon[] = [
   // ── Economy ──
@@ -113,6 +121,11 @@ export const BOON_POOL: readonly Boon[] = [
   { id: 'proc-reapers-cut', name: "Reaper's Cut", desc: '1% chance to instantly slay a non-boss foe.', flavor: "Atropos keeps shears for exactly this. She's not picky about when.", icon: '☠️', rarity: 'epic', category: 'off', effect: { kind: 'instakillChance', chance: 0.01 } },
   { id: 'proc-arc-of-olympus', name: 'Arc of Olympus', desc: '5% of shots leap to a second nearby foe.', flavor: 'One bolt, two verdicts. Efficiency is a virtue on Olympus.', icon: '⚡', rarity: 'rare', category: 'off', effect: { kind: 'chainChance', chance: 0.05 } },
   { id: 'proc-all-seeing-eye', name: 'All-Seeing Eye', desc: 'Every tower gets a small chance to glimpse hidden (camo) foes.', flavor: 'Now and then, the whole pantheon looks the same way at once. Hide from that.', icon: '👁️', rarity: 'legendary', category: 'util', effect: { kind: 'camoRevealChance', chance: 0.03 } },
+
+  // ── Build-defining (M11 S4): a dynamic damage factor from your live roster / how badly it's going ──
+  { id: 'syn-monotheist', name: 'Monotheist', desc: 'While you field only ONE god, that god deals ×2 damage.', flavor: 'Pick a favorite. Commit to the bit. The others will understand. They will not.', icon: '🔱', rarity: 'legendary', category: 'syn', effect: { kind: 'monotheistMul', value: 2 } },
+  { id: 'syn-full-pantheon', name: 'Full Pantheon', desc: '+6% all-god damage for each DIFFERENT god you field.', flavor: 'A quarrel of gods is still, technically, a team.', icon: '🏛️', rarity: 'epic', category: 'syn', effect: { kind: 'pantheonPerGod', value: 0.06 } },
+  { id: 'syn-vengeance', name: 'Vengeance', desc: '+2% damage for every life Olympus has lost this run.', flavor: 'Nothing sharpens a god like a grudge and a body count.', icon: '💢', rarity: 'rare', category: 'syn', effect: { kind: 'vengeancePerLife', value: 0.02 } },
 ]
 
 /** A fresh RunModifiers seeded from the meta save (before any boon). godDamageMul covers every god. */
@@ -137,6 +150,9 @@ export function baseRunModifiers(meta: Modifiers): RunModifiers {
     chainChance: 0,
     instakillChance: 0,
     camoRevealChance: 0,
+    monotheistMul: 1,
+    pantheonPerGod: 0,
+    vengeancePerLife: 0,
   }
 }
 
@@ -175,6 +191,9 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
     else if (e.kind === 'chainChance') rm.chainChance += e.chance
     else if (e.kind === 'instakillChance') rm.instakillChance += e.chance
     else if (e.kind === 'camoRevealChance') rm.camoRevealChance += e.chance
+    else if (e.kind === 'monotheistMul') rm.monotheistMul = Math.max(rm.monotheistMul, e.value)
+    else if (e.kind === 'pantheonPerGod') rm.pantheonPerGod += e.value
+    else if (e.kind === 'vengeancePerLife') rm.vengeancePerLife += e.value
   }
   rm.fireRateMul = Math.min(rm.fireRateMul, FIRE_RATE_CAP)
   rm.towerDamageMul = Math.min(rm.towerDamageMul, TOWER_DAMAGE_CAP)
@@ -188,5 +207,8 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
   rm.chainChance = Math.min(rm.chainChance, CHAIN_CHANCE_CAP)
   rm.instakillChance = Math.min(rm.instakillChance, INSTAKILL_CHANCE_CAP)
   rm.camoRevealChance = Math.min(rm.camoRevealChance, CAMO_REVEAL_CAP)
+  rm.monotheistMul = Math.min(rm.monotheistMul, MONOTHEIST_CAP)
+  rm.pantheonPerGod = Math.min(rm.pantheonPerGod, PANTHEON_PER_GOD_CAP)
+  rm.vengeancePerLife = Math.min(rm.vengeancePerLife, VENGEANCE_PER_LIFE_CAP)
   return rm
 }

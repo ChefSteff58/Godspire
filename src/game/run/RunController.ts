@@ -73,7 +73,7 @@ export class RunController {
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1, fireRateMul: 1, bossDamageMul: 1, incomeMul: 1, goldPerKillAdd: 0, startingShield: 0, secondWindStart: false, draftBonusOptions: 0 }
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
-  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0, critChance: 0, critMult: 1, chainChance: 0, instakillChance: 0, camoRevealChance: 0 }
+  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0, critChance: 0, critMult: 1, chainChance: 0, instakillChance: 0, camoRevealChance: 0, monotheistMul: 1, pantheonPerGod: 0, vengeancePerLife: 0 }
   private persistentEffects: BoonEffect[] = []
   /** How many times each boon id has been drafted — de-weights repeats in later drafts. */
   private boonCounts = new Map<string, number>()
@@ -335,7 +335,18 @@ export class RunController {
   // ── fire-time stat reads (NEVER baked at placement, so re-folds reach existing towers) ──
 
   effectiveDamage(god: GodKind, baseDamage: number): number {
-    return baseDamage * this.modifiers.towerDamageMul * this.modifiers.godDamageMul[god]
+    return baseDamage * this.modifiers.towerDamageMul * this.modifiers.godDamageMul[god] * this.buildMul()
+  }
+
+  /** M11 build-defining boons — a DYNAMIC damage factor read from live run state (roster + lives lost),
+   * so it re-evaluates every shot as you build/sell gods or bleed lives. 1 when no build boon is active. */
+  private buildMul(): number {
+    const m = this.modifiers
+    let f = 1
+    if (m.pantheonPerGod > 0) f *= 1 + m.pantheonPerGod * this.builtGods.size // reward a broad roster
+    if (m.vengeancePerLife > 0) f *= 1 + m.vengeancePerLife * Math.max(0, this.maxLives - this.lives) // comeback
+    if (m.monotheistMul > 1 && this.builtGods.size === 1) f *= m.monotheistMul // devotion to a single god
+    return f
   }
 
   effectiveFireRate(_god: GodKind, baseFireRate: number): number {

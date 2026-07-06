@@ -109,6 +109,48 @@ describe('RunController — per-god signature boons (M11 S2)', () => {
   })
 })
 
+describe('RunController — build-defining boons (M11 S4)', () => {
+  it('Monotheist ×2 only while exactly one god is fielded', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    run.builtGods = new Set(['zeus'])
+    pick(run, 'syn-monotheist')
+    expect(run.effectiveDamage('zeus', 10)).toBeCloseTo(20) // devotion → ×2
+    run.builtGods = new Set(['zeus', 'apollo']) // a second god breaks it
+    expect(run.effectiveDamage('zeus', 10)).toBeCloseTo(10)
+    run.builtGods = new Set() // no towers at all → no bonus
+    expect(run.effectiveDamage('zeus', 10)).toBeCloseTo(10)
+  })
+
+  it('Full Pantheon scales with the number of DISTINCT gods fielded', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    pick(run, 'syn-full-pantheon') // +6% per distinct god
+    run.builtGods = new Set(['zeus'])
+    expect(run.effectiveDamage('zeus', 100)).toBeCloseTo(106)
+    run.builtGods = new Set(['zeus', 'apollo', 'demeter'])
+    expect(run.effectiveDamage('zeus', 100)).toBeCloseTo(118) // ×(1 + 0.06×3)
+  })
+
+  it('Vengeance grows damage as Olympus bleeds lives (comeback)', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META) // 100 lives
+    pick(run, 'syn-vengeance') // +2% per life lost
+    expect(run.effectiveDamage('zeus', 100)).toBeCloseTo(100) // no lives lost yet
+    run.onLeak(10)
+    expect(run.effectiveDamage('zeus', 100)).toBeCloseTo(120) // ×(1 + 0.02×10)
+  })
+
+  it('the build factor stacks multiplicatively with a per-god damage boon', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    run.builtGods = new Set(['zeus'])
+    pick(run, 'syn-monotheist') // ×2
+    pick(run, 'core-zeus-king-of-storms') // godDamageMul zeus 1.3
+    expect(run.effectiveDamage('zeus', 10)).toBeCloseTo(26) // 10 × 1.3 × 2
+  })
+})
+
 describe('RunController — draft reroll (M11)', () => {
   const openDraft = (run: RunController) => {
     run.draft = [{ type: 'boon', boon: boon('off-divine-wrath') }]
