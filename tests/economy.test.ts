@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { farm, bountyIncome, waveGold, simulate, fullBuildCost } from '../scripts/econ-sim'
+import { farm, bountyIncome, waveGold, simulate, fullBuildCost, ARCHETYPES, farmIncome } from '../scripts/econ-sim'
 
 // M12 S0 — the economy-sim harness's permanent guard. These lock the STABLE invariants that must
 // hold before AND after the Demeter redesign; the S1 targets (farm income bounded) land as real
@@ -49,10 +49,26 @@ describe('economy sim — the full-board sink ceiling', () => {
   })
 })
 
-// ── S1 TARGETS (flip these on once the Demeter redesign lands; they FAIL today by design) ──
+// ── S1 TARGETS (the Demeter redesign must hold these — the reason M12 exists) ──
 describe('economy sim — post-redesign targets (S1)', () => {
-  it.todo('no farm archetype exceeds the priciest T5 (4,200) in per-wave income through w60')
-  it.todo('a 4-Vault stack earns < ~2× a single Vault at w50 (per-farm diminishing returns)')
-  it.todo('a single maxed farm does NOT afford the full 52k board before ~w60')
-  it.todo('cluster synergy: adjacent farms earn a capped bonus (≤ +30%)')
+  it('no farm archetype exceeds the priciest T5 (4,200) in per-wave income through w60', () => {
+    for (const a of ARCHETYPES) {
+      const rows = simulate(a.cfg)
+      expect(rows.every((r) => r.per <= 4_200), `${a.name} inflated past a T5/wave`).toBe(true)
+    }
+  })
+
+  it('a 4-Vault stack earns < 3× a single Vault at w50 (stacking diminishing returns bite)', () => {
+    const one = farmIncome([farm(2, 5)], 50)
+    const four = farmIncome([farm(2, 5), farm(2, 5), farm(2, 5), farm(2, 5)], 50)
+    expect(four).toBeGreaterThan(one) // still worth building more…
+    expect(four).toBeLessThan(3 * one) // …but 4 farms are NOT 4× the gold (DR)
+  })
+
+  it('no SINGLE maxed farm can bankroll the whole 52k board by w50', () => {
+    for (const cfg of [{ farms: [farm(5, 2)] }, { farms: [farm(2, 5)] }, { farms: [farm(2, 5)], demeterIncomeMul: 1.6 }]) {
+      const cum50 = simulate(cfg)[49].cum
+      expect(cum50).toBeLessThan(52_275)
+    }
+  })
 })

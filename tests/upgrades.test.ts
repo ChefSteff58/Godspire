@@ -195,14 +195,14 @@ describe('demeterIncome', () => {
   })
 
   it('Cornucopia adds flat per-wave gold (wave-independent)', () => {
-    const d = tower('demeter', 2, 0) // +20 +45 (nerf 2026-07-05: base 20, Cornucopia 20/45)
-    expect(demeterIncome(d, 1)).toBe(20 + 65)
-    expect(demeterIncome(d, 20)).toBe(20 + 65)
+    const d = tower('demeter', 2, 0) // M12 rescale: base 20, Cornucopia 20/40 → +60 flat
+    expect(demeterIncome(d, 1)).toBe(20 + 60)
+    expect(demeterIncome(d, 20)).toBe(20 + 60)
   })
 
   it('Vault scales with the wave number', () => {
-    const d = tower('demeter', 0, 1) // Seed Capital: +2 × wave (nerf 2026-07-05: base 20, Vault 2/3/4)
-    expect(demeterIncome(d, 10)).toBe(20 + 2 * 10)
-    expect(demeterIncome(d, 20)).toBe(20 + 2 * 20)
+    const d = tower('demeter', 0, 1) // M12 rescale: Seed Capital +1 × wave
+    expect(demeterIncome(d, 10)).toBe(20 + 1 * 10)
+    expect(demeterIncome(d, 20)).toBe(20 + 1 * 20)
   })
 })

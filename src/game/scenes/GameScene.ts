@@ -33,10 +33,10 @@ import {
   UPGRADES,
   towerEffectiveStats,
   auraBuff,
-  demeterIncome,
   nextTier,
   canUpgradePath,
 } from '../../core/data/upgrades'
+import { demeterHerdPayout } from '../../core/economy/farms'
 import { favorFromRun } from '../../core/progress/rules'
 import type { Vec2 } from '../../core/types'
 import { RunController } from '../run/RunController'
@@ -2559,16 +2559,20 @@ export class GameScene extends Phaser.Scene {
     this.deselectTower()
   }
 
-  /** Demeter farms pay out gold when a wave clears (with a floating gold number). */
+  /** Demeter farms pay out gold when a wave clears (with a floating gold number). M12: the whole
+   *  herd is priced together — cluster synergy + stacking diminishing returns (demeterHerdPayout). */
   private payDemeterIncome(): void {
-    for (const t of this.towers) {
-      if (t.god !== 'demeter') continue
-      const income = Math.round(demeterIncome(t, this.run.wave) * this.run.demeterIncomeMul) // M11 Golden Harvest
+    const farms = this.towers.filter((t) => t.god === 'demeter')
+    if (farms.length === 0) return
+    const byId = new Map(farms.map((f) => [f.id, f]))
+    for (const { id, income: base } of demeterHerdPayout(farms, this.run.wave)) {
+      const income = Math.round(base * this.run.demeterIncomeMul) // M11 Golden Harvest boon rides on top
       if (income <= 0) continue
+      const t = byId.get(id)!
       this.run.grantGold(income)
       // play Demeter's harvest animation once on payout ("making money") — playOnce returns to idle by
       // itself when the cycle ends, so there's no stale timer to fire on a farm sold mid-harvest.
-      this.towerArt.get(t.id)?.playOnce('attack')
+      this.towerArt.get(id)?.playOnce('attack')
       this.floatText(t.pos.x, t.pos.y - 20, `+${income}`, '#ffe066')
     }
   }

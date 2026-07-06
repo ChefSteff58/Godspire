@@ -10,6 +10,7 @@
 import { waveIncome } from '../src/core/economy/ledger'
 import { waveSpec } from '../src/core/systems/waveManager'
 import { demeterIncome, UPGRADES } from '../src/core/data/upgrades'
+import { stackMul } from '../src/core/economy/farms'
 import type { Tower } from '../src/core/entities/tower'
 import type { GodKind, UpgradePathKey } from '../src/core/data/towers'
 
@@ -30,13 +31,19 @@ export interface EconConfig {
   incomeMul?: number // Pantheon global wave-income multiplier
 }
 
+/** Total farm income for a herd at `wave` (models M12 stacking DR; cluster=1 here since the
+ *  archetypes are position-less — cluster is bonus-only and unit-tested separately). */
+export function farmIncome(farms: Tower[], wave: number, dMul = 1): number {
+  const stack = stackMul(farms.length)
+  return farms.reduce((s, f) => s + Math.round(demeterIncome(f, wave) * stack * dMul), 0)
+}
+
 /** Gold earned on the wave-`wave` clear for a given board configuration. */
 export function waveGold(wave: number, cfg: EconConfig = {}): number {
   const incomeMul = cfg.incomeMul ?? 1
-  const dMul = cfg.demeterIncomeMul ?? 1
   const wave$ = Math.floor(waveIncome(wave) * incomeMul)
   const bounty$ = bountyIncome(wave)
-  const farm$ = (cfg.farms ?? []).reduce((s, f) => s + Math.round(demeterIncome(f, wave) * dMul), 0)
+  const farm$ = farmIncome(cfg.farms ?? [], wave, cfg.demeterIncomeMul ?? 1)
   return wave$ + bounty$ + farm$
 }
 

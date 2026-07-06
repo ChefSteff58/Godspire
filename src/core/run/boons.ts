@@ -89,6 +89,7 @@ export const MONOTHEIST_CAP = 3
 export const PANTHEON_PER_GOD_CAP = 0.15
 export const VENGEANCE_PER_LIFE_CAP = 0.05
 export const SITE_RADIUS_CAP = 3
+export const BOSS_BOUNTY_CAP = 3 // M12: stacked Fate-Bargain tolls cap at ×3 boss bounty
 
 export const BOON_POOL: readonly Boon[] = [
   // ── Economy ──
@@ -240,5 +241,6 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
   rm.pantheonPerGod = Math.min(rm.pantheonPerGod, PANTHEON_PER_GOD_CAP)
   rm.vengeancePerLife = Math.min(rm.vengeancePerLife, VENGEANCE_PER_LIFE_CAP)
   rm.siteRadiusMul = Math.min(rm.siteRadiusMul, SITE_RADIUS_CAP)
+  rm.bossBountyMul = Math.min(rm.bossBountyMul, BOSS_BOUNTY_CAP) // M12: Fate-Bargain tolls can't compound the economy without limit
   return rm
 }

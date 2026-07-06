@@ -9,7 +9,7 @@ import {
   WAVE_INCOME_PER_WAVE,
 } from '../src/core/economy/ledger'
 import { enemyHp, enemyCount, enemySpeed, waveSpec } from '../src/core/systems/waveManager'
-import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP, DEMETER_INCOME_CAP, INSTAKILL_CHANCE_CAP, PANTHEON_PER_GOD_CAP, boonGod } from '../src/core/run/boons'
+import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP, DEMETER_INCOME_CAP, INSTAKILL_CHANCE_CAP, PANTHEON_PER_GOD_CAP, BOSS_BOUNTY_CAP, boonGod } from '../src/core/run/boons'
 import { generateDraft, generateFateBargain, scheduleNextDraft } from '../src/core/run/draft'
 import { GOD_ORDER } from '../src/core/data/towers'
 import { BASE_MODIFIERS } from '../src/core/progress/rules'
@@ -161,6 +161,11 @@ describe('foldRunModifiers', () => {
       { kind: 'enemyHpMul', value: 1.15 },
     ])
     expect(stacked.enemyHpMul).toBeCloseTo(1.38)
+  })
+
+  it('caps boss-bounty stacking so Fate-Bargain tolls cannot run away with the economy (M12)', () => {
+    const rm = foldRunModifiers(BASE_MODIFIERS, Array(3).fill({ kind: 'bossBountyMul', value: 1.5 })) // 1.5³ = 3.375 → capped
+    expect(rm.bossBountyMul).toBe(BOSS_BOUNTY_CAP)
   })
 })
 

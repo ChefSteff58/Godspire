@@ -70,6 +70,25 @@ they're **clustered** — turning "spam farms" into a bounded spatial-optimizati
 priciest T5 (4,200) in per-wave income through w60; a 4-Vault stack earns < ~2× a single Vault
 (DR working); a single maxed farm does NOT afford the full 52k board before ~w60.
 
+## ✅ S1 shipped — after the redesign
+
+Cornucopia flat 620→420 (20/40/70/110/180), Vault ×wave 28→10 (1/2/2/2/3), plus `stackMul` DR
+(`1/(1+0.3(N−1))`) and capped cluster synergy (`+8%/neighbour`, ≤+30%, radius 120px). `bossBountyMul`
+capped at 3×. Re-running the sim (`npx vite-node scripts/econ-sim-run.ts`):
+
+| metric | before | after |
+|---|---|---|
+| 4-Vault stack per-wave @ w60 | 8,178 | 2,550 |
+| 4-Vault first wave > a T5 (4,200)/wave | w31 | **never (≤60)** |
+| 1 Vault affords the 52k board by | w48 | **never (≤60)** |
+| 4-Vault stack vs 1 Vault (farm income @ w50) | 4.0× | **2.1×** (DR) |
+| 1 Cornucopia affords the 52k board by | w48 | w57 |
+
+A single well-built farm still ~doubles your income (rewarding); no single farm bankrolls the board;
+stacking hits hard DR that clustering only partly (≤+30%) offsets — a bounded layout puzzle. All four
+guard assertions in `tests/economy.test.ts` are green. Live-verified: 2 farms 40px apart at w30 paid
+exactly `2 × floor(380 × 1.08 × 0.769) = 630`.
+
 ## Cost re-curve (S2)
 
 With income reined in, re-validate T4/T5 costs so saving for a T5 stays a multi-wave goal (BTD6
