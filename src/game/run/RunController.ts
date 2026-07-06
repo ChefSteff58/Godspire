@@ -188,6 +188,12 @@ export class RunController {
     this.earnGold(amount)
   }
 
+  /** M11 Early Ascension: the scene picks the ascended god (random from the field) and applies its
+   * damage bump here, so the buff lives in persistentEffects and survives re-folds like any boon. */
+  grantGodBoon(god: GodKind, mul: number): void {
+    this.applyEffect({ kind: 'godDamageMul', god, value: mul })
+  }
+
   cheatGold(): void {
     earn(this.ledger, 1000) // a cheat — deliberately NOT counted in goldEarned
   }
@@ -447,6 +453,8 @@ export class RunController {
       case 'secondWind':
         this.secondWindArmed = true
         break
+      case 'earlyAscension':
+        break // scene-handled (sprite swap + a per-god damage bump via grantGodBoon)
       case 'composite':
         for (const sub of e.effects) this.applyEffect(sub)
         break

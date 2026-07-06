@@ -157,6 +157,9 @@ export class GameScene extends Phaser.Scene {
   private readonly spikeGfx = new Map<string, Phaser.GameObjects.Graphics>()
   // Aphrodite holds a STABLE set of charmed enemy ids per tower, so the slowed foes don't churn.
   private readonly charmedByTower = new Map<string, Set<string>>()
+  // M11 Early Ascension: towers force-ascended by a boon (outside the normal tier-5 gate).
+  private readonly forcedAscTowers = new Set<string>()
+  private goldenAgeApplied = false // M11 Golden Age: one-time camera gold grade
   private overlay!: Phaser.GameObjects.Graphics
   private ghost!: Phaser.GameObjects.Graphics
   private pointer: Vec2 = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 }
@@ -234,6 +237,8 @@ export class GameScene extends Phaser.Scene {
     this.spikes.clear()
     this.spikeGfx.clear() // old graphics are destroyed by scene.restart
     this.charmedByTower.clear()
+    this.forcedAscTowers.clear()
+    this.goldenAgeApplied = false
     this.enemyShadows.clear()
     this.towerShadows.clear()
     this.posCache.clear()
@@ -1168,6 +1173,7 @@ export class GameScene extends Phaser.Scene {
         if (chosen?.type === 'boon') {
           this.floatText(GAME_WIDTH / 2, 150, `⚡ ${chosen.boon.name}`, '#f5d061')
           this.recordBoon(chosen.boon)
+          this.applyBoonSceneFx(chosen.boon)
         }
       }
       else if (it.type === 'rerollDraft') {
@@ -1224,6 +1230,7 @@ export class GameScene extends Phaser.Scene {
           if (chosen.type === 'boon') {
             this.floatText(GAME_WIDTH / 2, 132, `⚡ The Fates chose: ${chosen.boon.name}`, '#f5d061')
             this.recordBoon(chosen.boon)
+            this.applyBoonSceneFx(chosen.boon)
           }
         }
       }
@@ -2430,8 +2437,46 @@ export class GameScene extends Phaser.Scene {
    * rule guarantees at most one path ever reaches 5, so the forms can't conflict. Missing art is a
    * silent no-op (the drop-in contract: characters land batch by batch).
    */
+  /** Route a just-picked boon's SCENE-side effect — the visual transforms the pure run can't do. */
+  private applyBoonSceneFx(boon: { id: string; effect: { kind: string } }): void {
+    if (boon.effect.kind === 'earlyAscension') this.earlyAscension()
+    else if (boon.id === 'vis-golden-age') this.applyGoldenAge()
+  }
+
+  /** M11 Early Ascension: a random fielded god ascends NOW (sprite swap + flourish) and gains +30% dmg. */
+  private earlyAscension(): void {
+    const gods = [...this.run.builtGods] as GodKind[]
+    if (gods.length === 0) return
+    const god = gods[Math.floor(Math.random() * gods.length)]
+    let ascended = false
+    for (const t of this.getTowers()) {
+      if (t.god !== god) continue
+      this.forcedAscTowers.add(t.id)
+      this.syncTowerAscension(t)
+      ascended = true
+    }
+    if (ascended) {
+      this.run.grantGodBoon(god, 1.3)
+      this.floatText(GAME_WIDTH / 2, 172, `🌟 ${TOWER_STATS[god].name} ascends!`, '#f5d061')
+    }
+  }
+
+  /** M11 Golden Age: a one-time warm-gold camera grade + bloom (WebGL only; Canvas stays raw). */
+  private applyGoldenAge(): void {
+    if (this.goldenAgeApplied) return
+    this.goldenAgeApplied = true
+    if (this.game.renderer.type === Phaser.WEBGL) {
+      const cm = this.cameras.main.postFX.addColorMatrix()
+      cm.multiply([1.1, 0.03, 0, 0, 0, 0.02, 1.03, 0, 0, 0, 0, 0.02, 0.88, 0, 0, 0, 0, 0, 1, 0], true) // warm gold tilt
+      this.cameras.main.postFX.addBloom(0xf5d061, 1, 1, 1, 0.32, 4)
+    }
+    this.floatText(GAME_WIDTH / 2, 172, '🌅 A Golden Age dawns', '#f5d061')
+  }
+
   private syncTowerAscension(tower: Tower): void {
-    const ascKey = tower.pathA >= 5 ? `${tower.god}_asc_a` : tower.pathB >= 5 ? `${tower.god}_asc_b` : null
+    // A maxed path (tier 5) picks its path form; an Early-Ascension boon forces the path-A form early.
+    const ascKey =
+      tower.pathA >= 5 ? `${tower.god}_asc_a` : tower.pathB >= 5 ? `${tower.god}_asc_b` : this.forcedAscTowers.has(tower.id) ? `${tower.god}_asc_a` : null
     if (!ascKey || !DirAnimSprite.hasDirectional(this, ascKey)) return
     const old = this.towerSprites.get(tower.id)
     if (!old || (old.getData?.('ascBase') as string) === ascKey) return

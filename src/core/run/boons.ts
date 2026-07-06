@@ -20,6 +20,7 @@ export type BoonEffect =
   | { kind: 'maxLivesAdd'; value: number } // raise the lives cap AND heal that much
   | { kind: 'gateShield'; value: number } // gain N shield charges — each absorbs one leak
   | { kind: 'secondWind' } // once: survive the first defeat at 25 lives
+  | { kind: 'earlyAscension' } // M11: scene-handled — ascend a random fielded god early (+ buff it)
   // ── persistent (folded into RunModifiers, read at fire-time) ──
   | { kind: 'goldPerKillAdd'; value: number }
   | { kind: 'towerDamageMul'; value: number }
@@ -126,6 +127,10 @@ export const BOON_POOL: readonly Boon[] = [
   { id: 'syn-monotheist', name: 'Monotheist', desc: 'While you field only ONE god, that god deals ×2 damage.', flavor: 'Pick a favorite. Commit to the bit. The others will understand. They will not.', icon: '🔱', rarity: 'legendary', category: 'syn', effect: { kind: 'monotheistMul', value: 2 } },
   { id: 'syn-full-pantheon', name: 'Full Pantheon', desc: '+6% all-god damage for each DIFFERENT god you field.', flavor: 'A quarrel of gods is still, technically, a team.', icon: '🏛️', rarity: 'epic', category: 'syn', effect: { kind: 'pantheonPerGod', value: 0.06 } },
   { id: 'syn-vengeance', name: 'Vengeance', desc: '+2% damage for every life Olympus has lost this run.', flavor: 'Nothing sharpens a god like a grudge and a body count.', icon: '💢', rarity: 'rare', category: 'syn', effect: { kind: 'vengeancePerLife', value: 0.02 } },
+
+  // ── Visual / transform (M11 S5): boons you can SEE happen on the field ──
+  { id: 'vis-early-ascension', name: 'Early Ascension', desc: 'A random god you field ascends now (+30% damage).', flavor: 'Skip the paperwork. Straight to godhood.', icon: '🌟', rarity: 'rare', category: 'core', effect: { kind: 'earlyAscension' } },
+  { id: 'vis-golden-age', name: 'Golden Age', desc: 'Olympus blazes gold: all gods +12% damage and +12% fire rate.', flavor: 'For one shining age, everything the light touches is yours. The light touches everything.', icon: '🌅', rarity: 'epic', category: 'off', effect: { kind: 'composite', effects: [{ kind: 'towerDamageMul', value: 1.12 }, { kind: 'fireRateMul', value: 1.12 }] } },
 ]
 
 /** A fresh RunModifiers seeded from the meta save (before any boon). godDamageMul covers every god. */

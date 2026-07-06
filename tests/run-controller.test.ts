@@ -151,6 +151,31 @@ describe('RunController — build-defining boons (M11 S4)', () => {
   })
 })
 
+describe('RunController — visual boons (M11 S5)', () => {
+  it('Early Ascension is a scene-driven no-op in the pure run (no crash, no stat change on its own)', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    expect(() => pick(run, 'vis-early-ascension')).not.toThrow()
+    expect(run.effectiveDamage('zeus', 10)).toBeCloseTo(10) // the +30% is applied scene-side via grantGodBoon
+  })
+
+  it('grantGodBoon buffs one god (the scene calls this for the ascended god)', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    run.grantGodBoon('poseidon', 1.3)
+    expect(run.effectiveDamage('poseidon', 10)).toBeCloseTo(13)
+    expect(run.effectiveDamage('zeus', 10)).toBeCloseTo(10) // others untouched
+  })
+
+  it('Golden Age applies its global damage + fire-rate composite', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    pick(run, 'vis-golden-age')
+    expect(run.effectiveDamage('zeus', 100)).toBeCloseTo(112)
+    expect(run.effectiveFireRate('zeus', 100)).toBeCloseTo(112)
+  })
+})
+
 describe('RunController — draft reroll (M11)', () => {
   const openDraft = (run: RunController) => {
     run.draft = [{ type: 'boon', boon: boon('off-divine-wrath') }]
