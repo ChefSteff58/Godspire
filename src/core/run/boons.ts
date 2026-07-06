@@ -44,6 +44,10 @@ export type BoonEffect =
   // ── M11 map-altering ──
   | { kind: 'frozenStyx' } // scene+run: the lake ices over → buildable ground this run
   | { kind: 'siteRadiusMul'; value: number } // Blessed Grove: grow every Sacred Site's reach
+  // ── M11 Fate Bargain curses (enemy buffs, folded into the run then read at spawn / on kill) ──
+  | { kind: 'enemyHpMul'; value: number }
+  | { kind: 'enemySpeedMul'; value: number }
+  | { kind: 'bossBountyMul'; value: number }
   // ── combinators ──
   | { kind: 'composite'; effects: BoonEffect[] }
   | { kind: 'coinflipFold'; win: BoonEffect; lose: BoonEffect } // 50/50 on pick
@@ -57,6 +61,10 @@ export interface Boon {
   rarity: Rarity
   category: BoonCategory
   effect: BoonEffect
+  // ── M11 Fate Bargain only: a curse/reward gamble card (rendered split red/gold) ──
+  bargain?: boolean
+  curse?: string // the price (red)
+  reward?: string // the boon (gold)
 }
 
 /** Draft draw-weight by rarity — rarer cards surface less often, so legendaries feel special. */
@@ -167,6 +175,9 @@ export function baseRunModifiers(meta: Modifiers): RunModifiers {
     pantheonPerGod: 0,
     vengeancePerLife: 0,
     siteRadiusMul: 1,
+    enemyHpMul: 1,
+    enemySpeedMul: 1,
+    bossBountyMul: 1,
   }
 }
 
@@ -209,6 +220,9 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
     else if (e.kind === 'pantheonPerGod') rm.pantheonPerGod += e.value
     else if (e.kind === 'vengeancePerLife') rm.vengeancePerLife += e.value
     else if (e.kind === 'siteRadiusMul') rm.siteRadiusMul *= e.value
+    else if (e.kind === 'enemyHpMul') rm.enemyHpMul *= e.value
+    else if (e.kind === 'enemySpeedMul') rm.enemySpeedMul *= e.value
+    else if (e.kind === 'bossBountyMul') rm.bossBountyMul *= e.value
   }
   rm.fireRateMul = Math.min(rm.fireRateMul, FIRE_RATE_CAP)
   rm.towerDamageMul = Math.min(rm.towerDamageMul, TOWER_DAMAGE_CAP)

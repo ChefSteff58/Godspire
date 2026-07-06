@@ -10,7 +10,7 @@ import {
 } from '../src/core/economy/ledger'
 import { enemyHp, enemyCount, enemySpeed, waveSpec } from '../src/core/systems/waveManager'
 import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP, DEMETER_INCOME_CAP, INSTAKILL_CHANCE_CAP, PANTHEON_PER_GOD_CAP, boonGod } from '../src/core/run/boons'
-import { generateDraft, scheduleNextDraft } from '../src/core/run/draft'
+import { generateDraft, generateFateBargain, scheduleNextDraft } from '../src/core/run/draft'
 import { GOD_ORDER } from '../src/core/data/towers'
 import { BASE_MODIFIERS } from '../src/core/progress/rules'
 import type { Modifiers } from '../src/core/progress/types'
@@ -145,6 +145,23 @@ describe('foldRunModifiers', () => {
     const capped = foldRunModifiers(BASE_MODIFIERS, Array(5).fill(fx('syn-full-pantheon'))) // 0.3 → capped
     expect(capped.pantheonPerGod).toBe(PANTHEON_PER_GOD_CAP)
   })
+
+  it('folds the M11 Fate Bargain curses (enemy HP/speed + boss bounty)', () => {
+    const rm = foldRunModifiers(BASE_MODIFIERS, [
+      { kind: 'enemyHpMul', value: 1.2 },
+      { kind: 'enemySpeedMul', value: 1.15 },
+      { kind: 'bossBountyMul', value: 1.5 },
+    ])
+    expect(rm.enemyHpMul).toBeCloseTo(1.2)
+    expect(rm.enemySpeedMul).toBeCloseTo(1.15)
+    expect(rm.bossBountyMul).toBeCloseTo(1.5)
+    // curses stack multiplicatively across a run (two Bargains taken → 1.2 × 1.15 HP)
+    const stacked = foldRunModifiers(BASE_MODIFIERS, [
+      { kind: 'enemyHpMul', value: 1.2 },
+      { kind: 'enemyHpMul', value: 1.15 },
+    ])
+    expect(stacked.enemyHpMul).toBeCloseTo(1.38)
+  })
 })
 
 describe('boonGod — per-god dead-card filter (M11)', () => {
@@ -198,5 +215,29 @@ describe('draft', () => {
     expect([...legendaryIds].some((id) => early.has(id))).toBe(false) // none before w15
     const deep = idsAt(15)
     expect([...legendaryIds].every((id) => deep.has(id))).toBe(true) // all eligible at w15
+  })
+})
+
+describe('Fate Bargain generation (M11 S7)', () => {
+  it('offers 3 curse/reward gambles + a clean Walk Away, all flagged as bargains', () => {
+    const opts = generateFateBargain(19)
+    expect(opts).toHaveLength(4)
+    expect(opts.every((o) => o.type === 'boon' && o.boon.bargain)).toBe(true)
+    const ids = opts.map((o) => (o.type === 'boon' ? o.boon.id : ''))
+    expect(new Set(ids).size).toBe(4) // distinct
+    expect(ids).toContain('bargain-decline')
+  })
+
+  it('every gamble names BOTH a curse and a reward and applies as a composite', () => {
+    for (const o of generateFateBargain(19)) {
+      if (o.type !== 'boon') continue
+      expect(o.boon.curse).toBeTruthy()
+      expect(o.boon.reward).toBeTruthy()
+      if (o.boon.id === 'bargain-decline') {
+        expect(o.boon.effect).toEqual({ kind: 'composite', effects: [] }) // a clean no-op
+      } else {
+        expect(o.boon.effect.kind).toBe('composite') // curse + reward bound together
+      }
+    }
   })
 })

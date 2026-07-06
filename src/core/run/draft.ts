@@ -57,3 +57,49 @@ export function generateDraft(
 export function scheduleNextDraft(wave: number, _rng: Rng = Math.random): number {
   return Math.max(0, Math.floor(wave)) + 5
 }
+
+/**
+ * M11 FATE BARGAIN — offered right before a boss (waves 19/39/…): each card binds a CURSE (a permanent
+ * enemy buff) to a REWARD (a permanent boon). Picking one applies BOTH; "Walk Away" declines cleanly.
+ * These are gambles, not draws — always the same 3 + decline, no rarity weighting or reroll.
+ */
+const FATE_BARGAINS: readonly Boon[] = [
+  {
+    id: 'bargain-trial-of-strength', name: 'Trial of Strength', bargain: true,
+    curse: 'All enemies gain +20% HP', reward: 'All gods deal +30% damage',
+    desc: 'Enemies +20% HP; all gods +30% damage — rest of run.',
+    flavor: 'Strength is just a problem you have not hit hard enough yet.',
+    icon: '⚖️', rarity: 'epic', category: 'syn',
+    effect: { kind: 'composite', effects: [{ kind: 'enemyHpMul', value: 1.2 }, { kind: 'towerDamageMul', value: 1.3 }] },
+  },
+  {
+    id: 'bargain-swift-doom', name: 'Swift Doom', bargain: true,
+    curse: 'All enemies move +15% faster', reward: 'All gods fire +25% faster',
+    desc: 'Enemies +15% speed; all gods +25% fire rate — rest of run.',
+    flavor: 'Everyone runs. Some of you also shoot.',
+    icon: '🌀', rarity: 'epic', category: 'syn',
+    effect: { kind: 'composite', effects: [{ kind: 'enemySpeedMul', value: 1.15 }, { kind: 'fireRateMul', value: 1.25 }] },
+  },
+  {
+    id: 'bargain-golden-toll', name: 'The Golden Toll', bargain: true,
+    curse: 'All enemies gain +15% HP', reward: '+50% boss bounty & +350 gold now',
+    desc: 'Enemies +15% HP; +50% boss bounty (rest of run) and +350 gold now.',
+    flavor: 'The Fates take a cut. They always take a cut.',
+    icon: '🏛️', rarity: 'epic', category: 'eco',
+    effect: { kind: 'composite', effects: [{ kind: 'enemyHpMul', value: 1.15 }, { kind: 'bossBountyMul', value: 1.5 }, { kind: 'goldGrant', value: 350 }] },
+  },
+]
+
+const BARGAIN_DECLINE: Boon = {
+  id: 'bargain-decline', name: 'Walk Away', bargain: true,
+  curse: 'No curse', reward: 'No gift',
+  desc: 'Decline the bargain — the wave proceeds untouched.',
+  flavor: 'Wisdom is knowing when the Fates are hustling you.',
+  icon: '🚪', rarity: 'common', category: 'util',
+  effect: { kind: 'composite', effects: [] }, // a clean no-op
+}
+
+/** The Fate Bargain set-piece: the 3 curse/reward gambles + a Walk Away, offered before a boss. */
+export function generateFateBargain(_wave: number, _rng: Rng = Math.random): DraftOption[] {
+  return [...FATE_BARGAINS, BARGAIN_DECLINE].map((boon) => ({ type: 'boon', boon }))
+}

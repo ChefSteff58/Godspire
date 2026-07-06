@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { RunController } from '../src/game/run/RunController'
 import { BOON_POOL, boonGod } from '../src/core/run/boons'
+import { generateFateBargain } from '../src/core/run/draft'
 import { deriveModifiers } from '../src/core/progress/rules'
 import type { Modifiers } from '../src/core/progress/types'
 
@@ -245,6 +246,87 @@ describe('RunController — draft reroll (M11)', () => {
     run.start(META) // new run
     openDraft(run)
     expect(run.snapshot().rerollCost).toBe(0) // free again
+  })
+})
+
+describe('RunController — Fate Bargain (M11 S7)', () => {
+  /** Open a real Bargain draft (the 3 gambles + Walk Away) and pick the card with this id. */
+  const takeBargain = (run: RunController, id: string) => {
+    const fb = generateFateBargain(19)
+    run.draft = fb
+    run.pickDraft(fb.findIndex((o) => o.type === 'boon' && o.boon.id === id))
+  }
+
+  it('the wave before a boss (19 → boss 20) offers a Bargain instead of a normal draft', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    run.wave = 19
+    run.phase = 'clearing'
+    run.settle(0)
+    expect(run.draft).not.toBeNull()
+    expect(run.draft!.every((o) => o.type === 'boon' && o.boon.bargain)).toBe(true)
+    expect(run.draft!.some((o) => o.type === 'boon' && o.boon.id === 'bargain-decline')).toBe(true)
+  })
+
+  it('an ordinary wave clear still offers a normal draft (no bargain)', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    run.wave = 15
+    run.phase = 'clearing'
+    run.settle(0)
+    expect(run.draft).not.toBeNull()
+    expect(run.draft!.some((o) => o.type === 'boon' && o.boon.bargain)).toBe(false)
+  })
+
+  it('The Golden Toll pays out now AND taxes every boss for the rest of the run', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    const gold0 = run.snapshot().gold
+    takeBargain(run, 'bargain-golden-toll') // +350 now, +50% boss bounty
+    expect(run.snapshot().gold).toBe(gold0 + 350) // reward up front
+    const gold1 = run.snapshot().gold
+    run.onKill(100, true) // a boss pays ×1.5
+    expect(run.snapshot().gold).toBe(gold1 + 150)
+    run.onKill(100, false) // a trash mob is unaffected by the boss-bounty curse
+    expect(run.snapshot().gold).toBe(gold1 + 150 + 100)
+  })
+
+  it('Trial of Strength binds the +30% god-damage reward for the rest of the run', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    takeBargain(run, 'bargain-trial-of-strength')
+    expect(run.effectiveDamage('zeus', 100)).toBeCloseTo(130)
+  })
+
+  it('Walk Away declines cleanly — no reward, no curse, draft consumed', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    const gold0 = run.snapshot().gold
+    takeBargain(run, 'bargain-decline')
+    expect(run.snapshot().gold).toBe(gold0) // nothing gained
+    expect(run.effectiveDamage('zeus', 100)).toBeCloseTo(100) // nothing changed
+    expect(run.draft).toBeNull() // the offer is spent
+  })
+
+  it("the enemy curse RIDES the spawn — cursed enemies enter with scaled HP", () => {
+    // Control: an untouched run's wave-3 spawns.
+    const control = new RunController(() => 0.5)
+    control.start(META)
+    control['beginWave'](3)
+    const baseline: number[] = []
+    for (let i = 0; i < 500 && control.phase === 'spawning'; i++) baseline.push(...control.tick(1).map((s) => s.hp))
+
+    // Cursed: same seed + wave, but Trial of Strength (+20% enemy HP) taken first.
+    const cursed = new RunController(() => 0.5)
+    cursed.start(META)
+    takeBargain(cursed, 'bargain-trial-of-strength')
+    cursed['beginWave'](3)
+    const scaled: number[] = []
+    for (let i = 0; i < 500 && cursed.phase === 'spawning'; i++) scaled.push(...cursed.tick(1).map((s) => s.hp))
+
+    expect(baseline.length).toBeGreaterThan(0)
+    expect(scaled.length).toBe(baseline.length) // same wave, same spawn count
+    scaled.forEach((hp, i) => expect(hp).toBe(Math.round(baseline[i] * 1.2))) // every enemy tankier
   })
 })
 

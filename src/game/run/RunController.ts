@@ -10,7 +10,7 @@ import type { GodKind } from '../../core/data/towers'
 import { createLedger, spend, canAfford, earn, waveIncome, type Ledger } from '../../core/economy/ledger'
 import { waveSpec, wavePreview, type WaveSpec } from '../../core/systems/waveManager'
 import { foldRunModifiers, boonGod, type BoonEffect, type Boon } from '../../core/run/boons'
-import { generateDraft, scheduleNextDraft, type DraftOption } from '../../core/run/draft'
+import { generateDraft, generateFateBargain, scheduleNextDraft, type DraftOption } from '../../core/run/draft'
 import type { SpawnDesc } from '../../core/entities/enemy'
 import type { RunPhase, RunModifiers } from '../../core/run/types'
 
@@ -73,7 +73,7 @@ export class RunController {
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1, fireRateMul: 1, bossDamageMul: 1, incomeMul: 1, goldPerKillAdd: 0, startingShield: 0, secondWindStart: false, draftBonusOptions: 0 }
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
-  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0, critChance: 0, critMult: 1, chainChance: 0, instakillChance: 0, camoRevealChance: 0, monotheistMul: 1, pantheonPerGod: 0, vengeancePerLife: 0, siteRadiusMul: 1 }
+  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0, critChance: 0, critMult: 1, chainChance: 0, instakillChance: 0, camoRevealChance: 0, monotheistMul: 1, pantheonPerGod: 0, vengeancePerLife: 0, siteRadiusMul: 1, enemyHpMul: 1, enemySpeedMul: 1, bossBountyMul: 1 }
   /** M11 Frozen Styx: once picked, the lake is buildable ground for the rest of the run. */
   frozenStyxBuildable = false
   private persistentEffects: BoonEffect[] = []
@@ -262,14 +262,16 @@ export class RunController {
       if (this.spawnTimerMs < group.intervalMs) break // wait for the next spawn tick
       this.spawnTimerMs -= group.intervalMs
       this.spawnedInGroup++
-      out.push({ kind: group.kind, hp: group.hp, speed: group.speed, bounty: group.bounty, leakWeight: group.leakWeight, splitDepth: 0, bossId: group.bossId, damageCap: group.damageCap, armor: group.armor })
+      // M11 Fate Bargain curses ride the spawn: enemies HP/speed scaled by any active curse (1 = none).
+      out.push({ kind: group.kind, hp: Math.round(group.hp * this.modifiers.enemyHpMul), speed: group.speed * this.modifiers.enemySpeedMul, bounty: group.bounty, leakWeight: group.leakWeight, splitDepth: 0, bossId: group.bossId, damageCap: group.damageCap, armor: group.armor })
     }
     return out
   }
 
   /** A kill: pay the bounty (+ any per-kill boon) and count it (+ tally bosses). */
   onKill(bounty: number, isBoss = false): void {
-    this.earnGold(bounty + this.modifiers.goldPerKillBonus)
+    // M11 Golden Toll: a boss kill pays bounty × bossBountyMul (a Bargain reward).
+    this.earnGold(bounty * (isBoss ? this.modifiers.bossBountyMul : 1) + this.modifiers.goldPerKillBonus)
     this.kills++
     if (isBoss) this.bossesKilled++
   }
@@ -337,6 +339,11 @@ export class RunController {
         this.boonCounts,
       )
       this.nextDraftWave = scheduleNextDraft(this.wave, this.rng)
+    }
+    // M11 Fate Bargain: after clearing the wave BEFORE a boss (19/39/…), the Fates offer a curse/reward
+    // gamble instead of a normal draft. It overrides any draft this frame (they never stack).
+    if (this.wave > 0 && (this.wave + 1) % 20 === 0) {
+      this.draft = generateFateBargain(this.wave, this.rng)
     }
     return income // a wave just cleared this frame (the scene pays Demeter income + floats the payday)
   }

@@ -33,6 +33,8 @@ export function FateDraftModal() {
 
   const rerollFree = rerollCost === 0
   const canReroll = rerollFree || gold >= rerollCost
+  // M11 Fate Bargain: a curse/reward gamble set-piece before a boss — different framing, no reroll.
+  const isBargain = options.some((o) => o.type === 'boon' && o.boon.bargain)
 
   const urgent = timerSec !== null && timerSec <= 5
   const frac = timerSec !== null ? Math.max(0, Math.min(1, timerSec / DRAFT_TIMER_FULL_SEC)) : 1
@@ -40,8 +42,17 @@ export function FateDraftModal() {
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-shrine-abyss/80 backdrop-blur-sm">
       <div className="text-center">
-        <h2 className="font-pixel text-2xl font-bold text-amber-300">The Fates offer a boon</h2>
-        <p className="text-sm text-shrine-marble/60">Choose one — the Fates weave it into the rest of your run.</p>
+        {isBargain ? (
+          <>
+            <h2 className="font-pixel text-2xl font-bold text-amber-300">The Fates offer a Bargain</h2>
+            <p className="text-sm text-shrine-marble/60">A boss looms. Every gift here has a price — bound for the rest of your run. Or walk away.</p>
+          </>
+        ) : (
+          <>
+            <h2 className="font-pixel text-2xl font-bold text-amber-300">The Fates offer a boon</h2>
+            <p className="text-sm text-shrine-marble/60">Choose one — the Fates weave it into the rest of your run.</p>
+          </>
+        )}
       </div>
       {timerSec !== null && (
         <div className="flex flex-col items-center gap-1">
@@ -90,23 +101,38 @@ export function FateDraftModal() {
                 <PixelIcon name={`boon_${b.id}`} fallback={b.icon} sizeClass="h-14 w-14 text-4xl" />
               </span>
               <span className="font-pixel text-base font-bold text-amber-200">{b.name}</span>
-              <span className="text-sm text-shrine-marble">{b.desc}</span>
-              <span className="text-xs italic text-shrine-marble/50">{b.flavor}</span>
+              {b.bargain ? (
+                b.id === 'bargain-decline' ? (
+                  <span className="text-sm italic text-shrine-marble/60">{b.desc}</span>
+                ) : (
+                  <span className="flex flex-col gap-1 text-xs">
+                    <span className="rounded bg-rose-500/15 px-1.5 py-1 font-bold text-rose-300">⛓ {b.curse}</span>
+                    <span className="rounded bg-amber-400/15 px-1.5 py-1 font-bold text-amber-200">✦ {b.reward}</span>
+                  </span>
+                )
+              ) : (
+                <>
+                  <span className="text-sm text-shrine-marble">{b.desc}</span>
+                  <span className="text-xs italic text-shrine-marble/50">{b.flavor}</span>
+                </>
+              )}
             </button>
           )
         })}
       </div>
-      {/* Tempt the Fates — one free reroll per run, then escalating gold (M11). */}
-      <button
-        onClick={() => canReroll && rerollDraft()}
-        disabled={!canReroll}
-        title={rerollFree ? 'One free reroll this run' : 'Reroll for gold — cost rises each time'}
-        className={`pixel-btn font-pixel text-sm font-bold ${
-          canReroll ? 'pixel-btn--gold arcade-raise text-shrine-abyss' : 'cursor-not-allowed text-shrine-marble/40 opacity-60'
-        }`}
-      >
-        🎲 Tempt the Fates — {rerollFree ? 'FREE' : `🪙${rerollCost}`}
-      </button>
+      {/* Tempt the Fates — one free reroll per run, then escalating gold (M11). Bargains can't be rerolled. */}
+      {!isBargain && (
+        <button
+          onClick={() => canReroll && rerollDraft()}
+          disabled={!canReroll}
+          title={rerollFree ? 'One free reroll this run' : 'Reroll for gold — cost rises each time'}
+          className={`pixel-btn font-pixel text-sm font-bold ${
+            canReroll ? 'pixel-btn--gold arcade-raise text-shrine-abyss' : 'cursor-not-allowed text-shrine-marble/40 opacity-60'
+          }`}
+        >
+          🎲 Tempt the Fates — {rerollFree ? 'FREE' : `🪙${rerollCost}`}
+        </button>
+      )}
     </div>
   )
 }

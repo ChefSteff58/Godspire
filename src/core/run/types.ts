@@ -51,6 +51,13 @@ export interface RunModifiers {
   vengeancePerLife: number
   /** Blessed Grove: ×reach of every Sacred Site's buff radius (1 = unchanged). */
   siteRadiusMul: number
+  // ── M11 Fate Bargain CURSES (enemy buffs, read at spawn / on kill; 1 = no curse) ──
+  /** Every enemy's HP ×this. */
+  enemyHpMul: number
+  /** Every enemy's walk speed ×this. */
+  enemySpeedMul: number
+  /** A boss kill pays bounty ×this (a Bargain REWARD, but rides the same layer). */
+  bossBountyMul: number
 }
 
 // SpawnDesc moved to core/entities/enemy.ts (it's enemy-shaped, and onDeath returns it).
