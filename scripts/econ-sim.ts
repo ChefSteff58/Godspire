@@ -71,7 +71,7 @@ export const TOWER_BASE_COST: Record<GodKind, number> = {
   zeus: 200, apollo: 250, demeter: 300, hermes: 275, hephaestus: 230, poseidon: 300, aphrodite: 220, athena: 320,
 }
 
-export const PRICIEST_T5 = 4200 // Poseidon B5 / Zeus B5 — the single most expensive purchase in the game
+export const PRICIEST_T5 = 8400 // M12 S2 paragon re-curve: Zeus B5 / Poseidon B5 — the single most expensive purchase
 
 /** Cross-path rule: a farm mains ONE path to 5 and dips the other to 2. */
 export const ARCHETYPES: { name: string; cfg: EconConfig }[] = [

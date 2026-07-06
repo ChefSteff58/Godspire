@@ -89,7 +89,27 @@ stacking hits hard DR that clustering only partly (≤+30%) offsets — a bounde
 guard assertions in `tests/economy.test.ts` are green. Live-verified: 2 farms 40px apart at w30 paid
 exactly `2 × floor(380 × 1.08 × 0.769) = 630`.
 
-## Cost re-curve (S2)
+## ✅ S2 shipped — paragon cost re-curve
 
-With income reined in, re-validate T4/T5 costs so saving for a T5 stays a multi-wave goal (BTD6
-"paragon" feel) rather than pocket change. Re-run this sim after S1+S2 and confirm the targets above.
+Per the locked decision (*aggressive paragon grind*): **T5 costs doubled**, **T4 ×1.5**, T1–T3
+untouched. T5s now run 5,600–8,400 (was 2,800–4,200); the T4→T5 jump is ~3× on every path, so the
+top of the tree reads as an escalating climb to a capstone.
+
+Effect on the sink ceiling (`npx vite-node scripts/econ-sim-run.ts`):
+
+| metric | S1 | S2 |
+|---|---:|---:|
+| full 8-god main-maxed board | 52,275 | **83,575** |
+| a 4-Vault farmer affords the whole board by | w50 | **never (≤60)** |
+| a lone Cornucopia affords the whole board by | w57 | **never (≤60)** |
+
+Main-maxing all eight gods is now a genuine long-run achievement no archetype reaches inside 60
+waves — T5 is a rare, saved-for capstone, exactly as intended. A *functional* board (a few gods at
+T3–T4 + a farm) stays affordable mid-game; the sim validates the income side, and combat
+survivability is confirmed by playtest. Guards: `tests/economy.test.ts` (board-cost ceiling now
+computed live from the tier data) + `tests/upgrades.test.ts` cost-curve (strictly rising tiers, T5
+≥ 5,000, ≥ 2.5× the T4).
+
+*Note:* T5 remains a beefy **stat** tier here — the marquee new-behavior "ultimates" (Zeus chain,
+Apollo burn, Poseidon whirlpool) are a separate later milestone; S2 makes T5 the expensive capstone
+of the current tree, not a new power class.

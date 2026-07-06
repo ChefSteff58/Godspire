@@ -206,3 +206,23 @@ describe('demeterIncome', () => {
     expect(demeterIncome(d, 20)).toBe(20 + 1 * 20)
   })
 })
+
+describe('upgrade cost curve (M12 S2 paragon re-curve)', () => {
+  const gods = Object.keys(UPGRADES) as (keyof typeof UPGRADES)[]
+  const paths = ['A', 'B'] as const
+
+  it('every path costs strictly more each tier (T1 < T2 < … < T5)', () => {
+    for (const g of gods) for (const p of paths) {
+      const costs = UPGRADES[g][p].tiers.map((t) => t.cost)
+      for (let i = 1; i < costs.length; i++) expect(costs[i], `${g}.${p} tier ${i + 1}`).toBeGreaterThan(costs[i - 1])
+    }
+  })
+
+  it('T5 is a paragon-tier grind (≥ 5,000 on every path) and a steep jump over T4 (≥ 2.5×)', () => {
+    for (const g of gods) for (const p of paths) {
+      const t = UPGRADES[g][p].tiers
+      expect(t[4].cost, `${g}.${p} T5`).toBeGreaterThanOrEqual(5_000)
+      expect(t[4].cost / t[3].cost, `${g}.${p} T5/T4 jump`).toBeGreaterThanOrEqual(2.5)
+    }
+  })
+})
