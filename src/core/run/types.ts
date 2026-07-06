@@ -21,6 +21,17 @@ export interface RunModifiers {
   bossDamageMul: number
   /** Per-wave income multiplier (meta only). */
   incomeMul: number
+  // ── M11 per-god signature boons (each amps ONE god's real mechanic; single-god, so no key) ──
+  /** Demeter: farm harvest payout ×. */
+  demeterIncomeMul: number
+  /** Poseidon: splash knockback distance ×. */
+  knockbackMul: number
+  /** Athena: aura radius ×. */
+  auraRangeMul: number
+  /** Aphrodite: extra simultaneous charm targets (+N). */
+  charmTargetsAdd: number
+  /** Hephaestus: extra spike-trap charges (+N). */
+  spikeChargesAdd: number
 }
 
 // SpawnDesc moved to core/entities/enemy.ts (it's enemy-shaped, and onDeath returns it).

@@ -9,8 +9,9 @@ import {
   WAVE_INCOME_PER_WAVE,
 } from '../src/core/economy/ledger'
 import { enemyHp, enemyCount, enemySpeed, waveSpec } from '../src/core/systems/waveManager'
-import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP } from '../src/core/run/boons'
+import { foldRunModifiers, BOON_POOL, FIRE_RATE_CAP, DEMETER_INCOME_CAP, boonGod } from '../src/core/run/boons'
 import { generateDraft, scheduleNextDraft } from '../src/core/run/draft'
+import { GOD_ORDER } from '../src/core/data/towers'
 import { BASE_MODIFIERS } from '../src/core/progress/rules'
 import type { Modifiers } from '../src/core/progress/types'
 
@@ -95,6 +96,47 @@ describe('foldRunModifiers', () => {
     const haste = fx('util-festival-of-dionysus') // fireRateMul 1.35
     const rm = foldRunModifiers(BASE_MODIFIERS, Array(20).fill(haste))
     expect(rm.fireRateMul).toBe(FIRE_RATE_CAP)
+  })
+
+  it('folds the M11 per-god signature effects to their run modifiers', () => {
+    const rm = foldRunModifiers(BASE_MODIFIERS, [
+      fx('core-demeter-golden-harvest'), // demeterIncomeMul 1.6
+      fx('core-poseidon-riptide'), // knockbackMul 1.8
+      fx('core-athena-far-sight'), // auraRangeMul 1.4
+      fx('core-aphrodite-rapture'), // charmTargetsAdd 2
+      fx('core-hephaestus-forge-everlasting'), // spikeChargesAdd 2
+    ])
+    expect(rm.demeterIncomeMul).toBeCloseTo(1.6)
+    expect(rm.knockbackMul).toBeCloseTo(1.8)
+    expect(rm.auraRangeMul).toBeCloseTo(1.4)
+    expect(rm.charmTargetsAdd).toBe(2)
+    expect(rm.spikeChargesAdd).toBe(2)
+  })
+
+  it('soft-caps the per-god muls so endless stacking cannot break (adds stay uncapped)', () => {
+    const rm = foldRunModifiers(BASE_MODIFIERS, Array(10).fill(fx('core-demeter-golden-harvest')))
+    expect(rm.demeterIncomeMul).toBe(DEMETER_INCOME_CAP)
+  })
+})
+
+describe('boonGod — per-god dead-card filter (M11)', () => {
+  const g = (id: string) => boonGod(BOON_POOL.find((b) => b.id === id)!)
+
+  it('maps every per-god signature boon to its god, and globals to null', () => {
+    expect(g('core-zeus-king-of-storms')).toBe('zeus')
+    expect(g('core-apollo-noon-glare')).toBe('apollo')
+    expect(g('core-demeter-golden-harvest')).toBe('demeter')
+    expect(g('core-poseidon-riptide')).toBe('poseidon')
+    expect(g('core-athena-far-sight')).toBe('athena')
+    expect(g('core-aphrodite-rapture')).toBe('aphrodite')
+    expect(g('core-hephaestus-forge-everlasting')).toBe('hephaestus')
+    expect(g('core-hermes-winged-heels')).toBe('hermes')
+    expect(g('off-divine-wrath')).toBeNull() // a global boon belongs to no god
+  })
+
+  it('every god in the roster now has at least one signature boon', () => {
+    const covered = new Set(BOON_POOL.map(boonGod).filter(Boolean))
+    for (const god of GOD_ORDER) expect(covered.has(god)).toBe(true)
   })
 })
 

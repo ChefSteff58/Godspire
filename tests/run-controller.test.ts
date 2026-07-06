@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { RunController } from '../src/game/run/RunController'
-import { BOON_POOL } from '../src/core/run/boons'
+import { BOON_POOL, boonGod } from '../src/core/run/boons'
 import { deriveModifiers } from '../src/core/progress/rules'
 import type { Modifiers } from '../src/core/progress/types'
 
@@ -77,6 +77,35 @@ describe('RunController — boon effects', () => {
     pick(run, 'core-zeus-king-of-storms') // godDamageMul zeus 1.3
     expect(run.effectiveDamage('zeus', 10)).toBeCloseTo(13)
     expect(run.effectiveDamage('apollo', 10)).toBe(10) // unaffected
+  })
+})
+
+describe('RunController — per-god signature boons (M11 S2)', () => {
+  it('a signature boon folds through to its mechanic getter', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    expect(run.demeterIncomeMul).toBe(1)
+    pick(run, 'core-demeter-golden-harvest') // demeterIncomeMul 1.6
+    expect(run.demeterIncomeMul).toBeCloseTo(1.6)
+    expect(run.knockbackMul).toBe(1) // other gods' knobs untouched
+    pick(run, 'core-poseidon-riptide')
+    expect(run.knockbackMul).toBeCloseTo(1.8)
+  })
+
+  it('the draft never offers a signature boon for a god not on the field', () => {
+    let i = 0
+    const rng = () => [0.05, 0.3, 0.55, 0.8, 0.95, 0.2, 0.65, 0.42, 0.11, 0.73][i++ % 10]
+    const run = new RunController(rng)
+    run.start({ ...META, startingGold: 999999 }) // rich enough to reroll freely
+    run.builtGods = new Set(['zeus']) // only Zeus fielded
+    run.draft = [{ type: 'boon', boon: boon('off-divine-wrath') }]
+    const seen = new Set<string>()
+    for (let k = 0; k < 40; k++) {
+      run.rerollDraft() // regenerates via draftExclude (which uses boonGod)
+      for (const o of run.draft!) if (o.type === 'boon') seen.add(o.boon.id)
+    }
+    const forbidden = BOON_POOL.filter((b) => { const g = boonGod(b); return g !== null && g !== 'zeus' })
+    for (const b of forbidden) expect(seen.has(b.id)).toBe(false) // dead cards never surface
   })
 })
 

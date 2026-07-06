@@ -1092,7 +1092,7 @@ export class GameScene extends Phaser.Scene {
       if (dep) {
         // Hephaestus produces a trap charge instead of shooting an enemy directly.
         tower.cooldown = 1 / fireRate
-        this.produceSpike(tower, { damage: eff.damage * aura.damageMul, maxCharges: eff.maxCharges }, dep)
+        this.produceSpike(tower, { damage: eff.damage * aura.damageMul, maxCharges: eff.maxCharges + this.run.spikeChargesAdd }, dep) // M11 Forge Everlasting
         continue
       }
       const target = selectTarget(
@@ -1106,7 +1106,7 @@ export class GameScene extends Phaser.Scene {
       tower.cooldown = 1 / fireRate
       const dmg = this.run.effectiveDamage(tower.god, eff.damage * aura.damageMul)
       const stats = TOWER_STATS[tower.god]
-      if (stats.splash) this.fireSplash(tower.pos, this.enemyPos(target), dmg, eff.splashRadius, eff.knockback, stats.color)
+      if (stats.splash) this.fireSplash(tower.pos, this.enemyPos(target), dmg, eff.splashRadius, eff.knockback * (tower.god === 'poseidon' ? this.run.knockbackMul : 1), stats.color) // M11 Riptide
       else if (stats.attack === 'hitscan') this.fireHitscan(tower, target, dmg)
       else this.fireProjectile(tower, target, dmg, eff.pierce, eff.projectileSpeed)
       this.towerAttackTell(tower, target) // pixel gods: a quick lunge toward the target on each shot
@@ -1507,7 +1507,7 @@ export class GameScene extends Phaser.Scene {
     for (const a of this.towers) {
       const buff = auraBuff(a)
       if (!buff) continue
-      const r = this.towerEff(a).range
+      const r = this.towerEff(a).range * this.run.auraRangeMul // M11 Far Sight (only aura towers = Athena)
       this.stepAuras.push({ pos: a.pos, r2: r * r, damageMul: buff.damageMul, fireRateMul: buff.fireRateMul, detect: buff.detect })
     }
   }
@@ -1545,7 +1545,7 @@ export class GameScene extends Phaser.Scene {
         for (const e of this.enemies) byId.set(e.id, e)
       }
       const eff = this.towerEff(tower)
-      const cap = Math.max(0, Math.floor(eff.slowTargets))
+      const cap = Math.max(0, Math.floor(eff.slowTargets) + this.run.charmTargetsAdd) // M11 Rapture (only slowAura = Aphrodite)
       const r = eff.range * siteBuffAt(tower.pos, tower.god).rangeMul
       const r2 = r * r
       const inRange = (e: Enemy): boolean => {
@@ -2445,7 +2445,7 @@ export class GameScene extends Phaser.Scene {
   private payDemeterIncome(): void {
     for (const t of this.towers) {
       if (t.god !== 'demeter') continue
-      const income = demeterIncome(t, this.run.wave)
+      const income = Math.round(demeterIncome(t, this.run.wave) * this.run.demeterIncomeMul) // M11 Golden Harvest
       if (income <= 0) continue
       this.run.grantGold(income)
       // play Demeter's harvest animation once on payout ("making money") — playOnce returns to idle by

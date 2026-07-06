@@ -9,7 +9,7 @@ import type { Modifiers } from '../../core/progress/types'
 import type { GodKind } from '../../core/data/towers'
 import { createLedger, spend, canAfford, earn, waveIncome, type Ledger } from '../../core/economy/ledger'
 import { waveSpec, wavePreview, type WaveSpec } from '../../core/systems/waveManager'
-import { foldRunModifiers, type BoonEffect, type Boon } from '../../core/run/boons'
+import { foldRunModifiers, boonGod, type BoonEffect, type Boon } from '../../core/run/boons'
 import { generateDraft, scheduleNextDraft, type DraftOption } from '../../core/run/draft'
 import type { SpawnDesc } from '../../core/entities/enemy'
 import type { RunPhase, RunModifiers } from '../../core/run/types'
@@ -73,7 +73,7 @@ export class RunController {
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1, fireRateMul: 1, bossDamageMul: 1, incomeMul: 1, goldPerKillAdd: 0, startingShield: 0, secondWindStart: false, draftBonusOptions: 0 }
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
-  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1 }
+  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0 }
   private persistentEffects: BoonEffect[] = []
   /** How many times each boon id has been drafted — de-weights repeats in later drafts. */
   private boonCounts = new Map<string, number>()
@@ -148,10 +148,12 @@ export class RunController {
 
   /** Boons that are DEAD CARDS right now — an armed Nike re-offer, a heal at full HP, or a per-god
    * boon for a god not on the field. Shared by the wave-clear draft and the reroll so they filter alike. */
-  private draftExclude = (b: Boon): boolean =>
-    (b.effect.kind === 'secondWind' && this.secondWindArmed) ||
-    (b.effect.kind === 'livesGrant' && this.lives >= this.maxLives) ||
-    (b.effect.kind === 'godDamageMul' && !this.builtGods.has(b.effect.god))
+  private draftExclude = (b: Boon): boolean => {
+    if (b.effect.kind === 'secondWind' && this.secondWindArmed) return true // an armed Nike re-offer is dead
+    if (b.effect.kind === 'livesGrant' && this.lives >= this.maxLives) return true // heal at full HP is dead
+    const g = boonGod(b) // a per-god signature boon for a god not on the field is dead
+    return g !== null && !this.builtGods.has(g)
+  }
 
   /** Gold cost of the NEXT reroll — 0 while the run's single free reroll is unused, else escalating
    * with wave depth AND how many paid rerolls you've already bought this run. */
@@ -344,6 +346,13 @@ export class RunController {
   get bossDamageMul(): number {
     return this.modifiers.bossDamageMul
   }
+
+  // ── M11 per-god signature reads (the scene applies these at the god's mechanic site) ──
+  get demeterIncomeMul(): number { return this.modifiers.demeterIncomeMul }
+  get knockbackMul(): number { return this.modifiers.knockbackMul }
+  get auraRangeMul(): number { return this.modifiers.auraRangeMul }
+  get charmTargetsAdd(): number { return this.modifiers.charmTargetsAdd }
+  get spikeChargesAdd(): number { return this.modifiers.spikeChargesAdd }
 
   snapshot(): RunSnapshot {
     return {
