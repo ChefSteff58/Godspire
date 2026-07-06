@@ -15,6 +15,9 @@ export type DraftOption =
 
 type Rng = () => number
 
+/** Legendaries are gated to deeper runs so an early legendary can't trivialize the teach zone (M11). */
+export const LEGENDARY_MIN_WAVE = 15
+
 /** Build a draft: `count` DISTINCT boons, sampled WEIGHTED by rarity (rarer = scarcer). Pure. */
 export function generateDraft(
   wave: number,
@@ -23,7 +26,9 @@ export function generateDraft(
   exclude?: (b: Boon) => boolean,
   owned?: ReadonlyMap<string, number>,
 ): DraftOption[] {
-  const pool = BOON_POOL.filter((b) => !exclude?.(b))
+  const pool = BOON_POOL.filter(
+    (b) => !exclude?.(b) && (b.rarity !== 'legendary' || Math.floor(wave) >= LEGENDARY_MIN_WAVE),
+  )
   // Rarity odds ESCALATE with depth so the 6th draft of a run reads as a reward, not a rerun of the
   // 1st (fleet playtest: deep drafts were all-common). Already-owned boons are down-weighted (not
   // banned) so repeats become rare-but-possible instead of "the deck forgot I was there".

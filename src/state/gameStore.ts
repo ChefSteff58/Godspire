@@ -74,6 +74,7 @@ export interface SelectedTower {
 export type RunIntent =
   | { type: 'startWave' }
   | { type: 'pickDraft'; index: number }
+  | { type: 'rerollDraft' }
   | { type: 'playAgain' }
   | { type: 'sellTower' }
   | { type: 'upgradeTower'; path: 'A' | 'B' }
@@ -117,6 +118,8 @@ interface GameStore {
   draftOptions: DraftOption[] | null
   invincible: boolean
   canStartWave: boolean
+  /** Gold cost of the next draft reroll (0 = the run's free reroll is still available). */
+  rerollCost: number
   runSummary: RunSummary | null
   /** The speed to restore after a draft pause — stashed so 3× FF survives the modal. */
   preDraftScale: number
@@ -161,6 +164,7 @@ interface GameStore {
   // UI-facing intent helpers
   requestStartWave: () => void
   pickDraft: (index: number) => void
+  rerollDraft: () => void
   playAgain: () => void
   sellTower: () => void
   upgradeTower: (path: 'A' | 'B') => void
@@ -180,6 +184,7 @@ const FRESH_RUN = {
   draftOptions: null,
   invincible: false,
   canStartWave: true,
+  rerollCost: 0,
   runSummary: null,
   preDraftScale: 1,
   draftTimerSec: null,
@@ -256,6 +261,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       draftOptions: s.draftOptions,
       invincible: s.invincible,
       canStartWave: s.canStartWave,
+      rerollCost: s.rerollCost,
     }),
   setRunSummary: (runSummary) => set({ runSummary }),
   addActiveBoon: (b) => set((s) => ({ activeBoons: [...s.activeBoons, b] })),
@@ -273,6 +279,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   requestStartWave: () => set((s) => ({ intents: [...s.intents, { type: 'startWave' }] })),
   pickDraft: (index) => set((s) => ({ intents: [...s.intents, { type: 'pickDraft', index }] })),
+  rerollDraft: () => set((s) => ({ intents: [...s.intents, { type: 'rerollDraft' }] })),
   playAgain: () => set((s) => ({ intents: [...s.intents, { type: 'playAgain' }] })),
   sellTower: () => set((s) => ({ intents: [...s.intents, { type: 'sellTower' }] })),
   upgradeTower: (path) => set((s) => ({ intents: [...s.intents, { type: 'upgradeTower', path }] })),

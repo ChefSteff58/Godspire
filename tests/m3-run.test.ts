@@ -117,4 +117,16 @@ describe('draft', () => {
     expect(scheduleNextDraft(0)).toBe(5)
     expect(scheduleNextDraft(10)).toBe(15)
   })
+
+  it('gates legendaries behind wave 15 (protects the teach zone)', () => {
+    const legendaryIds = new Set(BOON_POOL.filter((b) => b.rarity === 'legendary').map((b) => b.id))
+    expect(legendaryIds.size).toBeGreaterThan(0)
+    // Draw the WHOLE pool (count = pool size) so eligibility, not luck, decides what surfaces.
+    const idsAt = (w: number) =>
+      new Set(generateDraft(w, seq([0.5, 0.1, 0.9, 0.3]), BOON_POOL.length).map((o) => (o.type === 'boon' ? o.boon.id : '')))
+    const early = idsAt(14)
+    expect([...legendaryIds].some((id) => early.has(id))).toBe(false) // none before w15
+    const deep = idsAt(15)
+    expect([...legendaryIds].every((id) => deep.has(id))).toBe(true) // all eligible at w15
+  })
 })

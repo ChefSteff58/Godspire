@@ -25,8 +25,14 @@ const DRAFT_TIMER_FULL_SEC = 20
 export function FateDraftModal() {
   const options = useGameStore((s) => s.draftOptions)
   const pickDraft = useGameStore((s) => s.pickDraft)
+  const rerollDraft = useGameStore((s) => s.rerollDraft)
+  const rerollCost = useGameStore((s) => s.rerollCost)
+  const gold = useGameStore((s) => s.gold)
   const timerSec = useGameStore((s) => s.draftTimerSec)
   if (!options) return null
+
+  const rerollFree = rerollCost === 0
+  const canReroll = rerollFree || gold >= rerollCost
 
   const urgent = timerSec !== null && timerSec <= 5
   const frac = timerSec !== null ? Math.max(0, Math.min(1, timerSec / DRAFT_TIMER_FULL_SEC)) : 1
@@ -90,6 +96,17 @@ export function FateDraftModal() {
           )
         })}
       </div>
+      {/* Tempt the Fates — one free reroll per run, then escalating gold (M11). */}
+      <button
+        onClick={() => canReroll && rerollDraft()}
+        disabled={!canReroll}
+        title={rerollFree ? 'One free reroll this run' : 'Reroll for gold — cost rises each time'}
+        className={`pixel-btn font-pixel text-sm font-bold ${
+          canReroll ? 'pixel-btn--gold arcade-raise text-shrine-abyss' : 'cursor-not-allowed text-shrine-marble/40 opacity-60'
+        }`}
+      >
+        🎲 Tempt the Fates — {rerollFree ? 'FREE' : `🪙${rerollCost}`}
+      </button>
     </div>
   )
 }

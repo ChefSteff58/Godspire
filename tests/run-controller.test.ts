@@ -80,6 +80,60 @@ describe('RunController — boon effects', () => {
   })
 })
 
+describe('RunController — draft reroll (M11)', () => {
+  const openDraft = (run: RunController) => {
+    run.draft = [{ type: 'boon', boon: boon('off-divine-wrath') }]
+  }
+
+  it('the first reroll of a run is free; further rerolls cost escalating gold', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    openDraft(run)
+    expect(run.snapshot().rerollCost).toBe(0) // the run's one free reroll
+    const gold0 = run.snapshot().gold
+    expect(run.rerollDraft()).toBe(true)
+    expect(run.snapshot().gold).toBe(gold0) // free — nothing charged
+
+    const cost1 = run.snapshot().rerollCost
+    expect(cost1).toBeGreaterThan(0)
+    expect(run.rerollDraft()).toBe(true)
+    expect(run.snapshot().gold).toBe(gold0 - cost1) // charged
+
+    const cost2 = run.snapshot().rerollCost
+    expect(cost2).toBeGreaterThan(cost1) // each paid reroll costs more
+  })
+
+  it('a reroll you cannot afford is a no-op (draft + gold unchanged)', () => {
+    const run = new RunController(() => 0.5)
+    run.start({ ...META, startingGold: 40 })
+    openDraft(run)
+    expect(run.rerollDraft()).toBe(true) // spend the free one
+    const draftAfterFree = run.draft
+    expect(run.snapshot().rerollCost).toBeGreaterThan(40) // the paid cost exceeds our purse
+    expect(run.rerollDraft()).toBe(false) // too poor
+    expect(run.draft).toBe(draftAfterFree) // cards unchanged
+    expect(run.snapshot().gold).toBe(40) // not charged
+  })
+
+  it('rerolling with no draft open is a no-op', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    run.draft = null
+    expect(run.rerollDraft()).toBe(false)
+  })
+
+  it('the free reroll resets on a new run', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    openDraft(run)
+    run.rerollDraft() // burn the free one
+    expect(run.snapshot().rerollCost).toBeGreaterThan(0)
+    run.start(META) // new run
+    openDraft(run)
+    expect(run.snapshot().rerollCost).toBe(0) // free again
+  })
+})
+
 describe('RunController — Pantheon meta buffs at run start (M6.5)', () => {
   it('seeds starting gold/lives/shields + arms Second Wind from the unlocked tree', () => {
     const meta = deriveModifiers([

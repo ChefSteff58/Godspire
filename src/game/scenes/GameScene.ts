@@ -1148,6 +1148,12 @@ export class GameScene extends Phaser.Scene {
           this.recordBoon(chosen.boon)
         }
       }
+      else if (it.type === 'rerollDraft') {
+        if (this.run.rerollDraft()) {
+          this.draftClockMs = DRAFT_TIMER_MS // fresh cards → fresh decision clock (the reroll "pause")
+          this.floatText(GAME_WIDTH / 2, 168, '🎲 The Fates reconsider…', '#c9a6ff')
+        }
+      }
       else if (it.type === 'sellTower') this.sellSelectedTower()
       else if (it.type === 'upgradeTower') this.upgradeSelectedTower(it.path)
       else if (it.type === 'setTargeting') this.setSelectedTargeting(it.mode)

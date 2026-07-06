@@ -9,7 +9,7 @@ import type { Modifiers } from '../../core/progress/types'
 import type { GodKind } from '../../core/data/towers'
 import { createLedger, spend, canAfford, earn, waveIncome, type Ledger } from '../../core/economy/ledger'
 import { waveSpec, wavePreview, type WaveSpec } from '../../core/systems/waveManager'
-import { foldRunModifiers, type BoonEffect } from '../../core/run/boons'
+import { foldRunModifiers, type BoonEffect, type Boon } from '../../core/run/boons'
 import { generateDraft, scheduleNextDraft, type DraftOption } from '../../core/run/draft'
 import type { SpawnDesc } from '../../core/entities/enemy'
 import type { RunPhase, RunModifiers } from '../../core/run/types'
@@ -26,6 +26,8 @@ export interface RunSnapshot {
   invincible: boolean
   /** True only when the player may press "Start wave" (building, no draft open, not over). */
   canStartWave: boolean
+  /** Gold cost of the next reroll of the open draft — 0 while the run's one free reroll is unused. */
+  rerollCost: number
 }
 
 type Rng = () => number
@@ -35,6 +37,10 @@ const BUILD_GRACE_MS = 1500
 /** Longer grace before a wave that debuts a kind / brings a boss / masses an elite legion — the
  * pre-wave telegraph needs to be ACTIONABLE (time to buy the counter), not just decorative. */
 const BUILD_GRACE_BIG_MS = 4000
+/** M11 reroll economy: base gold for the first PAID reroll, ×growth per paid reroll this run, and the
+ * whole thing scales with wave depth (`×(1+wave/10)`) so it stays meaningful as gold inflates. */
+const REROLL_BASE = 50
+const REROLL_GROWTH = 2
 
 export class RunController {
   private ledger: Ledger = createLedger(0)
@@ -74,6 +80,9 @@ export class RunController {
 
   draft: DraftOption[] | null = null
   private nextDraftWave = 3
+  /** M11 reroll: ONE free reroll for the whole run, then each paid reroll costs escalating gold. */
+  private freeRerollUsed = false
+  private paidRerolls = 0
 
   // active-wave spawn bookkeeping — a cursor over the wave's groups
   private spec: WaveSpec | null = null
@@ -105,6 +114,8 @@ export class RunController {
     this.modifiers = foldRunModifiers(meta, this.persistentEffects)
     this.draft = null
     this.nextDraftWave = scheduleNextDraft(0, this.rng) // first draft 3–5 waves in, never before wave 1
+    this.freeRerollUsed = false
+    this.paidRerolls = 0
     this.spec = null
     this.groupIdx = 0
     this.spawnedInGroup = 0
@@ -133,6 +144,35 @@ export class RunController {
     if (!opt || opt.type !== 'boon') return // M3 never emits 'god'; ignore defensively
     this.boonCounts.set(opt.boon.id, (this.boonCounts.get(opt.boon.id) ?? 0) + 1)
     this.applyEffect(opt.boon.effect)
+  }
+
+  /** Boons that are DEAD CARDS right now — an armed Nike re-offer, a heal at full HP, or a per-god
+   * boon for a god not on the field. Shared by the wave-clear draft and the reroll so they filter alike. */
+  private draftExclude = (b: Boon): boolean =>
+    (b.effect.kind === 'secondWind' && this.secondWindArmed) ||
+    (b.effect.kind === 'livesGrant' && this.lives >= this.maxLives) ||
+    (b.effect.kind === 'godDamageMul' && !this.builtGods.has(b.effect.god))
+
+  /** Gold cost of the NEXT reroll — 0 while the run's single free reroll is unused, else escalating
+   * with wave depth AND how many paid rerolls you've already bought this run. */
+  rerollCost(): number {
+    if (!this.freeRerollUsed) return 0
+    return Math.round(REROLL_BASE * (1 + this.wave / 10) * REROLL_GROWTH ** this.paidRerolls)
+  }
+
+  /** "Tempt the Fates": reroll the OPEN draft, spending the free reroll or escalating gold. Returns
+   * true only if it actually rerolled (false when no draft is open or the player can't afford it). */
+  rerollDraft(): boolean {
+    if (!this.draft) return false
+    const cost = this.rerollCost()
+    if (cost > 0) {
+      if (!this.purchase(cost)) return false // too poor — no-op, the card stays
+      this.paidRerolls++
+    } else {
+      this.freeRerollUsed = true
+    }
+    this.draft = generateDraft(this.wave, this.rng, 3 + (this.meta.draftBonusOptions ?? 0), this.draftExclude, this.boonCounts)
+    return true
   }
 
   /** Earn gold AND tally it for the end-of-run stats (the one income choke point). */
@@ -282,10 +322,7 @@ export class RunController {
         this.wave,
         this.rng,
         3 + (this.meta.draftBonusOptions ?? 0), // Pantheon draft luck
-        (b) =>
-          (b.effect.kind === 'secondWind' && this.secondWindArmed) || // an armed Nike re-offer is dead
-          (b.effect.kind === 'livesGrant' && this.lives >= this.maxLives) || // heal at full HP is dead
-          (b.effect.kind === 'godDamageMul' && !this.builtGods.has(b.effect.god)), // boon for an unfielded god is dead
+        this.draftExclude,
         this.boonCounts,
       )
       this.nextDraftWave = scheduleNextDraft(this.wave, this.rng)
@@ -320,6 +357,7 @@ export class RunController {
       draftOptions: this.draft,
       invincible: this.invincible,
       canStartWave: this.phase === 'building' && !this.draft,
+      rerollCost: this.rerollCost(),
     }
   }
 
