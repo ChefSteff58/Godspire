@@ -31,14 +31,14 @@ export const SITES: readonly Site[] = [
 ]
 
 /** Multiplicative fold of every site covering `pos` (+ per-god easter eggs at a tighter radius).
- *  Small on purpose (≤ +8-15% one stat). */
-export function siteBuffAt(pos: Vec2, god?: string): { fireRateMul: number; rangeMul: number } {
+ *  Small on purpose (≤ +8-15% one stat). `radiusMul` grows every site's reach (M11 Blessed Grove). */
+export function siteBuffAt(pos: Vec2, god?: string, radiusMul = 1): { fireRateMul: number; rangeMul: number } {
   let fireRateMul = 1
   let rangeMul = 1
   for (const s of SITES) {
     const d = Math.hypot(pos.x - s.pos.x, pos.y - s.pos.y)
-    if (d <= s.radius) fireRateMul *= s.effect.fireRateMul ?? 1
-    if (s.easterEgg && god === s.easterEgg.god && d <= s.easterEgg.radius) rangeMul *= s.easterEgg.rangeMul
+    if (d <= s.radius * radiusMul) fireRateMul *= s.effect.fireRateMul ?? 1
+    if (s.easterEgg && god === s.easterEgg.god && d <= s.easterEgg.radius * radiusMul) rangeMul *= s.easterEgg.rangeMul
   }
   return { fireRateMul, rangeMul }
 }

@@ -151,6 +151,24 @@ describe('RunController — build-defining boons (M11 S4)', () => {
   })
 })
 
+describe('RunController — map-altering boons (M11 S6)', () => {
+  it('Frozen Styx sets the run-long buildable flag', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    expect(run.frozenStyxBuildable).toBe(false)
+    pick(run, 'map-frozen-styx')
+    expect(run.frozenStyxBuildable).toBe(true)
+  })
+
+  it('Blessed Grove folds the Sacred-Site radius multiplier', () => {
+    const run = new RunController(() => 0.5)
+    run.start(META)
+    expect(run.siteRadiusMul).toBe(1)
+    pick(run, 'map-blessed-grove')
+    expect(run.siteRadiusMul).toBeCloseTo(2)
+  })
+})
+
 describe('RunController — visual boons (M11 S5)', () => {
   it('Early Ascension is a scene-driven no-op in the pure run (no crash, no stat change on its own)', () => {
     const run = new RunController(() => 0.5)

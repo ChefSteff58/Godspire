@@ -56,6 +56,12 @@ describe('the lake in canPlace', () => {
     expect(canPlace({ x: 500, y: 300 }, 16, { ...ctx, terrain: 'water' as const }).ok).toBe(true)
   })
 
+  it('Frozen Styx (M11): the boon flag lets ANY god build on the lake', () => {
+    expect(canPlace({ x: 590, y: 330 }, 16, ctx).ok).toBe(false) // normally blocked
+    expect(canPlace({ x: 590, y: 330 }, 16, { ...ctx, frozenStyxBuildable: true }).ok).toBe(true)
+    expect(canPlace({ x: 500, y: 300 }, 16, { ...ctx, frozenStyxBuildable: true }).ok).toBe(true)
+  })
+
   it('points across the road from the pocket are unaffected by the lake', () => {
     // uses the REAL path/obstacles/terrain: assert the lake obstacle is not what fires there
     const r = canPlace({ x: 300, y: 350 }, 16, { ground: () => true })

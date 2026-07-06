@@ -73,7 +73,9 @@ export class RunController {
 
   private meta: Modifiers = { startingGold: 0, startingLives: 0, towerDamageMul: 1, fireRateMul: 1, bossDamageMul: 1, incomeMul: 1, goldPerKillAdd: 0, startingShield: 0, secondWindStart: false, draftBonusOptions: 0 }
   // Placeholder; start() rebuilds modifiers (incl. a godDamageMul entry per god) via foldRunModifiers.
-  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0, critChance: 0, critMult: 1, chainChance: 0, instakillChance: 0, camoRevealChance: 0, monotheistMul: 1, pantheonPerGod: 0, vengeancePerLife: 0 }
+  private modifiers: RunModifiers = { towerDamageMul: 1, fireRateMul: 1, goldPerKillBonus: 0, godDamageMul: { zeus: 1, apollo: 1, demeter: 1, hermes: 1, hephaestus: 1, poseidon: 1, aphrodite: 1, athena: 1 }, bossDamageMul: 1, incomeMul: 1, demeterIncomeMul: 1, knockbackMul: 1, auraRangeMul: 1, charmTargetsAdd: 0, spikeChargesAdd: 0, critChance: 0, critMult: 1, chainChance: 0, instakillChance: 0, camoRevealChance: 0, monotheistMul: 1, pantheonPerGod: 0, vengeancePerLife: 0, siteRadiusMul: 1 }
+  /** M11 Frozen Styx: once picked, the lake is buildable ground for the rest of the run. */
+  frozenStyxBuildable = false
   private persistentEffects: BoonEffect[] = []
   /** How many times each boon id has been drafted — de-weights repeats in later drafts. */
   private boonCounts = new Map<string, number>()
@@ -116,6 +118,7 @@ export class RunController {
     this.nextDraftWave = scheduleNextDraft(0, this.rng) // first draft 3–5 waves in, never before wave 1
     this.freeRerollUsed = false
     this.paidRerolls = 0
+    this.frozenStyxBuildable = false
     this.spec = null
     this.groupIdx = 0
     this.spawnedInGroup = 0
@@ -376,6 +379,7 @@ export class RunController {
   get chainChance(): number { return this.modifiers.chainChance }
   get instakillChance(): number { return this.modifiers.instakillChance }
   get camoRevealChance(): number { return this.modifiers.camoRevealChance }
+  get siteRadiusMul(): number { return this.modifiers.siteRadiusMul } // Blessed Grove
 
   snapshot(): RunSnapshot {
     return {
@@ -455,6 +459,9 @@ export class RunController {
         break
       case 'earlyAscension':
         break // scene-handled (sprite swap + a per-god damage bump via grantGodBoon)
+      case 'frozenStyx':
+        this.frozenStyxBuildable = true // the lake is buildable ground for the rest of the run
+        break
       case 'composite':
         for (const sub of e.effects) this.applyEffect(sub)
         break

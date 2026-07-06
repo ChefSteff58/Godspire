@@ -49,6 +49,8 @@ export interface RunModifiers {
   pantheonPerGod: number
   /** Vengeance: +this per life Olympus has lost this run (0 = inactive). */
   vengeancePerLife: number
+  /** Blessed Grove: ×reach of every Sacred Site's buff radius (1 = unchanged). */
+  siteRadiusMul: number
 }
 
 // SpawnDesc moved to core/entities/enemy.ts (it's enemy-shaped, and onDeath returns it).

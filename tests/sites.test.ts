@@ -41,6 +41,15 @@ describe('sacred sites (the Olive of Athena)', () => {
     expect(isBuildableGround(olive.pos.x, olive.pos.y)).toBe(true)
   })
 
+  it('Blessed Grove (M11 radiusMul) grows the blessing reach — fire-rate + easter-egg alike', () => {
+    const justOut = { x: olive.pos.x + olive.radius + 20, y: olive.pos.y } // outside the normal radius
+    expect(siteBuffAt(justOut, undefined, 1).fireRateMul).toBe(1) // no blessing normally
+    expect(siteBuffAt(justOut, 'athena', 2).fireRateMul).toBeCloseTo(1.08) // ×2 reach now covers it
+    const eggOut = { x: olive.pos.x + olive.easterEgg!.radius + 10, y: olive.pos.y }
+    expect(siteBuffAt(eggOut, 'athena', 1).rangeMul).toBe(1)
+    expect(siteBuffAt(eggOut, 'athena', 2).rangeMul).toBeCloseTo(1.15) // egg radius grows too
+  })
+
   it("EASTER EGG: it is HER tree — Athena near the trunk sees +15% further", () => {
     const egg = olive.easterEgg!
     expect(egg.god).toBe('athena')

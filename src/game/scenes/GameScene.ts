@@ -46,7 +46,7 @@ import { hasSprite, hasTileset } from '../assets/manifest'
 import { DirAnimSprite } from '../render/DirAnimSprite'
 import { layoutWangTiles, WANG_TILE_FOR_MASK } from '../render/wang'
 import { stonePredicate, grassPredicate, isBuildableGround, terrainAt, TERRAIN_TILE_PX } from '../../core/map/terrain'
-import { waterAt } from '../../core/map/water'
+import { waterAt, STYX_POINTS } from '../../core/map/water'
 import { isLavaVertex, lavaVertexSet } from '../../core/map/lava'
 import { SITES, siteBuffAt } from '../../core/map/sites'
 import { dir8, dirToTarget } from '../render/facing'
@@ -160,6 +160,7 @@ export class GameScene extends Phaser.Scene {
   // M11 Early Ascension: towers force-ascended by a boon (outside the normal tier-5 gate).
   private readonly forcedAscTowers = new Set<string>()
   private goldenAgeApplied = false // M11 Golden Age: one-time camera gold grade
+  private styxFrozen = false // M11 Frozen Styx: one-time ice overlay on the lake
   private overlay!: Phaser.GameObjects.Graphics
   private ghost!: Phaser.GameObjects.Graphics
   private pointer: Vec2 = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 }
@@ -239,6 +240,7 @@ export class GameScene extends Phaser.Scene {
     this.charmedByTower.clear()
     this.forcedAscTowers.clear()
     this.goldenAgeApplied = false
+    this.styxFrozen = false
     this.enemyShadows.clear()
     this.towerShadows.clear()
     this.posCache.clear()
@@ -1091,7 +1093,7 @@ export class GameScene extends Phaser.Scene {
       tower.cooldown -= dtSec
       if (tower.cooldown > 0) continue
       const aura = this.auraAt(tower.pos) // Athena buffs nearby gods + reveals stealth foes
-      const site = siteBuffAt(tower.pos, tower.god) // sacred sites bless from the map itself (+ per-god easter eggs)
+      const site = siteBuffAt(tower.pos, tower.god, this.run.siteRadiusMul) // sacred sites bless from the map itself (+ per-god easter eggs)
       const fireRate = this.run.effectiveFireRate(tower.god, eff.fireRate * aura.fireRateMul * site.fireRateMul)
       const dep = TOWER_STATS[tower.god].deployable
       if (dep) {
@@ -1575,7 +1577,7 @@ export class GameScene extends Phaser.Scene {
       }
       const eff = this.towerEff(tower)
       const cap = Math.max(0, Math.floor(eff.slowTargets) + this.run.charmTargetsAdd) // M11 Rapture (only slowAura = Aphrodite)
-      const r = eff.range * siteBuffAt(tower.pos, tower.god).rangeMul
+      const r = eff.range * siteBuffAt(tower.pos, tower.god, this.run.siteRadiusMul).rangeMul
       const r2 = r * r
       const inRange = (e: Enemy): boolean => {
         const ep = this.enemyPos(e)
@@ -2134,7 +2136,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (selected || showDebug) {
         const eff = this.towerEff(tower) // folded ONLY when actually drawn (this loop runs every frame)
-        const range = eff.range * siteBuffAt(tower.pos, tower.god).rangeMul // the ring GROWS by her tree
+        const range = eff.range * siteBuffAt(tower.pos, tower.god, this.run.siteRadiusMul).rangeMul // the ring GROWS by her tree
         const slow = TOWER_STATS[tower.god].slowAura
         const buff = TOWER_STATS[tower.god].auraBuff
         // simple solid range circles — dashes/breathing read as noise (2026-07-01 playtest)
@@ -2240,7 +2242,10 @@ export class GameScene extends Phaser.Scene {
       if (pos.x < r || pos.x > GAME_WIDTH - r || pos.y < r || pos.y > GAME_HEIGHT - r) return false
     }
     const terrain = stats.requiresWater ? 'water' : undefined
-    if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints(), terrain }).ok) return false
+    // M11 Frozen Styx: the lake is buildable by any god — skip the water obstacle AND count lake cells as ground.
+    const frozen = this.run.frozenStyxBuildable
+    const ground = frozen ? (x: number, y: number) => isBuildableGround(x, y) || waterAt(x, y) : undefined
+    if (!canPlace(pos, stats.footprint, { towers: this.towerFootprints(), terrain, frozenStyxBuildable: frozen, ground }).ok) return false
     if (stats.requiresWater && !this.onWater(pos)) return false
     return true
   }
@@ -2293,7 +2298,7 @@ export class GameScene extends Phaser.Scene {
     // the range ring + a faint footprint marker, coloured by validity
     g.lineStyle(1.5, tint, 0.85)
     // fold site easter eggs into the preview ring — dragging Athena toward her tree REVEALS it
-    g.strokeCircle(this.pointer.x, this.pointer.y, stats.range * siteBuffAt(this.pointer, placingGod).rangeMul)
+    g.strokeCircle(this.pointer.x, this.pointer.y, stats.range * siteBuffAt(this.pointer, placingGod, this.run.siteRadiusMul).rangeMul)
     g.fillStyle(tint, 0.18)
     g.fillCircle(this.pointer.x, this.pointer.y, stats.footprint)
     // preview the actual tower under the cursor (the tower WITH its ring, not a bare circle)
@@ -2440,7 +2445,23 @@ export class GameScene extends Phaser.Scene {
   /** Route a just-picked boon's SCENE-side effect — the visual transforms the pure run can't do. */
   private applyBoonSceneFx(boon: { id: string; effect: { kind: string } }): void {
     if (boon.effect.kind === 'earlyAscension') this.earlyAscension()
+    else if (boon.effect.kind === 'frozenStyx') this.freezeStyxVisual()
     else if (boon.id === 'vis-golden-age') this.applyGoldenAge()
+  }
+
+  /** M11 Frozen Styx: a one-time frosty overlay on the lake (placement is unlocked by the run flag). */
+  private freezeStyxVisual(): void {
+    if (this.styxFrozen) return
+    this.styxFrozen = true
+    const g = this.add.graphics().setDepth(1.7)
+    g.fillStyle(0xbfe8ff, 0.3)
+    g.beginPath()
+    g.moveTo(STYX_POINTS[0].x, STYX_POINTS[0].y)
+    for (const p of STYX_POINTS.slice(1)) g.lineTo(p.x, p.y)
+    g.closePath()
+    g.fillPath()
+    g.lineStyle(2, 0xffffff, 0.55).strokePath() // a frosty rim
+    this.floatText(585, 330, '❄ The Styx freezes over', '#dff4ff')
   }
 
   /** M11 Early Ascension: a random fielded god ascends NOW (sprite swap + flourish) and gains +30% dmg. */
@@ -2681,7 +2702,7 @@ export class GameScene extends Phaser.Scene {
         const eff = this.towerEff(tower)
         const aura = this.auraAt(tower.pos)
         target = selectTarget(
-          { pos: tower.pos, range: eff.range * siteBuffAt(tower.pos, tower.god).rangeMul, canHitAir: eff.canHitAir, canDetect: eff.canDetect || aura.detect },
+          { pos: tower.pos, range: eff.range * siteBuffAt(tower.pos, tower.god, this.run.siteRadiusMul).rangeMul, canHitAir: eff.canHitAir, canDetect: eff.canDetect || aura.detect },
           this.enemies,
           this.enemyPos,
           tower.targeting,

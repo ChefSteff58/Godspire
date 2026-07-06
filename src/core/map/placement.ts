@@ -66,6 +66,8 @@ export interface PlaceCtx {
   bounds?: { w: number; h: number }
   /** A water god may build on water-terrain obstacles. */
   terrain?: 'water'
+  /** M11 Frozen Styx: the lake iced over — ALL gods may build on water-terrain obstacles this run. */
+  frozenStyxBuildable?: boolean
   /** Buildable-ground predicate (defaults to the canonical terrain noise — chasm cells reject). */
   ground?: (x: number, y: number) => boolean
 }
@@ -95,7 +97,7 @@ export function canPlace(pos: Vec2, footprint: number, ctx: PlaceCtx = {}): Plac
     return { ok: false, reason: 'cliff' }
   }
   for (const o of obstacles) {
-    if (o.terrain === 'water' && ctx.terrain === 'water') continue
+    if (o.terrain === 'water' && (ctx.terrain === 'water' || ctx.frozenStyxBuildable)) continue // Poseidon, or a frozen Styx
     if (obstacleHit(pos, footprint, o)) return { ok: false, reason: 'obstacle' }
   }
   for (const t of towers) {

@@ -41,6 +41,9 @@ export type BoonEffect =
   | { kind: 'monotheistMul'; value: number } // ×dmg while exactly one god fielded
   | { kind: 'pantheonPerGod'; value: number } // +dmg per distinct god fielded
   | { kind: 'vengeancePerLife'; value: number } // +dmg per life lost this run
+  // ── M11 map-altering ──
+  | { kind: 'frozenStyx' } // scene+run: the lake ices over → buildable ground this run
+  | { kind: 'siteRadiusMul'; value: number } // Blessed Grove: grow every Sacred Site's reach
   // ── combinators ──
   | { kind: 'composite'; effects: BoonEffect[] }
   | { kind: 'coinflipFold'; win: BoonEffect; lose: BoonEffect } // 50/50 on pick
@@ -77,6 +80,7 @@ export const CAMO_REVEAL_CAP = 0.25
 export const MONOTHEIST_CAP = 3
 export const PANTHEON_PER_GOD_CAP = 0.15
 export const VENGEANCE_PER_LIFE_CAP = 0.05
+export const SITE_RADIUS_CAP = 3
 
 export const BOON_POOL: readonly Boon[] = [
   // ── Economy ──
@@ -131,6 +135,10 @@ export const BOON_POOL: readonly Boon[] = [
   // ── Visual / transform (M11 S5): boons you can SEE happen on the field ──
   { id: 'vis-early-ascension', name: 'Early Ascension', desc: 'A random god you field ascends now (+30% damage).', flavor: 'Skip the paperwork. Straight to godhood.', icon: '🌟', rarity: 'rare', category: 'core', effect: { kind: 'earlyAscension' } },
   { id: 'vis-golden-age', name: 'Golden Age', desc: 'Olympus blazes gold: all gods +12% damage and +12% fire rate.', flavor: 'For one shining age, everything the light touches is yours. The light touches everything.', icon: '🌅', rarity: 'epic', category: 'off', effect: { kind: 'composite', effects: [{ kind: 'towerDamageMul', value: 1.12 }, { kind: 'fireRateMul', value: 1.12 }] } },
+
+  // ── Map-altering (M11 S6): run-long changes to the battlefield itself ──
+  { id: 'map-frozen-styx', name: 'Frozen Styx', desc: 'The Lake of Styx ices over — build on it for the rest of the run.', flavor: 'Even the river of the dead can be told to hold still. Briefly. Rudely.', icon: '❄️', rarity: 'rare', category: 'util', effect: { kind: 'frozenStyx' } },
+  { id: 'map-blessed-grove', name: 'Blessed Grove', desc: "The Sacred Olive's blessing reaches twice as far.", flavor: 'Athena waters her tree. It has opinions about property lines now.', icon: '🌳', rarity: 'epic', category: 'util', effect: { kind: 'siteRadiusMul', value: 2 } },
 ]
 
 /** A fresh RunModifiers seeded from the meta save (before any boon). godDamageMul covers every god. */
@@ -158,6 +166,7 @@ export function baseRunModifiers(meta: Modifiers): RunModifiers {
     monotheistMul: 1,
     pantheonPerGod: 0,
     vengeancePerLife: 0,
+    siteRadiusMul: 1,
   }
 }
 
@@ -199,6 +208,7 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
     else if (e.kind === 'monotheistMul') rm.monotheistMul = Math.max(rm.monotheistMul, e.value)
     else if (e.kind === 'pantheonPerGod') rm.pantheonPerGod += e.value
     else if (e.kind === 'vengeancePerLife') rm.vengeancePerLife += e.value
+    else if (e.kind === 'siteRadiusMul') rm.siteRadiusMul *= e.value
   }
   rm.fireRateMul = Math.min(rm.fireRateMul, FIRE_RATE_CAP)
   rm.towerDamageMul = Math.min(rm.towerDamageMul, TOWER_DAMAGE_CAP)
@@ -215,5 +225,6 @@ export function foldRunModifiers(meta: Modifiers, effects: readonly BoonEffect[]
   rm.monotheistMul = Math.min(rm.monotheistMul, MONOTHEIST_CAP)
   rm.pantheonPerGod = Math.min(rm.pantheonPerGod, PANTHEON_PER_GOD_CAP)
   rm.vengeancePerLife = Math.min(rm.vengeancePerLife, VENGEANCE_PER_LIFE_CAP)
+  rm.siteRadiusMul = Math.min(rm.siteRadiusMul, SITE_RADIUS_CAP)
   return rm
 }
