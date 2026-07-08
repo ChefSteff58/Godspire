@@ -8,7 +8,16 @@ import {
   canUnlock,
 } from '../core/progress/rules'
 import { isSupabaseConfigured } from '../lib/supabase/client'
-import { ensureSession, linkEmail, linkGoogle, signOut, subscribeAuth } from '../lib/supabase/auth'
+import {
+  ensureSession,
+  isReturningSignIn,
+  linkEmail,
+  linkGoogle,
+  signInEmail,
+  signInGoogle,
+  signOut,
+  subscribeAuth,
+} from '../lib/supabase/auth'
 import { loadProfile, updateProfileName } from '../lib/supabase/profiles'
 import { submitScore as submitScoreToBoard, fetchMyBest } from '../lib/supabase/leaderboard'
 import { loadProgress, saveProgress } from '../lib/persistence/progressRepo'
@@ -51,6 +60,10 @@ interface SessionStore {
   setDisplayName: (name: string) => Promise<void>
   linkEmail: (email: string) => Promise<{ ok: boolean; error?: string }>
   linkGoogle: () => Promise<{ ok: boolean; error?: string }>
+  /** Sign IN to a returning account (email magic link) — replaces the guest session; SIGNED_IN reconciles. */
+  signInEmail: (email: string) => Promise<{ ok: boolean; error?: string }>
+  /** Sign IN to a returning account with Google (OAuth redirect) — SIGNED_IN reconciles on return. */
+  signInGoogle: () => Promise<{ ok: boolean; error?: string }>
   signOut: () => Promise<void>
 }
 
@@ -75,6 +88,32 @@ export const useSessionStore = create<SessionStore>((set, get) => {
   const canCloudWrite = (): string | null => {
     const { userId, status } = get()
     return userId && isSupabaseConfigured && status === 'ready' ? userId : null
+  }
+
+  /**
+   * A RETURNING sign-in (email magic link / Google OAuth) lands us on a different, NON-guest identity
+   * than the boot guest. Merge the guest's local progress into that account's cloud progress — the same
+   * LWW + monotonic-max reconcile boot() does — so nothing the player did as a guest is lost, then adopt
+   * the account's display name. Best-effort; never throws.
+   *
+   * Invoked (fire-and-forget) from the auth callback, so it must NOT await any `supabase.auth.*` method
+   * (deadlock). DB reads/writes via loadProgress/saveProgress/loadProfile are fine — only auth is barred.
+   */
+  const reconcile = async (userId: string) => {
+    try {
+      const local = readLocalProgress()
+      const [cloud, profile] = await Promise.all([loadProgress(userId), loadProfile(userId)])
+      const merged = mergeProgress(local, cloud)
+      writeLocalProgress(merged)
+      set({
+        progress: merged,
+        displayName: profile?.displayName ?? readLocalName() ?? DEFAULT_NAME,
+        status: 'ready',
+      })
+      await cloudSave(userId, merged)
+    } catch (e) {
+      console.warn('[godspire] sign-in reconcile failed:', e)
+    }
   }
 
   return {
@@ -107,10 +146,18 @@ export const useSessionStore = create<SessionStore>((set, get) => {
         }
         set({ userId: user.id, isGuest: user.isGuest })
 
-        // React to future auth changes (link / sign-out). No supabase awaits inside the callback.
-        subscribeAuth((u) => {
+        // React to future auth changes (sign-in / link / sign-out). NO supabase.auth.* awaits inside
+        // the callback (deadlock) — reconcile() only touches the DB + local cache, which is safe.
+        subscribeAuth((u, _session, event) => {
           if (u) {
+            const prev = get()
             set({ userId: u.id, isGuest: u.isGuest })
+            // A RETURNING sign-in hands us a NON-guest identity we didn't already hold. boot()'s own
+            // anon sign-in is a guest SIGNED_IN → skipped; INITIAL_SESSION / TOKEN_REFRESHED /
+            // USER_UPDATED aren't SIGNED_IN. (Predicate is pure + unit-tested in auth.ts.)
+            if (isReturningSignIn(event, u, { userId: prev.userId, isGuest: prev.isGuest })) {
+              void reconcile(u.id) // fire-and-forget (see reconcile's deadlock note)
+            }
           } else {
             // cross-tab sign-out / session loss: drop identity so this tab can't resurrect the
             // just-cleared save back into localStorage
@@ -205,6 +252,8 @@ export const useSessionStore = create<SessionStore>((set, get) => {
 
     linkEmail: (email) => linkEmail(email),
     linkGoogle: () => linkGoogle(),
+    signInEmail: (email) => signInEmail(email),
+    signInGoogle: () => signInGoogle(),
 
     signOut: async () => {
       await signOut()

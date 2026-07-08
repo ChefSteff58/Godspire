@@ -2,6 +2,7 @@ import { useGameStore } from '../../state/gameStore'
 import { spriteUrl } from '../../game/assets/manifest'
 import { uiUrl } from '../assets/uiKit'
 import { TitleLightning } from './TitleLightning'
+import { AccountBadge } from '../account/AccountBadge'
 
 /**
  * The front door. Pure React/CSS (no Phaser — the game mounts only after Play): a Tartarus-glow
@@ -28,6 +29,10 @@ export function TitleScreen() {
 
   return (
     <div className="relative flex h-dvh w-full flex-col items-center justify-center overflow-hidden bg-shrine-abyss">
+      {/* account chip — a returning player can sign in from the front door (guest → load saved account) */}
+      <div className="absolute left-4 top-4 z-20">
+        <AccountBadge />
+      </div>
       {/* backdrop: the rift's ember glow rising from below, Olympus gold above */}
       <div
         className="pointer-events-none absolute inset-0"

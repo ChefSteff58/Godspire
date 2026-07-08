@@ -14,11 +14,16 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
   const setDisplayName = useSessionStore((s) => s.setDisplayName)
   const linkEmail = useSessionStore((s) => s.linkEmail)
   const linkGoogle = useSessionStore((s) => s.linkGoogle)
+  const signInEmail = useSessionStore((s) => s.signInEmail)
+  const signInGoogle = useSessionStore((s) => s.signInGoogle)
   const signOut = useSessionStore((s) => s.signOut)
 
   const [name, setName] = useState(displayName)
   const [email, setEmail] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
+  // 'link' = upgrade THIS guest to an account (keeps id + progress); 'signin' = returning player loading
+  // an EXISTING account (replaces the session; guest progress is merged on SIGNED_IN — see reconcile).
+  const [mode, setMode] = useState<'link' | 'signin'>('link')
 
   const level = levelForFavor(progress.favor)
   const points = availablePoints(progress)
@@ -35,9 +40,32 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           ? 'Sync error — saved locally'
           : 'Saved ✓'
 
+  // updateUser rejects an email that already belongs to another account — that's a returning player who
+  // should SIGN IN, not link. Supabase phrases it a few ways; match loosely.
+  function isAlreadyRegistered(err?: string): boolean {
+    if (!err) return false
+    const e = err.toLowerCase()
+    return e.includes('already') || e.includes('registered') || e.includes('exists')
+  }
+
   async function onLinkEmail() {
     if (!email.trim()) return
     const res = await linkEmail(email.trim())
+    if (res.ok) {
+      setMsg('Check your email for a sign-in link.')
+      return
+    }
+    if (isAlreadyRegistered(res.error)) {
+      setMode('signin')
+      setMsg('That email already has an account — sign in to load it.')
+      return
+    }
+    setMsg(res.error ?? 'Could not send link.')
+  }
+
+  async function onSignInEmail() {
+    if (!email.trim()) return
+    const res = await signInEmail(email.trim())
     setMsg(res.ok ? 'Check your email for a sign-in link.' : (res.error ?? 'Could not send link.'))
   }
 
@@ -99,10 +127,21 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
           </p>
         ) : isGuest ? (
           <div className="pixel-chip arcade-bevel mb-4 rounded-lg bg-black/30 p-3">
-            <p className="font-pixel mb-1 text-sm font-semibold text-amber-200">Claim your throne ⚡</p>
-            <p className="mb-3 text-xs text-shrine-marble/60">
-              Save your progress across devices. (As a guest, clearing your browser loses it.)
-            </p>
+            {mode === 'link' ? (
+              <>
+                <p className="font-pixel mb-1 text-sm font-semibold text-amber-200">Claim your throne ⚡</p>
+                <p className="mb-3 text-xs text-shrine-marble/60">
+                  Save your progress across devices. (As a guest, clearing your browser loses it.)
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-pixel mb-1 text-sm font-semibold text-amber-200">Welcome back 🏛️</p>
+                <p className="mb-3 text-xs text-shrine-marble/60">
+                  Sign in to load a saved account. Anything from this guest session merges into it.
+                </p>
+              </>
+            )}
             <div className="flex gap-2">
               <input
                 value={email}
@@ -111,19 +150,28 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                 className="flex-1 rounded-lg bg-shrine-abyss px-3 py-2 text-sm text-shrine-marble ring-1 ring-white/10 placeholder:text-shrine-marble/40 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
               />
               <button
-                onClick={() => void onLinkEmail()}
+                onClick={() => void (mode === 'link' ? onLinkEmail() : onSignInEmail())}
                 className="pixel-btn pixel-btn--gold arcade-raise font-pixel rounded bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900"
               >
-                Link
+                {mode === 'link' ? 'Link' : 'Sign in'}
               </button>
             </div>
             <button
-              onClick={() => void linkGoogle()}
+              onClick={() => void (mode === 'link' ? linkGoogle() : signInGoogle())}
               className="arcade-raise mt-2 w-full rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-200"
             >
               Continue with Google
             </button>
             {msg && <p className="mt-2 text-xs text-amber-300">{msg}</p>}
+            <button
+              onClick={() => {
+                setMode(mode === 'link' ? 'signin' : 'link')
+                setMsg(null)
+              }}
+              className="mt-3 w-full text-center text-xs text-shrine-marble/60 underline decoration-dotted underline-offset-2 hover:text-amber-200"
+            >
+              {mode === 'link' ? 'Already have an account? Sign in' : 'New here? Claim your throne'}
+            </button>
           </div>
         ) : (
           <button
