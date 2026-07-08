@@ -142,23 +142,23 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
                 </p>
               </>
             )}
-            <div className="flex gap-2">
-              <input
-                value={email}
-                placeholder="you@example.com"
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 rounded-lg bg-shrine-abyss px-3 py-2 text-sm text-shrine-marble ring-1 ring-white/10 placeholder:text-shrine-marble/40 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
-              />
-              <button
-                onClick={() => void (mode === 'link' ? onLinkEmail() : onSignInEmail())}
-                className="pixel-btn pixel-btn--gold arcade-raise font-pixel rounded bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900"
-              >
-                {mode === 'link' ? 'Link' : 'Sign in'}
-              </button>
-            </div>
+            {/* clean, full-width controls — no 9-slice frame / pixel font here: it crowded the button
+                and wrapped short labels onto two lines. Legibility wins over kit-consistency in a form. */}
+            <input
+              value={email}
+              placeholder="you@example.com"
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg bg-shrine-abyss px-3 py-2.5 text-sm text-shrine-marble ring-1 ring-white/10 placeholder:text-shrine-marble/40 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+            />
+            <button
+              onClick={() => void (mode === 'link' ? onLinkEmail() : onSignInEmail())}
+              className="arcade-raise mt-2 w-full rounded-lg bg-amber-400 px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-amber-300"
+            >
+              {mode === 'link' ? 'Link account' : 'Sign in'}
+            </button>
             <button
               onClick={() => void (mode === 'link' ? linkGoogle() : signInGoogle())}
-              className="arcade-raise mt-2 w-full rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-200"
+              className="arcade-raise mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-200"
             >
               Continue with Google
             </button>
