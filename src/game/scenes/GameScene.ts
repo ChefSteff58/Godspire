@@ -420,13 +420,11 @@ export class GameScene extends Phaser.Scene {
     glow.fillCircle(0, GAME_HEIGHT, 240)
     glow.fillStyle(0x3a2f10, 0.2)
     glow.fillCircle(GAME_WIDTH, 0, 240)
-    // corner vignette — focuses the eye center-field and hides the hard canvas edge (static, no frame cost)
-    const v = this.add.graphics().setDepth(0.6)
-    v.fillStyle(0x000000, 0.18)
-    v.fillEllipse(0, 0, 520, 340)
-    v.fillEllipse(GAME_WIDTH, 0, 520, 340)
-    v.fillEllipse(0, GAME_HEIGHT, 520, 340)
-    v.fillEllipse(GAME_WIDTH, GAME_HEIGHT, 520, 340)
+    // vignette — a SMOOTH radial darkening (transparent centre → dark edges) that focuses the eye and
+    // hides the hard canvas edge. (Was 4 hard-edged ellipses that read as grey CIRCLES in the corners
+    // once the portal set-pieces were removed — replaced with a gradient 2026-07-08.)
+    this.ensureVignetteTexture()
+    const v = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'fx_vignette').setDepth(0.6)
     // M10-S3: heat rising from below the world's rim — the map no longer ends in flat void.
     // Strong over Tartarus (left), fading toward Olympus (right).
     const heat = this.add.graphics().setDepth(0.6)
@@ -793,6 +791,24 @@ export class GameScene extends Phaser.Scene {
     grad.addColorStop(1, 'rgba(245,208,97,0)')
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, S, S)
+    c.refresh()
+  }
+
+  /** A full-frame vignette texture: transparent centre → dark edges (smooth radial), built once. Reads
+   *  as a soft frame-darkening, NOT the four discrete corner circles it replaced. */
+  private ensureVignetteTexture(): void {
+    if (this.textures.exists('fx_vignette')) return
+    const W = GAME_WIDTH
+    const H = GAME_HEIGHT
+    const c = this.textures.createCanvas('fx_vignette', W, H)
+    if (!c) return
+    const ctx = c.getContext()
+    const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.34, W / 2, H / 2, Math.max(W, H) * 0.62)
+    grad.addColorStop(0, 'rgba(0,0,0,0)')
+    grad.addColorStop(0.7, 'rgba(0,0,0,0.10)')
+    grad.addColorStop(1, 'rgba(0,0,0,0.30)')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, W, H)
     c.refresh()
   }
 
