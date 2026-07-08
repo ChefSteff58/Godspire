@@ -147,6 +147,7 @@ export function createEnemy(kind: EnemyKind = 'shade'): Enemy {
     slowMul: 1,
     slowTimerMs: 0,
     stealth: t.stealth,
+    emerging: false, // set true only for fresh hellmouth spawns (GameScene.spawnEnemy)
   }
 }
 

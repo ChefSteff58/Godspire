@@ -79,6 +79,12 @@ const ATTACK_HOLD_MS = 450
 // The sim's base walk speed (px/s) — enemy walk-cycle cadence is scaled by speed/BASE so charmed foes
 // visibly crawl and satyrs visibly sprint instead of every walk cycling at one fixed fps.
 const BASE_ENEMY_SPEED = 60
+// Hellmouth climb-out: an emerging enemy is invisible + UNtargetable until its center clears the rim.
+// The rim overlay (obj_rift_patch, cropped x=88..192, drawn OVER enemies) hides the pit exit, so a
+// creature is only fully materialized + targetable once past that lip — else a tower by the pit locks
+// onto a body still tucked behind the glowing crust and "fires into nothing".
+const EMERGE_START_X = 118 // alpha begins ramping here (behind the lip)
+const EMERGE_END_X = 200 // full alpha + targetable here — just past the rim's 192 right edge (1st corner is x=210)
 // The Wang ground tilesets (M8 Stage 4; M9 adds the 3-band gradient). 32px tiles over the 960×540
 // field → a 30×17 grid (the last row overdraws 4px; Scale.FIT clips it). The terrain NOISE lives in
 // src/core/map/terrain.ts — cliffs are GAMEPLAY now, so render + placement share one canonical truth.
@@ -1054,14 +1060,16 @@ export class GameScene extends Phaser.Scene {
       const shadow = this.enemyShadows.get(enemy.id)
       shadow?.setPosition(pos.x, pos.y + (shadow.getData('dy') as number))
       if (sp) {
-        // hellmouth climb-out: alpha tracks position across the rim lip (x 118→166), and the
-        // moment the lip is crossed the creature POPS to full size with an ember scrabble
+        // hellmouth climb-out: alpha tracks position across the rim lip (x 118→200, past the rim
+        // overlay), and the moment the lip is crossed the creature POPS to full size with an ember scrabble
         const emergeA = sp.getData('emergeAlpha') as number | undefined
         if (emergeA !== undefined) {
-          const t = Math.min(1, Math.max(0, (pos.x - 118) / 48))
+          const t = Math.min(1, Math.max(0, (pos.x - EMERGE_START_X) / (EMERGE_END_X - EMERGE_START_X)))
           sp.setAlpha(emergeA * t)
           shadow?.setAlpha(0.18 * t)
-          if (pos.x >= 166 || enemy.pathT > 0.12) {
+          if (pos.x >= EMERGE_END_X) { // fully over the lip — materialize + become targetable together
+            // (no pathT fallback: it fired at ~x176, clearing emerging while still behind the rim; every
+            //  hellmouth spawn reliably walks past EMERGE_END_X, so x is the one honest gate)
             sp.setData('emergeAlpha', undefined)
             enemy.emerging = false // over the lip — towers may now acquire it
             sp.setAlpha(emergeA)
@@ -1655,6 +1663,7 @@ export class GameScene extends Phaser.Scene {
         if (spike.charges <= 0) break
         const e = this.enemies[j]
         if (e.flying || spike.hitIds.has(e.id)) continue // ground-only, once per enemy
+        if (e.emerging) continue // a trap can't pop a body still climbing out of the pit
         const ep = this.enemyPos(e)
         const r = spike.hitRadius + damagedRadius(enemyRadius(e), e.hp / e.maxHp)
         if ((spike.pos.x - ep.x) ** 2 + (spike.pos.y - ep.y) ** 2 <= r * r) {
@@ -1761,6 +1770,7 @@ export class GameScene extends Phaser.Scene {
         if (p.pierceLeft < 0) break
         const e = this.enemies[j]
         if (p.hitIds.includes(e.id)) continue
+        if (e.emerging) continue // still climbing out of the hellmouth — a stray arrow can't clip it in the pit
         if (e.flying && !p.canHitAir) continue // ground-only arrows pass under fliers
         const ep = this.enemyPos(e)
         const hitR = damagedRadius(enemyRadius(e), e.hp / e.maxHp) + 5
