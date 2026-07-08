@@ -15,6 +15,7 @@ export function TitleScreen() {
   const startGame = useGameStore((s) => s.startGame)
   const openPantheon = useGameStore((s) => s.openPantheon)
   const openLeaderboard = useGameStore((s) => s.openLeaderboard)
+  const openSettings = useGameStore((s) => s.openSettings)
   const zeus = spriteUrl('zeus')
   const minotaur = spriteUrl('minotaur')
 
@@ -100,6 +101,12 @@ export function TitleScreen() {
           className="pixel-btn arcade-raise font-pixel w-full rounded bg-shrine-stone px-6 py-2.5 text-sm font-bold text-amber-200"
         >
           🏆 Ranks
+        </button>
+        <button
+          onClick={openSettings}
+          className="pixel-btn arcade-raise font-pixel w-full rounded bg-shrine-stone px-6 py-2.5 text-sm font-bold text-amber-200"
+        >
+          ⚙️ Settings
         </button>
       </div>
     </div>

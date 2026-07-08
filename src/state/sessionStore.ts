@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PlayerProgress, RunResult, Modifiers } from '../core/progress/types'
+import type { PlayerProgress, PlayerSettings, RunResult, Modifiers } from '../core/progress/types'
 import {
   emptyProgress,
   applyRunRewards,
@@ -57,6 +57,8 @@ interface SessionStore {
   submitScore: () => Promise<void>
   getModifiers: () => Modifiers
   unlockNode: (nodeId: string) => Promise<void>
+  /** Persist one gameplay preference (writeLocal + best-effort cloudSave, like unlockNode). */
+  setSetting: <K extends keyof PlayerSettings>(key: K, value: PlayerSettings[K]) => Promise<void>
   setDisplayName: (name: string) => Promise<void>
   linkEmail: (email: string) => Promise<{ ok: boolean; error?: string }>
   linkGoogle: () => Promise<{ ok: boolean; error?: string }>
@@ -228,6 +230,20 @@ export const useSessionStore = create<SessionStore>((set, get) => {
       const updated: PlayerProgress = {
         ...base,
         unlockedNodes: [...base.unlockedNodes, nodeId],
+        updatedAt: now(),
+      }
+      set({ progress: updated })
+      writeLocalProgress(updated)
+      const userId = canCloudWrite()
+      if (userId) await cloudSave(userId, updated)
+    },
+
+    setSetting: async (key, value) => {
+      // Rebase on shared state (another tab may have written since our snapshot), then patch the one key.
+      const base = mergeProgress(readLocalProgress(), get().progress)
+      const updated: PlayerProgress = {
+        ...base,
+        settings: { ...base.settings, [key]: value },
         updatedAt: now(),
       }
       set({ progress: updated })

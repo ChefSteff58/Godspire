@@ -21,7 +21,7 @@ export function emptyProgress(now: string = EPOCH): PlayerProgress {
     schemaVersion: PROGRESS_SCHEMA_VERSION,
     favor: 0,
     unlockedNodes: [],
-    settings: { muted: false },
+    settings: { muted: false, defaultSpeed: 1, reducedMotion: false, colorblind: false },
     stats: { runsPlayed: 0, bestWave: 0, totalKills: 0, bossesKilled: 0, totalGoldSpent: 0, totalTowersBuilt: 0 },
     updatedAt: now,
   }
@@ -157,9 +157,15 @@ export function canUnlock(
 }
 
 /**
- * Merge a local + cloud save. Last-writer-wins by single-clock `updatedAt`; `favor` and
- * `stats` are monotonic-max; `unlockedNodes` is taken WHOLE from the newer side (NEVER
- * unioned — a union would resurrect spent points). `level` is derived from favor, never merged.
+ * Merge a local + cloud save. `favor`/`stats` are monotonic-max; `settings` follow the newer side
+ * (by single-clock `updatedAt`); `unlockedNodes` (spent points) follow the side with MORE lifetime
+ * favor — that side owns the coherent, most-advanced spend — with ties broken by `updatedAt` (a fresh
+ * re-spend at equal favor). NEVER union nodes: a union resurrects spent points. `level` is derived.
+ *
+ * Why favor, not raw LWW, gates the build: a NO-GAMEPLAY timestamp bump — a guest flipping a Setting
+ * stamps `updatedAt: now()` on an otherwise-empty save — must NOT make that empty save "win" and wipe
+ * a returning account's real build on the sign-in reconcile. Favor only ever grows, so the higher-favor
+ * side is always the more-advanced build; an empty guest (favor 0) can no longer clobber it.
  */
 export function mergeProgress(
   local: PlayerProgress | null,
@@ -169,10 +175,11 @@ export function mergeProgress(
   if (!local) return cloud as PlayerProgress
   if (!cloud) return local
   const newer = local.updatedAt >= cloud.updatedAt ? local : cloud
+  const build = local.favor === cloud.favor ? newer : local.favor > cloud.favor ? local : cloud
   return {
     schemaVersion: PROGRESS_SCHEMA_VERSION,
     favor: Math.max(local.favor, cloud.favor),
-    unlockedNodes: [...newer.unlockedNodes],
+    unlockedNodes: [...build.unlockedNodes],
     settings: { ...newer.settings },
     stats: {
       runsPlayed: Math.max(local.stats.runsPlayed, cloud.stats.runsPlayed),
@@ -196,13 +203,19 @@ export function migrateProgress(raw: unknown): PlayerProgress {
       typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : d
     const stats = (r.stats ?? {}) as Record<string, unknown>
     const settings = (r.settings ?? {}) as Record<string, unknown>
+    const bool = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d)
     return {
       schemaVersion: PROGRESS_SCHEMA_VERSION,
       favor: Math.min(num(r.favor, 0), 1e12), // sane ceiling — corrupt saves can't explode the curve
       unlockedNodes: Array.isArray(r.unlockedNodes)
         ? [...new Set(r.unlockedNodes.filter((x): x is string => typeof x === 'string'))] // dupes double-apply
         : [],
-      settings: { muted: typeof settings.muted === 'boolean' ? settings.muted : false },
+      settings: {
+        muted: bool(settings.muted, false),
+        defaultSpeed: settings.defaultSpeed === 3 ? 3 : 1, // only 1|3 are valid; anything else → 1
+        reducedMotion: bool(settings.reducedMotion, false),
+        colorblind: bool(settings.colorblind, false),
+      },
       stats: {
         runsPlayed: num(stats.runsPlayed, 0),
         bestWave: num(stats.bestWave, 0),

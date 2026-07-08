@@ -3,6 +3,7 @@ import { GameScreen } from './ui/screens/GameScreen'
 import { TitleScreen } from './ui/screens/TitleScreen'
 import { PantheonTreePanel } from './ui/hud/PantheonTreePanel'
 import { LeaderboardOverlay } from './ui/hud/LeaderboardOverlay'
+import { SettingsPanel } from './ui/hud/SettingsPanel'
 import { useGameStore } from './state/gameStore'
 import { useSessionStore } from './state/sessionStore'
 
@@ -22,6 +23,7 @@ export default function App() {
           session, not a running game). During a run they now cover the full window — a modal's job. */}
       <PantheonTreePanel />
       <LeaderboardOverlay />
+      <SettingsPanel />
     </div>
   )
 }

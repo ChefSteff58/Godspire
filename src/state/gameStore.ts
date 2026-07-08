@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useSessionStore } from './sessionStore'
 import type { GodKind } from '../core/data/towers'
 import type { TargetingMode } from '../core/systems/targeting'
 import type { RunPhase } from '../core/run/types'
@@ -117,6 +118,8 @@ interface GameStore {
   pantheonOpen: boolean
   /** The leaderboard overlay is open (pauses the run while shown). */
   leaderboardOpen: boolean
+  /** The settings overlay is open (pauses the run while shown). */
+  settingsOpen: boolean
   /** Speed to restore when a full-screen menu overlay closes (stashed on open). */
   preMenuScale: number
   /** Bumped whenever a purchase is denied for lack of gold — the TopBar gold chip shakes on change. */
@@ -162,6 +165,8 @@ interface GameStore {
   closePantheon: () => void
   openLeaderboard: () => void
   closeLeaderboard: () => void
+  openSettings: () => void
+  closeSettings: () => void
   /** Signal a can't-afford click (scene → HUD feedback). */
   denyGold: () => void
 
@@ -216,12 +221,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   autoStart: true, // rounds auto-chain (BTD6 auto-play); the first wave still waits for a manual start
   pantheonOpen: false,
   leaderboardOpen: false,
+  settingsOpen: false,
   preMenuScale: 1,
   goldDeniedTick: 0,
   intents: [],
   ...FRESH_RUN,
 
-  startGame: () => set({ gamePhase: 'playing', timeScale: 1 }),
+  // start at the player's preferred speed (Settings → defaultSpeed); falls back to 1× pre-boot
+  startGame: () =>
+    set({ gamePhase: 'playing', timeScale: useSessionStore.getState().progress.settings.defaultSpeed }),
   quitToTitle: () => {
     get().resetRun()
     set({ gamePhase: 'title', timeScale: 1 }) // GameScreen unmounts → GameCanvas destroys Phaser
@@ -234,33 +242,58 @@ export const useGameStore = create<GameStore>((set, get) => ({
   denyGold: () => set((s) => ({ goldDeniedTick: s.goldDeniedTick + 1 })),
   toggleAutoStart: () => set((s) => ({ autoStart: !s.autoStart })),
   // Full-screen menu overlays pause the run (stash the prior speed, restore it on close).
-  // Overlay-aware: with BOTH overlays stackable from the always-clickable TopBar, only the FIRST
+  // Overlay-aware: with three overlays stackable from the always-clickable TopBar, only the FIRST
   // open stashes the player's speed and only the LAST close restores it — otherwise closing one
-  // overlay would unpause combat behind the other and lose the stashed 3×.
+  // overlay would unpause combat behind another and lose the stashed 3×. Each open/close consults
+  // whether ANY OTHER overlay is currently open.
   openPantheon: () =>
     set((s) =>
       s.pantheonOpen
         ? s
         : {
             pantheonOpen: true,
-            preMenuScale: s.leaderboardOpen ? s.preMenuScale : s.timeScale, // verbatim — a manual pause must survive the round-trip
+            preMenuScale: s.leaderboardOpen || s.settingsOpen ? s.preMenuScale : s.timeScale, // verbatim — a manual pause must survive the round-trip
             timeScale: 0,
           },
     ),
   closePantheon: () =>
-    set((s) => (s.leaderboardOpen ? { pantheonOpen: false } : { pantheonOpen: false, timeScale: s.preMenuScale })),
+    set((s) =>
+      s.leaderboardOpen || s.settingsOpen
+        ? { pantheonOpen: false }
+        : { pantheonOpen: false, timeScale: s.preMenuScale },
+    ),
   openLeaderboard: () =>
     set((s) =>
       s.leaderboardOpen
         ? s
         : {
             leaderboardOpen: true,
-            preMenuScale: s.pantheonOpen ? s.preMenuScale : s.timeScale,
+            preMenuScale: s.pantheonOpen || s.settingsOpen ? s.preMenuScale : s.timeScale,
             timeScale: 0,
           },
     ),
   closeLeaderboard: () =>
-    set((s) => (s.pantheonOpen ? { leaderboardOpen: false } : { leaderboardOpen: false, timeScale: s.preMenuScale })),
+    set((s) =>
+      s.pantheonOpen || s.settingsOpen
+        ? { leaderboardOpen: false }
+        : { leaderboardOpen: false, timeScale: s.preMenuScale },
+    ),
+  openSettings: () =>
+    set((s) =>
+      s.settingsOpen
+        ? s
+        : {
+            settingsOpen: true,
+            preMenuScale: s.pantheonOpen || s.leaderboardOpen ? s.preMenuScale : s.timeScale,
+            timeScale: 0,
+          },
+    ),
+  closeSettings: () =>
+    set((s) =>
+      s.pantheonOpen || s.leaderboardOpen
+        ? { settingsOpen: false }
+        : { settingsOpen: false, timeScale: s.preMenuScale },
+    ),
 
   // one batched write per frame — never tear gold/lives across separate setters
   mirrorRun: (s) =>

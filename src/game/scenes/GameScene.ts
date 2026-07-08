@@ -272,7 +272,9 @@ export class GameScene extends Phaser.Scene {
     useGameStore.getState().setSelectedTower(null)
     useGameStore.getState().mirrorRun(this.run.snapshot())
 
-    this.reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    // OS preference OR the player's explicit Settings toggle (reducedMotion) — either cuts camera juice.
+    const osReduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    this.reduceMotion = osReduce || useSessionStore.getState().progress.settings.reducedMotion
     this.hoveredTowerId = null
     this.input.setDefaultCursor('default') // restart must not inherit a stale pointer cursor
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {

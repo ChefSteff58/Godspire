@@ -14,10 +14,13 @@ import {
   migrateProgress,
 } from '../src/core/progress/rules'
 import { rowToProgress } from '../src/lib/persistence/progressRepo'
-import type { PlayerProgress } from '../src/core/progress/types'
+import type { PlayerProgress, PlayerSettings } from '../src/core/progress/types'
 
 const NOW = '2026-06-24T12:00:00.000Z'
 const EARLIER = '2026-06-24T11:00:00.000Z'
+
+/** The full settings shape (all fields required) — spread + override in tests that only care about one. */
+const DEFAULT_SETTINGS: PlayerSettings = { muted: false, defaultSpeed: 1, reducedMotion: false, colorblind: false }
 
 describe('level curve', () => {
   it('xpForLevel is 0 at level 1 and increasing', () => {
@@ -114,6 +117,26 @@ describe('mergeProgress', () => {
     expect(merged.favor).toBe(300) // monotonic max
   })
 
+  it('a no-gameplay timestamp bump on an EMPTY guest save cannot wipe a real account build', () => {
+    // Returning player flips a Setting as a guest (empty save stamped now()) then signs in. The empty
+    // local must NOT win the build even though it is "newer" — the higher-favor account keeps its nodes.
+    const guestLocal = make({
+      favor: 0,
+      unlockedNodes: [],
+      settings: { ...DEFAULT_SETTINGS, defaultSpeed: 3 },
+      updatedAt: NOW,
+    })
+    const account = make({
+      favor: 5000,
+      unlockedNodes: ['war_dmg_1', 'wisdom_life_1', 'harvest_gold_1'],
+      updatedAt: EARLIER,
+    })
+    const merged = mergeProgress(guestLocal, account)
+    expect(merged.unlockedNodes).toEqual(['war_dmg_1', 'wisdom_life_1', 'harvest_gold_1']) // build preserved
+    expect(merged.favor).toBe(5000)
+    expect(merged.settings.defaultSpeed).toBe(3) // the just-expressed setting still rides along (newer side)
+  })
+
   it('never produces negative available points after a merge', () => {
     const local = make({ favor: 125, unlockedNodes: ['war_dmg_1'], updatedAt: NOW })
     const cloud = make({ favor: 300, unlockedNodes: ['harvest_gold_1'], updatedAt: EARLIER })
@@ -135,7 +158,7 @@ describe('mergeProgress', () => {
     const local = make({
       favor: 300,
       unlockedNodes: ['war_dmg_1', 'wisdom_life_1'],
-      settings: { muted: true },
+      settings: { ...DEFAULT_SETTINGS, muted: true },
       updatedAt: EARLIER,
     })
     const pristineCloud = rowToProgress({
@@ -147,7 +170,7 @@ describe('mergeProgress', () => {
     })
     const merged = mergeProgress(local, pristineCloud)
     expect(merged.unlockedNodes).toEqual(['war_dmg_1', 'wisdom_life_1'])
-    expect(merged.settings).toEqual({ muted: true })
+    expect(merged.settings).toEqual({ ...DEFAULT_SETTINGS, muted: true })
     expect(merged.favor).toBe(300)
     expect(merged.updatedAt).toBe(EARLIER)
   })
@@ -160,8 +183,20 @@ describe('mergeProgress', () => {
       stats: {},
       updated_at: NOW,
     })
-    const local = make({ settings: { muted: false }, updatedAt: EARLIER })
-    expect(mergeProgress(local, cloud).settings).toEqual({ muted: true }) // newer side wins as usual
+    const local = make({ settings: { ...DEFAULT_SETTINGS, muted: false }, updatedAt: EARLIER })
+    expect(mergeProgress(local, cloud).settings).toEqual({ ...DEFAULT_SETTINGS, muted: true }) // newer side wins
+  })
+
+  it('takes the WHOLE settings object from the newer side (new S2 fields ride along)', () => {
+    const local = make({ settings: { muted: false, defaultSpeed: 3, reducedMotion: true, colorblind: false }, updatedAt: NOW })
+    const cloud = make({ settings: { ...DEFAULT_SETTINGS, colorblind: true }, updatedAt: EARLIER })
+    // NOW wins → the fast-speed + reduced-motion prefs survive; the older colorblind flag does NOT bleed in
+    expect(mergeProgress(local, cloud).settings).toEqual({
+      muted: false,
+      defaultSpeed: 3,
+      reducedMotion: true,
+      colorblind: false,
+    })
   })
 })
 
@@ -169,11 +204,25 @@ describe('migrateProgress never throws', () => {
   it('coerces garbage to a valid empty-ish save', () => {
     for (const garbage of [null, undefined, 42, 'nope', [], { favor: 'x' }]) {
       const p = migrateProgress(garbage)
-      expect(p.schemaVersion).toBe(1)
+      expect(p.schemaVersion).toBe(2) // literal, not the constant — must fail loudly if the bump regresses
       expect(Array.isArray(p.unlockedNodes)).toBe(true)
       expect(typeof p.favor).toBe('number')
       expect(p.favor).toBeGreaterThanOrEqual(0)
+      expect(p.settings).toEqual(DEFAULT_SETTINGS) // new fields default cleanly
     }
+  })
+
+  it('defaults the new S2 settings on an old (v1) save that only had { muted }', () => {
+    const p = migrateProgress({ favor: 10, settings: { muted: true }, updatedAt: NOW })
+    expect(p.settings).toEqual({ muted: true, defaultSpeed: 1, reducedMotion: false, colorblind: false })
+  })
+
+  it('coerces bad settings values (only 1|3 speed; booleans else default)', () => {
+    const p = migrateProgress({
+      settings: { muted: 'yes', defaultSpeed: 2, reducedMotion: 1, colorblind: 'true' },
+    })
+    expect(p.settings).toEqual(DEFAULT_SETTINGS) // muted:'yes'→false, speed 2→1, rm 1→false, cb 'true'→false
+    expect(migrateProgress({ settings: { defaultSpeed: 3 } }).settings.defaultSpeed).toBe(3) // 3 is valid
   })
 
   it('preserves valid fields and drops non-string node ids', () => {

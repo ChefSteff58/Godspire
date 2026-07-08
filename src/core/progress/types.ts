@@ -1,7 +1,7 @@
 // ── src/core/progress ── PURE meta-progression model.
 // No phaser / react / zustand / supabase imports (enforced by tests/core-purity.test.ts).
 
-export const PROGRESS_SCHEMA_VERSION = 1
+export const PROGRESS_SCHEMA_VERSION = 2
 
 /**
  * The lifetime account save. Mirrors the `player_progress` DB row — GAMEPLAY ONLY.
@@ -21,7 +21,15 @@ export interface PlayerProgress {
 }
 
 export interface PlayerSettings {
+  /** Reserved audio slot — audio is off the roadmap, so nothing reads this yet (kept for merge/migrate). */
   muted: boolean
+  /** Speed a run STARTS at — 1× (normal) or 3× (fast). Replaces startGame's hardcoded 1×. */
+  defaultSpeed: 1 | 3
+  /** Force-cut camera shake/flash regardless of the OS prefers-reduced-motion setting (ORs with it). */
+  reducedMotion: boolean
+  /** Reserved for a future colorblind pass — a real one recolors the SPRITE/enemy palette (identity is
+   *  carried by silhouette + Phaser hexes, not CSS), so it's its own task; no UI reads this yet. */
+  colorblind: boolean
 }
 
 export interface PlayerStats {
