@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { useGameStore, type SelectedFarm } from '../../state/gameStore'
 import { useSessionStore } from '../../state/sessionStore'
 import { PathSystem, OLYMPUS_PATH } from '../../core/map/path'
-import { OBSTACLES } from '../../core/map/obstacles'
+import { OBSTACLES, type Obstacle } from '../../core/map/obstacles'
 import { canPlace, pointInPoly } from '../../core/map/placement'
 import {
   createEnemy,
@@ -79,12 +79,12 @@ const ATTACK_HOLD_MS = 450
 // The sim's base walk speed (px/s) — enemy walk-cycle cadence is scaled by speed/BASE so charmed foes
 // visibly crawl and satyrs visibly sprint instead of every walk cycling at one fixed fps.
 const BASE_ENEMY_SPEED = 60
-// Hellmouth climb-out: an emerging enemy is invisible + UNtargetable until its center clears the rim.
-// The rim overlay (obj_rift_patch, cropped x=88..192, drawn OVER enemies) hides the pit exit, so a
-// creature is only fully materialized + targetable once past that lip — else a tower by the pit locks
-// onto a body still tucked behind the glowing crust and "fires into nothing".
-const EMERGE_START_X = 118 // alpha begins ramping here (behind the lip)
-const EMERGE_END_X = 200 // full alpha + targetable here — just past the rim's 192 right edge (1st corner is x=210)
+// BTD6-style off-screen ENTRANCE (2026-07-08, hellmouth removed): enemies spawn beyond the left edge
+// (the path starts at x=-60), so they're clipped/invisible off-canvas; they then fade in across
+// x=0→44 and become targetable at 44 (the `emerging` guard) so towers never fire off the edge at a
+// body that isn't on-screen yet. Same machinery as the old pit climb-out, just re-anchored to the edge.
+const EMERGE_START_X = 0 // alpha begins ramping as they cross onto the field
+const EMERGE_END_X = 44 // full alpha + targetable once fully on-screen
 // The Wang ground tilesets (M8 Stage 4; M9 adds the 3-band gradient). 32px tiles over the 960×540
 // field → a 30×17 grid (the last row overdraws 4px; Scale.FIT clips it). The terrain NOISE lives in
 // src/core/map/terrain.ts — cliffs are GAMEPLAY now, so render + placement share one canonical truth.
@@ -613,7 +613,13 @@ export class GameScene extends Phaser.Scene {
       }
       const objKey = `obj_${o.id}`
       if (this.textures.exists(objKey)) {
-        if (s.kind === 'circle') this.setDressing.push(this.addSpriteScaled(objKey, s.x, s.y, s.r * 3.1).setDepth(2))
+        if (s.kind === 'circle') {
+          // the Ruined Columns are a LANDMARK filling the bottom-left corner pocket (2026-07-08 resize);
+          // other circle props stay ~3.1× their footprint. Nudged up a touch so the base isn't clipped.
+          const size = o.id === 'columns' ? 180 : s.r * 3.1
+          const dy = o.id === 'columns' ? -14 : 0
+          this.setDressing.push(this.addSpriteScaled(objKey, s.x, s.y + dy, size).setDepth(2))
+        }
         else if (s.kind === 'poly') {
           const b = GameScene.polyBounds(s.points)
           this.setDressing.push(this.addSpriteScaled(objKey, b.cx, b.cy, Math.max(b.w, b.h) * 1.08).setDepth(2))
@@ -721,114 +727,73 @@ export class GameScene extends Phaser.Scene {
       stone: ['obj_decor_stump', 'obj_decor_rock1', 'obj_decor_rock2', 'obj_decor_shrine', 'obj_decor_amphorae'].filter(have),
       grass: ['obj_decor_tuft1', 'obj_decor_tuft2', 'obj_decor_laurel'].filter(have),
     }
-    for (const d of scatterDecor(7, 19, isBuildableGround, terrainAt, OLYMPUS_PATH, OBSTACLES, keys)) {
+    // Keep the sacred Olympus-exit meadow pristine — no grim battlefield litter (bones/shields) by the
+    // threshold. This also stops decor filling the spot the old boulder used to occupy (2026-07-08).
+    const exitMeadowClear: Obstacle = { id: 'exit_meadow_clear', label: '', shape: { kind: 'circle', x: 820, y: 195, r: 140 }, color: 0 }
+    for (const d of scatterDecor(7, 19, isBuildableGround, terrainAt, OLYMPUS_PATH, [...OBSTACLES, exitMeadowClear], keys)) {
       this.setDressing.push(this.addSpriteScaled(d.key, d.x, d.y, d.sizePx).setDepth(0.8))
     }
   }
 
   private drawMarkers(): void {
-    const start = OLYMPUS_PATH[0]
     const end = OLYMPUS_PATH[OLYMPUS_PATH.length - 1]
-    const g = this.add.graphics().setDepth(2)
-    this.setDressing.push(g)
-    // Mouth of Tartarus — the M9 INPAINTED patch wins: the hellmouth was painted into a live
-    // terrain screenshot (masked-alpha import at its crop origin), so blending is by construction.
-    // Fallback chain: patch → old prop art → drawn ellipses.
-    if (this.textures.exists('obj_rift_patch')) {
-      this.animateRift(this.add.image(0, 24, 'obj_rift_patch').setOrigin(0).setDepth(1.5))
-      // M10 refine: the RIM overlay covers the road's whole exit band at FULL height (the old
-      // lower-right quadrant let a spawn's body show, vanish, and reappear — 'walked behind a
-      // wall'). With spawns now invisible until the lip (see the sync loop's emergeAlpha ramp),
-      // this strip only has to sell the final slide-out from under the crust.
-      const rim = this.add.image(0, 24, 'obj_rift_patch').setOrigin(0).setDepth(6.5).setCrop(88, 0, 104, 192)
-      if (this.game.renderer.type === Phaser.WEBGL) {
-        // mirror the lower copy's breathing glow so the pulse doesn't die where the overlay sits
-        const rimGlow = rim.postFX.addGlow(0xff5533, 2, 0, false, 0.1, 12)
-        this.tweens.add({ targets: rimGlow, outerStrength: 6, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-      }
-    } else if (this.textures.exists('obj_rift')) {
-      this.setDressing.push(this.addSpriteScaled('obj_rift', start.x + 16, start.y, 270).setDepth(2))
-    } else {
-      const rings: [number, number][] = [
-        [62, 0x2a0810],
-        [46, 0x7a1020],
-        [30, 0xd83a2a],
-        [15, 0xffb070],
-      ]
-      for (const [r, c] of rings) {
-        g.fillStyle(c, 0.92)
-        g.fillEllipse(start.x, start.y, r * 1.9, r * 1.35)
-      }
-      this.setDressing.push(
-        this.add
-          .text(start.x + 34, start.y - 46, 'Tartarus', { fontFamily: 'Silkscreen, Georgia, serif', fontSize: '12px', color: '#e08a98' })
-          .setOrigin(0.5)
-          .setDepth(2),
-      )
-    }
-    // The Olympus threshold: a radiant marble gate (PixelLab standalone — a proper transparent arch
-    // SILHOUETTE, not the old square block) stands at the road's end, framed by a golden light-pool,
-    // god-rays, and rising motes (terrain also forces lush grass here).
-    this.dressOlympusExit(end) // gold ground-pool + rays + motes FIRST, behind the gate
-    if (this.textures.exists('obj_gate')) {
-      const gate = this.addSpriteScaled('obj_gate', end.x - 80, end.y - 70, 210).setDepth(2)
-      this.setDressing.push(gate)
-    }
+    // ENTRANCE (2026-07-08 redesign): NO portal set-piece — the road simply runs in from off the left
+    // edge over the lava scar (BTD6-style). A faint ember drift at the mouth keeps it alive; the
+    // animated lava layer carries the rest. Enemies fade in as they cross onto the field (see spawn).
+    this.ambientCap = Math.max(this.ambientCap, 22)
+    this.time.addEvent({ delay: 820, loop: true, callback: () => this.spawnAmbient('ember', { x: 20, y: 148 }) })
+    // EXIT: the Olympus threshold — a soft golden HALF-glow centered exactly on the point the road runs
+    // off the right edge, + rising gold motes. The Sacred Olive stands in the meadow beside it (obstacles).
+    this.dressOlympusExit(end)
   }
 
   // ── M9-S2 set-piece animation: Phaser built-in postFX + blend sprites, on ONLY these two
   // objects (perf-capped by design). WebGL-guarded — Canvas renderer just shows the static art. ──
 
-  /** The hellmouth breathes: pulsing molten glow + a rotating fire vortex over the pit floor. */
-  private animateRift(rift: Phaser.GameObjects.Image): void {
-    if (this.game.renderer.type === Phaser.WEBGL) {
-      const glow = rift.postFX.addGlow(0xff5533, 2, 0, false, 0.1, 12)
-      this.tweens.add({ targets: glow, outerStrength: 6, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+  /** The Olympus threshold: a soft golden HALF-glow centered EXACTLY on the point the road runs off the
+   *  right edge (its right half is off-canvas → a clean semicircle), plus rising gold motes. No object —
+   *  the Sacred Olive stands in the meadow beside it, and the whole thing reads as the gates of Olympus
+   *  just off-screen. */
+  private dressOlympusExit(end: Vec2): void {
+    // "Centre of the exit" = where the track crosses the right edge (x = GAME_WIDTH). Derive its y
+    // (map-agnostic), then nudge DOWN + RIGHT into the corner where the road actually vanishes (taste).
+    let crossY = end.y
+    const pts = OLYMPUS_PATH
+    for (let i = pts.length - 1; i > 0; i--) {
+      const a = pts[i - 1], b = pts[i]
+      if (a.x !== b.x && (a.x - GAME_WIDTH) * (b.x - GAME_WIDTH) <= 0) {
+        crossY = a.y + ((GAME_WIDTH - a.x) / (b.x - a.x)) * (b.y - a.y)
+        break
+      }
     }
-    // molten mouth = the bright centroid of the painted patch (measured at import: world 97,161)
-    if (this.textures.exists('fx_swirl')) {
-      const swirl = this.add
-        .image(97, 161, 'fx_swirl')
-        .setDepth(6.6) // ABOVE the rim overlay + creatures: the mouth's vortex swallows what it spawns
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setAlpha(0.5)
-        .setDisplaySize(76, 58)
-      this.setDressing.push(swirl) // dressing — hide in inpaint shots
-      this.tweens.add({ targets: swirl, angle: 360, duration: 9000, repeat: -1 })
-      this.tweens.add({ targets: swirl, alpha: 0.28, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-    }
-    // a second, denser ember stream rises from the mouth itself (cap raised 14→20 for it)
-    this.ambientCap = 20
-    this.time.addEvent({ delay: 520, loop: true, callback: () => this.spawnAmbient('ember', { x: 97, y: 155 }) })
+    const cx = GAME_WIDTH + 16 // just past the edge → a golden HALF-circle hugging the corner
+    const cy = crossY + 48
+    // ONE smooth radial-gradient disc (gold centre → transparent rim), not stacked rings
+    this.ensureGoldGlowTexture()
+    const glow = this.add.image(cx, cy, 'fx_gold_glow').setDepth(0.5).setBlendMode(Phaser.BlendModes.ADD).setDisplaySize(400, 360).setAlpha(0.8)
+    this.setDressing.push(glow)
+    this.tweens.add({ targets: glow, alpha: 1, scaleX: glow.scaleX * 1.06, scaleY: glow.scaleY * 1.06, duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    // rising gold motes from the threshold
+    this.ambientCap = Math.max(this.ambientCap, 24)
+    this.time.addEvent({ delay: 460, loop: true, callback: () => this.spawnAmbient('mote', { x: cx - 44, y: cy }) })
   }
 
-  /** The Olympus threshold radiates without a gate object: a soft gold light-pool on the meadow
-   *  (additive ellipses — the lake/lava glow pattern) + rising gold motes. The road ends in radiance. */
-  private dressOlympusExit(end: Vec2): void {
-    // The exit waypoint (≈1000,205) sits just past the 960-wide canvas edge, so anchor the glow INWARD
-    // over the last visible stretch of road+meadow — else the pool's bright center clips off-screen.
-    const cx = end.x - 105 // ≈895 — on-canvas, over the road's final climb
-    const cy = end.y + 30 // ≈235
-    // a broad, soft light-pool washing the golden meadow…
-    const pool = this.add.ellipse(cx, cy, 300, 205, 0xf5d061, 0.28).setDepth(0.5).setBlendMode(Phaser.BlendModes.ADD)
-    this.setDressing.push(pool)
-    this.tweens.add({ targets: pool, alpha: 0.42, scaleX: 1.07, scaleY: 1.07, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-    // …with a brighter, faster-breathing core where the road climbs to Olympus
-    const core = this.add.ellipse(cx + 30, cy - 20, 150, 100, 0xffe9a8, 0.38).setDepth(0.55).setBlendMode(Phaser.BlendModes.ADD)
-    this.setDressing.push(core)
-    this.tweens.add({ targets: core, alpha: 0.56, duration: 1900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-    // GOD-RAYS: gold shafts fanning down from Olympus (off the top-right corner) onto the meadow
-    const rays = this.add.graphics().setDepth(0.58).setBlendMode(Phaser.BlendModes.ADD)
-    rays.fillStyle(0xffe9a8, 0.12)
-    const ax = end.x - 42, ay = end.y - 150 // apex up toward Olympus, just off the corner
-    rays.fillTriangle(ax, ay, cx - 60, cy + 120, cx - 8, cy + 132) // left shaft
-    rays.fillTriangle(ax, ay, cx + 6, cy + 134, cx + 58, cy + 126) // mid shaft
-    rays.fillTriangle(ax, ay, cx + 70, cy + 118, cx + 118, cy + 92) // right shaft
-    this.setDressing.push(rays)
-    this.tweens.add({ targets: rays, alpha: 0.6, duration: 3200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-    // a denser, faster stream of rising gold motes from the threshold
-    this.ambientCap = Math.max(this.ambientCap, 26)
-    this.time.addEvent({ delay: 320, loop: true, callback: () => this.spawnAmbient('mote', { x: cx + 20, y: cy }) })
+  /** A soft gold radial-gradient texture (bright centre → transparent rim), built once — so the Olympus
+   *  exit reads as ONE smooth glow instead of stacked discs. */
+  private ensureGoldGlowTexture(): void {
+    if (this.textures.exists('fx_gold_glow')) return
+    const S = 256
+    const c = this.textures.createCanvas('fx_gold_glow', S, S)
+    if (!c) return
+    const ctx = c.getContext()
+    const grad = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2)
+    grad.addColorStop(0, 'rgba(255,236,178,0.95)')
+    grad.addColorStop(0.35, 'rgba(245,208,97,0.55)')
+    grad.addColorStop(0.7, 'rgba(245,208,97,0.18)')
+    grad.addColorStop(1, 'rgba(245,208,97,0)')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, S, S)
+    c.refresh()
   }
 
   /** The Styx shimmers: a slow shine sweep + two drifting mist wisps over the water. */
@@ -1059,24 +1024,17 @@ export class GameScene extends Phaser.Scene {
       const shadow = this.enemyShadows.get(enemy.id)
       shadow?.setPosition(pos.x, pos.y + (shadow.getData('dy') as number))
       if (sp) {
-        // hellmouth climb-out: alpha tracks position across the rim lip (x 118→200, past the rim
-        // overlay), and the moment the lip is crossed the creature POPS to full size with an ember scrabble
+        // BTD6 off-screen entrance: fade the creature in as it crosses onto the field (x=0→44), and
+        // clear the `emerging` guard once it's fully on-screen. No pit pop / embers — it just walks in.
         const emergeA = sp.getData('emergeAlpha') as number | undefined
         if (emergeA !== undefined) {
           const t = Math.min(1, Math.max(0, (pos.x - EMERGE_START_X) / (EMERGE_END_X - EMERGE_START_X)))
           sp.setAlpha(emergeA * t)
           shadow?.setAlpha(0.18 * t)
-          if (pos.x >= EMERGE_END_X) { // fully over the lip — materialize + become targetable together
-            // (no pathT fallback: it fired at ~x176, clearing emerging while still behind the rim; every
-            //  hellmouth spawn reliably walks past EMERGE_END_X, so x is the one honest gate)
+          if (pos.x >= EMERGE_END_X) {
             sp.setData('emergeAlpha', undefined)
-            enemy.emerging = false // over the lip — towers may now acquire it
+            enemy.emerging = false // fully on-screen — towers may now acquire it
             sp.setAlpha(emergeA)
-            const b = (sp.getData('baseScale') as number) ?? 1
-            this.tweens.add({ targets: sp, scale: b, duration: 300, ease: 'Back.easeOut' })
-            if (this.enemies.length + this.projectiles.length <= 30) {
-              this.burst(pos.x, pos.y + 8, 5, 0xff7040, 16, 2, 240) // dirt + embers over the lip
-            }
           }
         }
       }
@@ -1396,20 +1354,18 @@ export class GameScene extends Phaser.Scene {
     const base = (sprite.getData('baseScale') as number) ?? sprite.scale
     sprite.setData('baseScale', base)
     sprite.setScale(base * 0.4)
-    const fromMouth = desc.spawnAtT === undefined // fresh spawns climb out of the hellmouth
+    const fromMouth = desc.spawnAtT === undefined // a fresh spawn (not a split) marches in from off-screen
     if (fromMouth) {
-      // PORTAL CLIMB-OUT: invisible in the pit, materializing across the rim lip. Alpha follows
-      // PROGRESS (the sync loop's emergeAlpha ramp on pos.x), never wall-clock — so at any speed
-      // they read as hauling themselves over the crust, not fading in mid-bowl. Position is
-      // NEVER tweened (the fixed-substep sim owns it). Stealth keeps its half-alpha ceiling.
+      // OFF-SCREEN ENTRANCE: alpha 0 until on-screen, fading in on PROGRESS (the sync loop's emergeAlpha
+      // ramp on pos.x) so it reads at any speed; UNtargetable until fully on-screen. Stealth keeps its
+      // half-alpha ceiling. Scale still pops (below) — it enters at full size, no pit-hold.
       sprite.setAlpha(0)
       sprite.setData('emergeAlpha', enemy.stealth ? 0.5 : 1)
-      enemy.emerging = true // UNtargetable until it clears the rim (selectTarget skips it)
-      sprite.setScale(base * 0.55) // held small until the lip — the emergence pop finishes the job
+      enemy.emerging = true // selectTarget + the fire loops skip it until it's on the field
       this.enemyShadows.get(enemy.id)?.setAlpha(0)
-    } else {
-      this.tweens.add({ targets: sprite, scale: base, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
     }
+    // everyone pops from 0.4 → full scale (fromMouth included; its pop just happens off-screen)
+    this.tweens.add({ targets: sprite, scale: base, duration: isBoss ? 360 : 200, ease: 'Back.easeOut' })
   }
 
   /**

@@ -4,8 +4,9 @@ import type { Vec2 } from '../types'
 // softly ROUNDED corners (BTD6 "Monkey Meadow" feel). Turn-heavy + uses the whole map; the
 // inside of each bend is a deliberate build pocket. Enters off the left, exits off the right.
 const WAYPOINTS: readonly Vec2[] = [
-  { x: 55, y: 140 }, // BORN IN THE HELLMOUTH (M10-S4): the march starts inside the pit bowl and
-  // climbs out over its east rim — enemies visibly emerge instead of strolling in from off-screen
+  { x: -60, y: 150 }, // BTD6-style: the march ENTERS from off the left edge (over the lava scar) and
+  // fades in as it crosses onto the field — no hellmouth portal (removed 2026-07-08 for a cleaner,
+  // map-agnostic layout). The exit likewise runs off the right edge.
   { x: 210, y: 110 },
   { x: 300, y: 270 },
   { x: 150, y: 365 },

@@ -31,7 +31,7 @@ describe('sacred sites (the Olive of Athena)', () => {
   it('the relocated columns stand on buildable ground (bottom-left stonefield)', () => {
     const cols = OBSTACLES.find((o) => o.id === 'columns')!
     if (cols.shape.kind === 'circle') {
-      expect(cols.shape.x).toBe(110)
+      expect(cols.shape.x).toBe(78)
       expect(cols.shape.y).toBe(470)
       expect(isBuildableGround(cols.shape.x, cols.shape.y)).toBe(true)
     }

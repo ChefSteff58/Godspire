@@ -158,7 +158,7 @@ describe('cliffs in canPlace (the canonical map)', () => {
 })
 
 describe('the fixed obstacles stand on buildable ground', () => {
-  it('columns, boulder, and olive anchors are not on chasm', () => {
+  it('columns and olive anchors are not on chasm', () => {
     for (const o of OBSTACLES) {
       if (o.terrain === 'water') continue // the lake IS allowed over chasm
       const s = o.shape

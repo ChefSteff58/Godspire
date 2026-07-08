@@ -26,7 +26,7 @@ export type TerrainKind = 'chasm' | 'stone' | 'grass'
 
 /** The Sacred Olive's LIFE HALO: Athena's first gift keeps a lush ring of buildable meadow around
  *  itself even as the rest of the map crumbles to chasm. Center mirrors sites.ts `sacred_olive`. */
-export const OLIVE_CENTER: Vec2 = { x: 770, y: 110 }
+export const OLIVE_CENTER: Vec2 = { x: 860, y: 160 } // moved into the grass by the Olympus exit (2026-07-08)
 export const OLIVE_HALO_RADIUS = 74
 export function withinOliveHalo(x: number, y: number): boolean {
   return Math.hypot(x - OLIVE_CENTER.x, y - OLIVE_CENTER.y) <= OLIVE_HALO_RADIUS

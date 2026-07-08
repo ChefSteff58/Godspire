@@ -22,7 +22,7 @@ export const SITES: readonly Site[] = [
     id: 'sacred_olive',
     label: 'Sacred Olive of Athena',
     lore: "Athena's first gift still grows here — gods in its shade strike swifter.",
-    pos: { x: 770, y: 110 }, // the olive grove's center (rect 724,87 92×46 — its own grass)
+    pos: { x: 860, y: 160 }, // the olive grove's center (rect 814,137 92×46 — its own grass by the exit)
     radius: 110,
     effect: { fireRateMul: 1.08 },
     // the easter egg: it is HER tree — Athena standing close to the trunk sees further
