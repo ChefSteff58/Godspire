@@ -4,6 +4,7 @@ import {
   grassPredicate,
   terrainAt,
   isBuildableGround,
+  withinOlympusMeadow,
   RIFT,
   GATE,
   TERRAIN_TILE_PX,
@@ -82,6 +83,21 @@ describe('the 3-band gradient', () => {
     const stoneFrac = fractionInDisc(stone, 480, 270, 10_000)
     expect(stoneFrac).toBeGreaterThan(0.4)
     expect(stoneFrac).toBeLessThan(0.95)
+  })
+
+  it('the Olympus meadow halo forces lush buildable grass at the road exit', () => {
+    let sampled = 0
+    for (let vx = 0; vx <= 30; vx++) {
+      for (let vy = 0; vy <= 17; vy++) {
+        const x = vx * TERRAIN_TILE_PX
+        const y = vy * TERRAIN_TILE_PX
+        if (!withinOlympusMeadow(x, y)) continue
+        sampled++
+        expect(stone(x, y), `meadow cell (${x},${y}) must be solid`).toBe(true)
+        expect(grass(x, y), `meadow cell (${x},${y}) must be grass`).toBe(true)
+      }
+    }
+    expect(sampled).toBeGreaterThan(0) // the halo actually covers on-canvas lattice cells
   })
 })
 

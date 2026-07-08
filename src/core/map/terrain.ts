@@ -32,6 +32,14 @@ export function withinOliveHalo(x: number, y: number): boolean {
   return Math.hypot(x - OLIVE_CENTER.x, y - OLIVE_CENTER.y) <= OLIVE_HALO_RADIUS
 }
 
+/** The OLYMPUS THRESHOLD: a lush landing meadow at the path's exit. The gate object was removed
+ *  (2026-07-06) — the road now climbs into a golden meadow, so force this ring to buildable grass
+ *  (mirrors the olive halo) instead of leaving the endpoint to the noise field. */
+export const OLYMPUS_MEADOW_RADIUS = 115
+export function withinOlympusMeadow(x: number, y: number): boolean {
+  return Math.hypot(x - GATE.x, y - GATE.y) <= OLYMPUS_MEADOW_RADIUS
+}
+
 /** Deterministic sin-hash in [0,1) — identical inputs give identical patterns on every boot. */
 function seeded(n: number): number {
   const v = Math.sin(n * 9871.123) * 43758.5453
@@ -57,6 +65,7 @@ export function stonePredicate(
     // genuinely buildable ground — render and placement share this one truth.
     if (nearStyxShore(x, y)) return true
     if (withinOliveHalo(x, y)) return true // the Sacred Olive's life halo — always solid ground
+    if (withinOlympusMeadow(x, y)) return true // the Olympus threshold — always solid ground at the exit
     const vx = Math.round(x / tilePx)
     const vy = Math.round(y / tilePx)
     // two octaves of smoothed value noise over the vertex lattice (low frequency dominates → patches)
@@ -87,6 +96,7 @@ export function grassPredicate(
   return (x, y) => {
     if (!stone(x, y)) return false
     if (withinOliveHalo(x, y)) return true // lush grass rings the Sacred Olive even amid the crumble
+    if (withinOlympusMeadow(x, y)) return true // and carpets the Olympus threshold at the road's end
     const vx = Math.round(x / tilePx)
     const vy = Math.round(y / tilePx)
     const g1 = seeded(seed * 3.1 + vx * 11.13 + vy * 5.71)

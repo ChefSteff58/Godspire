@@ -766,31 +766,13 @@ export class GameScene extends Phaser.Scene {
           .setDepth(2),
       )
     }
-    // Olympus gate — prop art when dropped in (label-free for the same reason), else the drawn slab.
-    // With art it becomes a living set-piece to answer the hellmouth: gold glow + light sweep + motes.
+    // The Olympus threshold: a radiant marble gate (PixelLab standalone — a proper transparent arch
+    // SILHOUETTE, not the old square block) stands at the road's end, framed by a golden light-pool,
+    // god-rays, and rising motes (terrain also forces lush grass here).
+    this.dressOlympusExit(end) // gold ground-pool + rays + motes FIRST, behind the gate
     if (this.textures.exists('obj_gate')) {
-      // pulled well inside the right edge (was x≈980, ~95% off-canvas) so it reads as a prominent
-      // landmark — the radiant counterpart to the hellmouth — that the road climbs toward.
-      const gate = this.addSpriteScaled('obj_gate', end.x - 110, end.y - 8, 240).setDepth(2)
+      const gate = this.addSpriteScaled('obj_gate', end.x - 80, end.y - 70, 210).setDepth(2)
       this.setDressing.push(gate)
-      this.animateGate(gate)
-    } else {
-      g.fillStyle(0xf5d061, 0.96)
-      g.fillRoundedRect(end.x - 78, end.y - 36, 130, 74, 6)
-      g.fillStyle(0xbfa03a, 1)
-      g.fillRect(end.x - 64, end.y - 36, 11, 74)
-      g.fillRect(end.x - 30, end.y - 36, 11, 74)
-      this.setDressing.push(
-        this.add
-          .text(end.x - 44, end.y, 'OLYMPUS', {
-            fontFamily: 'Silkscreen, Georgia, serif',
-            fontSize: '11px',
-            color: '#1a1407',
-            fontStyle: 'bold',
-          })
-          .setOrigin(0.5)
-          .setDepth(2),
-      )
     }
   }
 
@@ -820,16 +802,33 @@ export class GameScene extends Phaser.Scene {
     this.time.addEvent({ delay: 520, loop: true, callback: () => this.spawnAmbient('ember', { x: 97, y: 155 }) })
   }
 
-  /** The gate of Olympus radiates: a pulsing gold glow, a slow divine light sweep, and rising gold motes. */
-  private animateGate(gate: Phaser.GameObjects.Image): void {
-    if (this.game.renderer.type === Phaser.WEBGL) {
-      const glow = gate.postFX.addGlow(0xf5d061, 2, 0, false, 0.1, 12)
-      this.tweens.add({ targets: glow, outerStrength: 6, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-      gate.postFX.addShine(0.3, 0.2, 5) // a slow divine light sweeps across the marble
-    }
-    // rising gold motes from the gate's glowing threshold (its lower-center, above the clouds)
-    this.ambientCap = Math.max(this.ambientCap, 20)
-    this.time.addEvent({ delay: 640, loop: true, callback: () => this.spawnAmbient('mote', { x: gate.x, y: gate.y + 40 }) })
+  /** The Olympus threshold radiates without a gate object: a soft gold light-pool on the meadow
+   *  (additive ellipses — the lake/lava glow pattern) + rising gold motes. The road ends in radiance. */
+  private dressOlympusExit(end: Vec2): void {
+    // The exit waypoint (≈1000,205) sits just past the 960-wide canvas edge, so anchor the glow INWARD
+    // over the last visible stretch of road+meadow — else the pool's bright center clips off-screen.
+    const cx = end.x - 105 // ≈895 — on-canvas, over the road's final climb
+    const cy = end.y + 30 // ≈235
+    // a broad, soft light-pool washing the golden meadow…
+    const pool = this.add.ellipse(cx, cy, 300, 205, 0xf5d061, 0.28).setDepth(0.5).setBlendMode(Phaser.BlendModes.ADD)
+    this.setDressing.push(pool)
+    this.tweens.add({ targets: pool, alpha: 0.42, scaleX: 1.07, scaleY: 1.07, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    // …with a brighter, faster-breathing core where the road climbs to Olympus
+    const core = this.add.ellipse(cx + 30, cy - 20, 150, 100, 0xffe9a8, 0.38).setDepth(0.55).setBlendMode(Phaser.BlendModes.ADD)
+    this.setDressing.push(core)
+    this.tweens.add({ targets: core, alpha: 0.56, duration: 1900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    // GOD-RAYS: gold shafts fanning down from Olympus (off the top-right corner) onto the meadow
+    const rays = this.add.graphics().setDepth(0.58).setBlendMode(Phaser.BlendModes.ADD)
+    rays.fillStyle(0xffe9a8, 0.12)
+    const ax = end.x - 42, ay = end.y - 150 // apex up toward Olympus, just off the corner
+    rays.fillTriangle(ax, ay, cx - 60, cy + 120, cx - 8, cy + 132) // left shaft
+    rays.fillTriangle(ax, ay, cx + 6, cy + 134, cx + 58, cy + 126) // mid shaft
+    rays.fillTriangle(ax, ay, cx + 70, cy + 118, cx + 118, cy + 92) // right shaft
+    this.setDressing.push(rays)
+    this.tweens.add({ targets: rays, alpha: 0.6, duration: 3200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    // a denser, faster stream of rising gold motes from the threshold
+    this.ambientCap = Math.max(this.ambientCap, 26)
+    this.time.addEvent({ delay: 320, loop: true, callback: () => this.spawnAmbient('mote', { x: cx + 20, y: cy }) })
   }
 
   /** The Styx shimmers: a slow shine sweep + two drifting mist wisps over the water. */
